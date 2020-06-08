@@ -1,0 +1,33 @@
+package inventory
+
+const (
+	ArrivedType string = "arrived"
+	MovedType string = "moved"
+)
+
+type Event interface {
+	OfType() string
+}
+
+type Arrived struct {
+	Epc string
+	Timestamp int64
+	DeviceId string
+	Location string
+}
+
+func (a Arrived) OfType() string {
+	return ArrivedType
+}
+
+type Moved struct {
+	Epc string
+	Timestamp int64
+	PrevLocation string
+	NextLocation string
+}
+
+func (m Moved) OfType() string {
+	return MovedType
+}
+
