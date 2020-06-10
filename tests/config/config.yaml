@@ -1,0 +1,10 @@
+execution_environment:
+  #alias: OnNonIntelNetwork
+  host: localhost
+  ssh_port: 22
+  username: root
+  working_dir: /tmp/rfid-inventory-service-test-platform
+  
+git_config:
+  repo: https://${SERVICE_TOKEN}@github.impcloud.net/RSP-Inventory-Suite/rfid-inventory-service.git
+  branch: ${GIT_BRANCH}
