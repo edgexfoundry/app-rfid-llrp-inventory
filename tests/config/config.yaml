@@ -3,8 +3,10 @@ execution_environment:
   host: localhost
   ssh_port: 22
   username: root
-  working_dir: /tmp/rfid-inventory-service-test-platform
+  working_dir: /tmp/rfid-inventory-test-platform
   
 git_config:
   repo: https://${SERVICE_TOKEN}@github.impcloud.net/RSP-Inventory-Suite/rfid-inventory-service.git
+  llrp_repo: https://${SERVICE_TOKEN}@github.impcloud.net/RSP-Inventory-Suite/device-llrp-go.git
   branch: ${GIT_BRANCH}
+  llrp_branch : ${LLRP_BRANCH}
