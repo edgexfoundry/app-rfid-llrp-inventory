@@ -54,7 +54,7 @@
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | ${result}=      | Run Process            | ./installPkg.sh                       | shell=true              | cwd=/utils            |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
-| | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=${host_environment['working_dir']}/device-llrp-go             |
+| | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=/LLRPbuild        |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=/build            |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |

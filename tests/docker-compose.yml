@@ -24,6 +24,7 @@ services:
       - ./config:/config
       - ./utils:/utils
       - ./../:/build
+      - ./../../device-llrp-go:/LLRPbuild
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
     build:
