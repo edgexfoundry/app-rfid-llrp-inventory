@@ -11,7 +11,6 @@ and producing events [ARRIVED, MOVED]
  - GNU Make
  - Docker
  - Docker-compose
- - Ubuntu install libsodium-dev libzmq3-dev
 
 #### Build ####
 
@@ -19,22 +18,38 @@ and producing events [ARRIVED, MOVED]
 make build
 ```
 
+#### Execute unit tests with coverage ####
+
+```
+make test
+```
+
+#### Format ####
+
+```
+make fmt
+```
+
+
 #### Build Docker image ####
 ```
-sudo make docker
+make docker
 ```
-NOTE!! The docker-compose file does not include the inventory service yet.
-to support development, docker compose starts all the supporting edgex
-containers, and the inventory service can be run from the IDE or command line.
 
 #### Docker-compose run with other Edgex services (Geneva Release) ####
 ```
-sudo make run
+make run
 ```
 
 #### Docker-compose stop ####
 ```
-sudo make stop
+make stop
 ```
+
+#### Docker-compose down ####
+```
+make down
+```
+
 ## License
 [Apache-2.0](LICENSE)

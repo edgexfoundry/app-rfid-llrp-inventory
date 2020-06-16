@@ -1,5 +1,5 @@
 /* Apache v2 license
-*  Copyright (C) <2019> Intel Corporation
+*  Copyright (C) <2020> Intel Corporation
 *
 *  SPDX-License-Identifier: Apache-2.0
  */
@@ -16,10 +16,7 @@ import (
 )
 
 const (
-	unknown = "UNKNOWN"
-)
-
-const (
+	unknown                = "UNKNOWN"
 	pfxTagGen2      string = "tag-gen2:"
 	pfxTagReads            = "tag-read-hist:"
 	pfxTagLocations        = "tag-locations:"
@@ -132,26 +129,3 @@ func (tagPro *TagProcessor) GetTagRedis(epc string) (t Tag) {
 	}
 	return t
 }
-
-// TODO: figure out what fields (if any?) need to be persisted
-// probably just memory fields are sufficient
-func (tagPro *TagProcessor) UpsertTagRedis(tag *Tag) {
-	if tagPro.cnxPool == nil {
-		return
-	}
-
-	c := tagPro.cnxPool.Get()
-	defer c.Close()
-
-	m, err := json.Marshal(tag)
-	if err != nil {
-		tagPro.log.Error(err.Error())
-		return
-	}
-	k := pfxTagGen2 + tag.Epc
-	_, err = c.Do("SET", k, m)
-	if err != nil {
-		tagPro.log.Error(err.Error())
-	}
-}
-
