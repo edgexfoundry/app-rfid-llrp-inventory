@@ -11,10 +11,11 @@ import subprocess
 
 #Docker containers list for device RFID Inventory service
 myDockerList = [
-"edgex-kuiper",
-"edgex-sys-mgmt-agent",
 "edgex-ui-go",
+"edgex-kuiper",
+"edgex-app-service-rfid-inventory-service",
 "edgex-app-service-configurable-rules",
+"edgex-device-llrp",
 "edgex-core-data",
 "edgex-core-command",
 "edgex-core-metadata",

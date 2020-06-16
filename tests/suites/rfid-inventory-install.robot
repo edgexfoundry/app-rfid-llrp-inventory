@@ -50,7 +50,7 @@
 |    | [Tags]             | Run                                       | generic | install
 |    | [Documentation]    | RFID Inventory Installtion Check          |
 |    | Log To Console     | Testcase ${TEST NAME} started.            |
-#|    | ${status}=         | verify_containers_running | positive      |
-#|    | Log To Console     | Status = ${status}                        |
-#|    | Should Be True     | ${status}                                 |
+|    | ${status}=         | verify_containers_running | positive      |
+|    | Log To Console     | Status = ${status}                        |
+|    | Should Be True     | ${status}                                 |
 |    | Log To Console     | Testcase ${TEST NAME} finished.           |

@@ -98,16 +98,14 @@
 |                 | ${start_time}=         | Convert Date                                | ${start_time}           | epoch |
 |                 | Log to Console         | Shutdown RFID Inventory Environment...            |
 |                 | Should Match RegExp    | ${host_environment['working_dir']}          | /tmp/.+                 | Working Directories should be nested in the `/tmp` directory    |
-#| | ${result}=    | Run Process            | docker-compose -f docker-compose-geneva-redis-no-secty.yml down       | shell=true | cwd=/build    |
-#|                 | Log to Console         | ${result.stdout}                            | ${result.stderr}        |
 | | ${result}=    | Run Process            | make "stop"                                 | shell=true              | cwd=/build    |
 |                 | Log to Console         | ${result.stdout}                            | ${result.stderr}        |
-| | ${result}=    | Run Process            | make "down"                                   | shell=true                | cwd=/build    |
+| | ${result}=    | Run Process            | make "down"                                   | shell=true            | cwd=/build    |
 |                 | Log to Console         | ${result.stdout}                            | ${result.stderr}        |
-| | ${result}=    | Run Process            | ./rmvDockerImgs.sh                          | shell=true              | cwd=/utils |
+| | ${result}=    | Run Process            | ./rmvDockerImgs.sh                          | shell=true              | cwd=/utils    |
 |                 | Log to Console         | ${result.stdout}                            | ${result.stderr}        |
 |                 | Log to Console          |   NOTE:: ALL Shutdown Completed            |
-#| | ${result}=    | Run Process            | sduo rm -rf rfid-inventory-service         | shell=true              | cwd=${host_environment['working_dir']} |
+#| | ${result}=    | Run Process            | sduo rm -rf rfid-inventory-test-platform   | shell=true              | cwd=${host_environment['working_dir']} |
 #|                 | Log to Console         | ${result.stdout}                           | ${result.stderr}        |
 #| | ${result}=    | Run Process            | sudo docker network prune -f               | shell=true              | cwd=${host_environment['working_dir']} |
 #|                 | Log to Console         | ${result.stdout}                           | ${result.stderr}        |

@@ -11,6 +11,7 @@ services:
   #   - MQTT_BROKER=127.0.0.1
       - SERVICE_TOKEN
       - GIT_BRANCH
+      - LLRP_BRANCH
       - http_proxy
       - https_proxy
       - no_proxy
