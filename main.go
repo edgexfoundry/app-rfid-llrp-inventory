@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -59,18 +60,17 @@ func main() {
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
 	// access the application's specific configuration settings.
-	deviceNames, err := app.edgexSdk.GetAppSettingStrings("DeviceNames")
+	valueDescriptor, err := app.edgexSdk.GetAppSettingStrings("ValueDescriptor")
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error(err.Error())
 		os.Exit(-1)
 	}
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Filtering for devices %v", deviceNames))
+	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Filtering for tag reads only %v", valueDescriptor))
 
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
-		transforms.NewFilter(deviceNames).FilterByDeviceName,
+		transforms.NewFilter(valueDescriptor).FilterByValueDescriptor,
 		processTagReads,
-		publishEvents,
 	)
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error("Error in the pipeline: ", err.Error())
@@ -98,33 +98,31 @@ func main() {
 	os.Exit(0)
 }
 
-// TODO: this needs to be modified
 func processTagReads(edgexCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
 
 	if len(params) < 1 {
-		return false, nil
+		return false, errors.New("no event received")
+	}
+	event, ok := params[0].(models.Event)
+	if !ok {
+		return false, errors.New("type received is not an Event")
+	}
+	if len(event.Readings) < 1 {
+		return false, errors.New("event contains no Readings")
 	}
 
-	if event, ok := params[0].(models.Event); ok {
-		for _, reading := range event.Readings {
-			if gen2Read, err := marshallGen2Read(reading); err == nil {
-				app.readChnl <- gen2Read
-			}
+	for _, reading := range event.Readings {
+		if gen2Read, err := marshallGen2Read(reading); err == nil {
+			app.readChnl <- gen2Read
 		}
 	}
 
-	// todo: this should be moved to send events, need another pipeline?
-	// edgexcontext.Complete([]byte(params[0].(string)))
-	return false, nil
-}
-
-// TODO: Need to be implemented (MQTT, cloud rest endpoint, ZMQ??)
-func publishEvents(edgexCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	return false, nil
 }
 
 var tagSerialCounter uint32
 
+// TODO: this may be modified based on the LLRP tag reads
 func marshallGen2Read(xevent models.Reading) (r inventory.Gen2Read, err error) {
 	serial := atomic.AddUint32(&tagSerialCounter, 1) % 20
 	r = inventory.Gen2Read{
@@ -174,6 +172,7 @@ func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 		case <-app.done:
 			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
 			return
+		// TODO: publish these events somewhere (MQTT, rest, database?)
 		case e := <-app.eventChnl:
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event %s", e.OfType()))
 		}

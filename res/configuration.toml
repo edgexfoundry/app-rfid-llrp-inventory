@@ -57,4 +57,4 @@ SubscribeTopic="events"
 PublishTopic="somewhere"
 
 [ApplicationSettings]
-DeviceNames = "Random-Float-Device"
+ValueDescriptor = "Tag reads"
