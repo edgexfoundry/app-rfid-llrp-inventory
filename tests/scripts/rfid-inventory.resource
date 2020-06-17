@@ -5,7 +5,7 @@
 
 *** Settings ***
 | Documentation    |
-| ...              | This is a Robot resource file for LRFID Inventory Service
+| ...              | This is a Robot resource file for RFID Inventory Service
 | ...              | collection common build-type RFID Inventory with 
 | ...              | meaningful Keywords.
 | Library          | DateTime                                                        
@@ -59,8 +59,6 @@
 | | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=/build            |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | Log To Console  | \n -----: Docker Build Inventory Env Setup is started...Take few minutes- :----\n  |
-#| | ${result}=      | Run Process            | make "run"                            | shell=true  |  stdout=DEVNULL | stderr=DEVNULL  | cwd=/build     | 
-#|                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | ${result}=      | Run Process            | make "run"                            | shell=true  |  cwd=/build     | 
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | Log To Console  | \n -----: RFID Inventory Service Instances - Docker Containers :----\n  |
@@ -109,6 +107,4 @@
 #| | ${result}=    | Run Process            | sduo rm -rf rfid-inventory-test-platform   | shell=true              | cwd=${host_environment['working_dir']} |
 #|                 | Log to Console         | ${result.stdout}                           | ${result.stderr}        |
 #| | ${result}=    | Run Process            | sudo docker network prune -f               | shell=true              | cwd=${host_environment['working_dir']} |
-#|                 | Log to Console         | ${result.stdout}                           | ${result.stderr}        |
-#| | ${result}=    | Run Process            | docker volume ls -f dangling=true          | shell=true              | cwd=${host_environment['working_dir']} |
 #|                 | Log to Console         | ${result.stdout}                           | ${result.stderr}        |
