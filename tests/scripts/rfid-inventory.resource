@@ -38,8 +38,8 @@
 |                 | Log to Console              | ${result.stdout}                                                 | ${result.stderr}           |
 | | ${result}=    | Run Process                 | git clone ${git_config['repo']} --branch ${git_config['branch']}                                    | shell=true | cwd=${host_environment['working_dir']} |
 |                 | Log to Console              | ${result.stdout}                                                 | ${result.stderr}           |
-| | ${result}=    | Run Process                 | git clone ${git_config['llrp_repo']} --branch ${git_config['llrp_branch']}                          | shell=true | cwd=${host_environment['working_dir']} |
-|                 | Log to Console              | ${result.stdout}                                                 | ${result.stderr}           |
+#| | ${result}=    | Run Process                 | git clone ${git_config['llrp_repo']} --branch ${git_config['llrp_branch']}                          | shell=true | cwd=${host_environment['working_dir']} |
+#|                 | Log to Console              | ${result.stdout}                                                | ${result.stderr}           |
 
 
 ####=============================================================####
@@ -54,14 +54,15 @@
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | ${result}=      | Run Process            | ./installPkg.sh                       | shell=true              | cwd=/utils            |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
-| | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=/LLRPbuild        |
-|                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
+#| | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=${host_environment['working_dir']}/device-llrp-go         |
+#|                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        | 
 | | ${result}=      | Run Process            | make "docker"                         |  shell=true             | cwd=/build            |
 |                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
-| | Log To Console  | \n -----: Dockcer Build Env Setup is started...Take few minutes- :----\n  |
-#| | ${result}=      | Run Process            | docker-compose "-f" "docker-compose-geneva-redis-no-secty.yml" "up" "-d" | shell=true  |  stdout=DEVNULL | stderr=DEVNULL  | cwd=/build     | 
-| | ${result}=      | Run Process            | make "run"                            | shell=true  |  stdout=DEVNULL | stderr=DEVNULL  | cwd=/build     | 
+| | Log To Console  | \n -----: Docker Build Inventory Env Setup is started...Take few minutes- :----\n  |
+#| | ${result}=      | Run Process            | make "run"                            | shell=true  |  stdout=DEVNULL | stderr=DEVNULL  | cwd=/build     | 
 #|                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
+| | ${result}=      | Run Process            | make "run"                            | shell=true  |  cwd=/build     | 
+|                   | Log to Console         | ${result.stdout}                      | ${result.stderr}        |
 | | Log To Console  | \n -----: RFID Inventory Service Instances - Docker Containers :----\n  |
 | | ${result}=      | Run Process            | docker "ps" "--format" "{{.Names}}"   | shell=true              | cwd=/build     |
 |                   | Log to Console         |  ${result.stdout}                     | ${result.stderr}        |
