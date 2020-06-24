@@ -1,3 +1,4 @@
+#
 # Copyright (c) 2020 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,41 +12,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
-ARG BASE=golang:1.14-alpine
-FROM ${BASE} AS builder
+FROM golang:1.14-alpine AS builder
 
-ARG ALPINE_PKG_BASE="build-base git openssh-client"
-ARG ALPINE_PKG_EXTRA="pkgconfig zeromq-dev"
+# add git for go modules
+RUN apk update && apk add --no-cache make git gcc libc-dev libsodium-dev zeromq-dev
+WORKDIR /rfid-inventory-service
 
-# Replicate the APK repository override.
-# If it is no longer necessary to avoid the CDN mirros we should consider dropping this as it is brittle.
-RUN sed -e 's/dl-cdn[.]alpinelinux.org/nl.alpinelinux.org/g' -i~ /etc/apk/repositories
-# Install our build time packages.
-RUN apk add --no-cache ${ALPINE_PKG_BASE} ${ALPINE_PKG_EXTRA}
-
-WORKDIR $GOPATH/src/github.impcloud.net/RSP-Inventory-Suite/rfid-inventory
 COPY go.mod .
+
 RUN go mod download
 
 COPY . .
+RUN apk info -a zeromq-dev
 
-# To run tests in the build container:
-#   docker build --build-arg 'MAKE=build test' .
-# This is handy of you do your Docker business on a Mac
-ARG MAKE='make build'
-RUN $MAKE
+RUN make rfid-inventory
 
 FROM alpine
 
-ENV APP_PORT=49992
-EXPOSE $APP_PORT
-
-COPY --from=builder /go/src/github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/build /
-COPY --from=builder /go/src/github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/LICENSE /
-COPY --from=builder /go/src/github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/Attribution.txt /
-
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
-      copyright='Copyright (c) 2020: Intel Corporation'
+  copyright='Copyright (c) 2020: Intel'
 
-ENTRYPOINT ["/rfid-inventory","--cp=consul://edgex-core-consul:8500","--registry","--confdir=/res"]
+RUN apk --no-cache add zeromq
+
+COPY --from=builder /rfid-inventory-service/res /res
+COPY --from=builder /rfid-inventory-service /
+CMD [ "/rfid-inventory" ,"--registry","--confdir=/res"]

@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -25,7 +26,6 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 )
@@ -35,7 +35,6 @@ const (
 )
 
 type inventoryApp struct {
-	log logger.LoggingClient
 	edgexSdk  *appsdk.AppFunctionsSDK
 	processor *inventory.TagProcessor
 	readChnl  chan inventory.Gen2Read
@@ -48,41 +47,33 @@ var app inventoryApp
 func main() {
 
 	app = inventoryApp{}
+	// initialize Edgex App functions SDK
 	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := app.edgexSdk.Initialize(); err != nil {
-		message := fmt.Sprintf("SDK initialization failed: %v\n", err)
-		if app.edgexSdk.LoggingClient != nil {
-			app.edgexSdk.LoggingClient.Error(message)
-		} else {
-			fmt.Println(message)
-		}
+		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
 		os.Exit(-1)
 	}
-	app.log = app.edgexSdk.LoggingClient
-	//app.log = logger.NewClientStdOut(serviceKey, false, "INFO")
 	app.done = make(chan bool)
 	app.readChnl = make(chan inventory.Gen2Read, 50)
 	app.eventChnl = make(chan inventory.Event, 10)
-	app.processor = inventory.NewTagProcessor(app.log)
-	app.log.Info(fmt.Sprintf("Running"))
+	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
+	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
 	// access the application's specific configuration settings.
-	deviceNames, err := app.edgexSdk.GetAppSettingStrings("DeviceNames")
+	valueDescriptor, err := app.edgexSdk.GetAppSettingStrings("ValueDescriptor")
 	if err != nil {
-		app.log.Error(err.Error())
+		app.edgexSdk.LoggingClient.Error(err.Error())
 		os.Exit(-1)
 	}
-	app.log.Info(fmt.Sprintf("Filtering for devices %v", deviceNames))
+	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Filtering for tag reads only %v", valueDescriptor))
 
-	// 3) This is our pipeline configuration, the collection of functions to
-	// execute every time an event is triggered.
+	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
-		transforms.NewFilter(deviceNames).FilterByDeviceName,
-		inboundCoreDatae,
+		transforms.NewFilter(valueDescriptor).FilterByValueDescriptor,
+		processTagReads,
 	)
-
 	if err != nil {
-		app.log.Error("Error in the pipeline: ", err.Error())
+		app.edgexSdk.LoggingClient.Error("Error in the pipeline: ", err.Error())
 	}
 
 	var wg sync.WaitGroup
@@ -91,15 +82,14 @@ func main() {
 	wg.Add(1)
 	go app.processEventChannel(&wg)
 
-	// 4) Lastly, we'll go ahead and tell the SDK to "start" and begin listening for events
-	// to trigger the pipeline.
+	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
 	if err != nil {
-		app.log.Error("MakeItRun returned error: ", err.Error())
+		app.edgexSdk.LoggingClient.Error("MakeItRun returned error: ", err.Error())
 		os.Exit(-1)
 	}
 
-	app.log.Info("waiting for channels to finish")
+	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
 	app.done <- true
 	app.done <- true
 	wg.Wait()
@@ -108,27 +98,31 @@ func main() {
 	os.Exit(0)
 }
 
-func inboundCoreDatae(edgexCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
+func processTagReads(edgexCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
 
 	if len(params) < 1 {
-		return false, nil
+		return false, errors.New("no event received")
+	}
+	event, ok := params[0].(models.Event)
+	if !ok {
+		return false, errors.New("type received is not an Event")
+	}
+	if len(event.Readings) < 1 {
+		return false, errors.New("event contains no Readings")
 	}
 
-	if event, ok := params[0].(models.Event); ok {
-		for _, reading := range event.Readings {
-			if gen2Read, err := marshallGen2Read(reading); err == nil {
-				app.readChnl <- gen2Read
-			}
+	for _, reading := range event.Readings {
+		if gen2Read, err := marshallGen2Read(reading); err == nil {
+			app.readChnl <- gen2Read
 		}
 	}
 
-	// todo: this should be moved to send events, need another pipeline?
-	// edgexcontext.Complete([]byte(params[0].(string)))
 	return false, nil
 }
 
 var tagSerialCounter uint32
 
+// TODO: this may be modified based on the LLRP tag reads
 func marshallGen2Read(xevent models.Reading) (r inventory.Gen2Read, err error) {
 	serial := atomic.AddUint32(&tagSerialCounter, 1) % 20
 	r = inventory.Gen2Read{
@@ -146,11 +140,11 @@ func marshallGen2Read(xevent models.Reading) (r inventory.Gen2Read, err error) {
 
 func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 	defer wg.Done()
-	app.log.Info("starting read channel processing")
+	app.edgexSdk.LoggingClient.Info("starting read channel processing")
 	for {
 		select {
 		case <-app.done:
-			app.log.Info("exiting read channel processing")
+			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
 			return
 		case r := <-app.readChnl:
 			app.handleGen2Read(&r)
@@ -159,7 +153,7 @@ func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 }
 
 func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
-	app.log.Info(fmt.Sprintf("handleGen2Read from %s", read.DeviceId))
+	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read from %s", read.DeviceId))
 	e := app.processor.ProcessReadData(read)
 	switch e.(type) {
 	case inventory.Arrived:
@@ -172,14 +166,15 @@ func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
 
 func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 	defer wg.Done()
-	app.log.Info("starting event channel processing")
+	app.edgexSdk.LoggingClient.Info("starting event channel processing")
 	for {
 		select {
-		case <- app.done:
-			app.log.Info("exiting event channel processing")
+		case <-app.done:
+			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
 			return
+		// TODO: publish these events somewhere (MQTT, rest, database?)
 		case e := <-app.eventChnl:
-			app.log.Info(fmt.Sprintf("processing event %s", e.OfType()))
+			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event %s", e.OfType()))
 		}
 	}
 }

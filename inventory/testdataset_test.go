@@ -1,5 +1,5 @@
 /* Apache v2 license
-*  Copyright (C) <2019> Intel Corporation
+*  Copyright (C) <2020> Intel Corporation
 *
 *  SPDX-License-Identifier: Apache-2.0
  */
@@ -13,7 +13,7 @@ import (
 )
 
 type testDataset struct {
-	tagPro *TagProcessor
+	tagPro       *TagProcessor
 	tagReads     []*Gen2Read
 	tags         []*Tag
 	readTimeOrig int64

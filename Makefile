@@ -1,7 +1,6 @@
-.PHONY: build test clean prepare update docker
+.PHONY: build test clean fmt docker run stop down
 
-#GO = CGO_ENABLED=0 GO111MODULE=on go
-GO = GO111MODULE=on go
+GO=CGO_ENABLED=1 GO111MODULE=on go
 
 MICROSERVICES=rfid-inventory
 
@@ -16,33 +15,37 @@ GIT_SHA=$(shell git rev-parse HEAD)
 
 GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-inventory.Version=$(VERSION)"
 
-BUILD_DIR=build
 build: $(MICROSERVICES)
 	$(GO) build ./...
 
 rfid-inventory:
-	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$@ ./main.go
-	cp -r ./res/ $(BUILD_DIR)/
+	$(GO) build $(GOFLAGS) -o $@ ./main.go
 
 test:
 	$(GO) test ./... -coverprofile=coverage.out
 
 clean:
-	rm -rf $(BUILD_DIR) 
+	rm -f $(MICROSERVICES)
+
+fmt:
+	go fmt ./...
 
 docker: $(DOCKERS)
 
 docker_rfid_inventory:
 	docker build \
---build-arg http_proxy \
---build-arg https_proxy \
---label "git_sha=$(GIT_SHA)" \
--t edgexfoundry/docker-rfid-inventory:$(GIT_SHA) \
--t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
-.
+		--build-arg http_proxy \
+		--build-arg https_proxy \
+			--label "git_sha=$(GIT_SHA)" \
+			-t edgexfoundry/docker-rfid-inventory:$(GIT_SHA) \
+			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
+			.
 
 run:
 	docker-compose -f docker-compose.yml up -d
 
 stop:
+	docker-compose -f docker-compose.yml stop
+
+down:
 	docker-compose -f docker-compose.yml down
