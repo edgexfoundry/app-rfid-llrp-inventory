@@ -19,6 +19,9 @@ package main
 import (
 	"fmt"
 	"github.com/pkg/errors"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/commands/routes"
+	"golang.org/x/net/context"
+	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -59,13 +62,36 @@ func main() {
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
-	// access the application's specific configuration settings.
+	// access the application's specific commands settings.
 	valueDescriptor, err := app.edgexSdk.GetAppSettingStrings("ValueDescriptor")
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error(err.Error())
 		os.Exit(-1)
 	}
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Filtering for tag reads only %v", valueDescriptor))
+
+	// Retrieve the application settings from configuration.toml
+	appSettings := app.edgexSdk.ApplicationSettings()
+	if appSettings == nil {
+		app.edgexSdk.LoggingClient.Error("No application settings found")
+		os.Exit(-1)
+	}
+
+	// Create SettingsHandler struct with logger & appsettings to be passed to http response context object
+	settingsHandlerVar := routes.SettingsHandler{Logger: app.edgexSdk.LoggingClient, AppSettings: appSettings}
+	settingsMap := map[string]routes.SettingsHandler{routes.SettingsHandlerKey: settingsHandlerVar}
+
+	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsMap, routes.PingResponse), http.MethodGet)
+	errorAddRouteHandler(app.edgexSdk, err)
+
+	err = app.edgexSdk.AddRoute("/command/sensors", passSettings(settingsMap, routes.GetSensorsCommand), http.MethodGet)
+	errorAddRouteHandler(app.edgexSdk, err)
+
+	err = app.edgexSdk.AddRoute("/command/readings/{readCommand}", passSettings(settingsMap, routes.IssueReadCommand), http.MethodPut)
+	errorAddRouteHandler(app.edgexSdk, err)
+
+	err = app.edgexSdk.AddRoute("/command/behaviors/{behaviorCommand}", passSettings(settingsMap, routes.IssueBehaviorCommand), http.MethodPut)
+	errorAddRouteHandler(app.edgexSdk, err)
 
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
@@ -176,5 +202,20 @@ func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 		case e := <-app.eventChnl:
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event %s", e.OfType()))
 		}
+	}
+}
+
+func passSettings(settingsMap map[string]routes.SettingsHandler, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter,
+		r *http.Request) {
+		ctx := context.WithValue(r.Context(), routes.SettingsMapKey, settingsMap)
+		handler(w, r.WithContext(ctx))
+	}
+}
+
+func errorAddRouteHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
+	if err != nil {
+		edgexSdk.LoggingClient.Error("Error adding route: %v", err.Error())
+		os.Exit(-1)
 	}
 }

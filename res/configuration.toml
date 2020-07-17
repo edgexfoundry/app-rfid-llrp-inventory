@@ -58,3 +58,5 @@ PublishTopic="somewhere"
 
 [ApplicationSettings]
 ValueDescriptor = "Tag reads"
+CoreCommandPUTDevicesNameCommandEndpoint = "http://localhost:48082/api/v1/device/name"
+CoreCommandGETDevicesCommandEndpoint = "http://localhost:48082/api/v1/device"

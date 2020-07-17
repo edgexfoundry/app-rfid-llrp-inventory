@@ -39,7 +39,7 @@ x-common-env-variables: &common-variables
   Clients_VirtualDevice_Host: edgex-device-virtual
   Clients_LLRPDevice_Host: edgex-device-llrp
   Databases_Primary_Host: edgex-redis
-  # Required in case old configuration from previous release used.
+  # Required in case old commands from previous release used.
   # Change to "true" if re-enabling logging service for remote logging
   Logging_EnableRemote: "false"
   #  Clients_Logging_Host: edgex-support-logging # un-comment if re-enabling logging service for remote logging
