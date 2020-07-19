@@ -42,7 +42,7 @@ const (
 	ResourceInventoryEvent = "InventoryEvent"
 
 	// todo: this should probably be configurable
-	inventoryServiceDeviceName = "InventoryService"
+	LLRPDeviceService = "LLRPDeviceService"
 )
 
 type inventoryApp struct {
@@ -231,7 +231,7 @@ func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
 		return
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(inventoryServiceDeviceName, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
+	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
 		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
 	}
 }
