@@ -32,8 +32,8 @@ func initialize() map[string]SettingsHandler {
 		newLogger.Error("***Error: error in reading CoreCommandGETDevicesCommandEndpoint from commands.toml file***")
 		return nil
 	}
-	appSettings = map[string]string{CoreCommandPUTDevicesNameCommandEndpoint: config.Get("ApplicationSettings.CoreCommandPUTDevicesNameCommandEndpoint").(string),
-		CoreCommandGETDevicesCommandEndpoint: config.Get("ApplicationSettings.CoreCommandGETDevicesCommandEndpoint").(string),
+	appSettings = map[string]string{CoreCommandPUTDevice: config.Get("ApplicationSettings.CoreCommandPUTDevicesNameCommandEndpoint").(string),
+		CoreCommandGETDevices: config.Get("ApplicationSettings.CoreCommandGETDevicesCommandEndpoint").(string),
 	}
 
 	settingsHandlerVar := SettingsHandler{Logger: newLogger, AppSettings: appSettings}
@@ -41,6 +41,7 @@ func initialize() map[string]SettingsHandler {
 
 	return settingsMap
 }
+
 /*
 func TestPingResponse(t *testing.T) {
 

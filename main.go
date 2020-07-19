@@ -84,7 +84,7 @@ func main() {
 	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsMap, routes.PingResponse), http.MethodGet)
 	errorAddRouteHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/command/sensors", passSettings(settingsMap, routes.GetSensorsCommand), http.MethodGet)
+	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsMap, routes.GetDevicesCommand), http.MethodGet)
 	errorAddRouteHandler(app.edgexSdk, err)
 
 	err = app.edgexSdk.AddRoute("/command/readings/{readCommand}", passSettings(settingsMap, routes.IssueReadCommand), http.MethodPut)
