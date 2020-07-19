@@ -16,13 +16,12 @@ GIT_SHA=$(shell git rev-parse HEAD)
 GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-inventory.Version=$(VERSION)"
 
 build: $(MICROSERVICES)
-	$(GO) build ./...
 
 rfid-inventory:
 	$(GO) build $(GOFLAGS) -o $@ ./main.go
 
 test:
-	$(GO) test ./... -coverprofile=coverage.out
+	$(GO) test $(args) ./... -coverprofile=coverage.out
 
 clean:
 	rm -f $(MICROSERVICES)

@@ -57,6 +57,5 @@ SubscribeTopic="events"
 PublishTopic="somewhere"
 
 [ApplicationSettings]
-ValueDescriptor = "Tag reads"
 CoreCommandPUTDevice = "http://localhost:48082/api/v1/device/name"
 CoreCommandGETDevices = "http://localhost:48082/api/v1/device"

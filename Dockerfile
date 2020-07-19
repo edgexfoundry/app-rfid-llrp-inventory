@@ -21,11 +21,9 @@ RUN apk update && apk add --no-cache make git gcc libc-dev libsodium-dev zeromq-
 WORKDIR /rfid-inventory-service
 
 COPY go.mod .
-
 RUN go mod download
 
 COPY . .
-RUN apk info -a zeromq-dev
 
 RUN make rfid-inventory
 
