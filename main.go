@@ -38,7 +38,11 @@ const (
 	readChBuffSz  = 1000
 	eventChBuffSz = 10
 
-	Gen2TagRead = "Gen2TagRead"
+	ResourceGen2TagRead    = "Gen2TagRead"
+	ResourceInventoryEvent = "InventoryEvent"
+
+	// todo: this should probably be configurable
+	inventoryServiceDeviceName = "InventoryService"
 )
 
 type inventoryApp struct {
@@ -95,7 +99,7 @@ func main() {
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
 		app.contextGrabber,
-		transforms.NewFilter([]string{Gen2TagRead}).FilterByValueDescriptor,
+		transforms.NewFilter([]string{ResourceGen2TagRead}).FilterByValueDescriptor,
 		app.processEvents,
 	)
 	if err != nil {
@@ -159,7 +163,7 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 	for _, reading := range event.Readings {
 		switch reading.Name {
 
-		case Gen2TagRead:
+		case ResourceGen2TagRead:
 			gen2Read := inventory.Gen2Read{}
 			if err := decode(reading.Value, &gen2Read); err == nil {
 				app.readCh <- gen2Read
@@ -210,7 +214,25 @@ func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 		// TODO: publish these events somewhere (MQTT, rest, database?)
 		case e := <-app.eventCh:
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event %s", e.OfType()))
+			app.pushEventToCoreData(e)
 		}
+	}
+}
+
+func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
+	payload, err := json.Marshal(event)
+	if err != nil {
+		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
+		return
+	}
+
+	if app.edgexSdkContext == nil {
+		app.edgexSdk.LoggingClient.Error("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
+		return
+	}
+
+	if _, err = app.edgexSdkContext.PushToCoreData(inventoryServiceDeviceName, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
+		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
 	}
 }
 

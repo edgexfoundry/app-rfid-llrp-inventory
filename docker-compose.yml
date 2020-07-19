@@ -49,15 +49,15 @@ services:
     image: edgexfoundry/docker-rfid-inventory:0.0.0-dev
     ports:
       - "127.0.0.1:48086:48086"
-    container_name: edgex-app-service-rfid-inventory-service
-    hostname: edgex-app-service-rfid-inventory-service
+    container_name: edgex-app-service-rfid-inventory
+    hostname: edgex-app-service-rfid-inventory
     networks:
       device-llrp-go_edgex-network:
         aliases:
-          - edgex-app-service-rfid-inventory-service
+          - edgex-app-service-rfid-inventory
     environment:
       <<: *common-variables
-      Service_Host: edgex-app-service-rfid-inventory-service
+      Service_Host: edgex-app-service-rfid-inventory
       Service_Port: 48086
       MessageBus_SubscribeHost_Host: edgex-core-data
       Binding_PublishTopic: events
