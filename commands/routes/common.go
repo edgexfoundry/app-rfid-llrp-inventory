@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.com/pkg/errors"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
+	"github.com/pkg/errors"
 	"net/http"
 	"time"
 )
