@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.com/pkg/errors"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"net/http"
 	"time"
@@ -11,7 +12,7 @@ import (
 
 const (
 	// SettingsMapKey is used to store the appSetting in the handler's request context
-	SettingsMapKey mapKey = "settingsMap"
+	SettingsKey mapKey = "settingsMap"
 	// SettingsHandlerKey is used to store the appSetting in the handler's request context
 	SettingsHandlerKey = "settingHandler"
 	//StartReadingCommand to start tag reading in readers
@@ -26,6 +27,8 @@ const (
 	CoreCommandGETDevices = "CoreCommandGETDevices"
 	// LLRPDeviceProfile specifies the name of the device profile in use for LLRP readers, used to determine device type
 	LLRPDeviceProfile = "Device.LLRP.Profile"
+
+	ApiConnectionTimeout = 60 * time.Second
 )
 
 type mapKey string
@@ -43,26 +46,33 @@ type SettingsHandler struct {
 
 //GetSettingsHandler will return the logger and app settings
 func GetSettingsHandler(req *http.Request) (logger.LoggingClient, map[string]string, error) {
-	settingsMap, ok := req.Context().Value(SettingsMapKey).(map[string]SettingsHandler)
-	if !ok || settingsMap == nil {
+	settingsHandler, ok := req.Context().Value(SettingsKey).(SettingsHandler)
+	if !ok {
 		return nil, nil, fmt.Errorf("cannot find appsettings")
 	}
 
-	settingsHandlerVar := settingsMap[SettingsHandlerKey]
-	loggingClient := settingsHandlerVar.Logger
-	appSettings := settingsHandlerVar.AppSettings
+	loggingClient := settingsHandler.Logger
+	appSettings := settingsHandler.AppSettings
 	if loggingClient == nil || appSettings == nil {
 		return nil, nil, fmt.Errorf("loggingClient/appSettings is nil")
 	}
 
 	return loggingClient, appSettings, nil
+}
 
+func GetAppSetting(settings map[string]string, name string) (string, error) {
+	value, ok := settings[name]
+
+	if ok {
+		return value, nil
+	}
+	return "", errors.Errorf("Application setting %s not found", name)
 }
 
 //NewHTTPClient returns HTTP Client variable
 func NewHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 10 * time.Minute,
+		Timeout: ApiConnectionTimeout,
 	}
 }
 
