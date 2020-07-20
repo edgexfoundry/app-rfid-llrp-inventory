@@ -87,6 +87,9 @@ func main() {
 	err := app.edgexSdk.AddRoute("/", passSettings(settingsMap, routes.Index), http.MethodGet)
 	errorAddRouteHandler(app.edgexSdk, err)
 
+	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsMap, routes.RawInventory), http.MethodGet)
+	errorAddRouteHandler(app.edgexSdk, err)
+
 	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsMap, routes.PingResponse), http.MethodGet)
 	errorAddRouteHandler(app.edgexSdk, err)
 

@@ -6,7 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
   <!-- Bootstrap CSS -->
+  <!-- TODO: Add to IP Plan -->
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <!-- todo: may have to remove theme (or this page altogether) before release -->
+  <link rel="stylesheet" href="https://bootswatch.com/4/darkly/bootstrap.min.css">
 
   <style>
     div {
@@ -14,33 +17,42 @@
     }
   </style>
 
-  <title>RFID Inventory Service</title>
+  <script>
+      function call(method, url) {
+          let xhr = new XMLHttpRequest();
+          console.log(method + ' ' + url);
+          xhr.open(method, url);
+
+          xhr.onload = function() {
+              if (xhr.status === 200) {
+                  if (xhr.getResponseHeader("Content-Type") === "application/json") {
+                      console.log(JSON.parse(xhr.responseText));
+                  } else {
+                      console.log('200 OK: ' + xhr.responseText);
+                  }
+              } else {
+                  console.log('Request failed.  Returned status of ' + xhr.status);
+              }
+          };
+
+          xhr.send();
+      }
+  </script>
+
+  <title>RFID Inventory Service - Developer Console</title>
 </head>
 <body>
-<script>
-    function call(method, url) {
-        let xhr = new XMLHttpRequest();
-        console.log(method + ' ' + url);
-        xhr.open(method, url);
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                console.log('200 OK: ' + xhr.responseText);
-                if (xhr.responseText[0] === "{") {
-                    console.log(JSON.parse(xhr.responseText));
-                }
-            } else {
-                console.log('Request failed.  Returned status of ' + xhr.status);
-            }
-        };
-
-        xhr.send();
-    }
-</script>
+<nav class="navbar navbar-dark bg-dark">
+  <span class="navbar-brand mb-0 h1">RFID Inventory Service - Developer Console</span>
+</nav>
 
 <div><button type="button" class="btn btn-success" onclick="call('PUT', '/command/readings/StartReading')">Start Reading</button></div>
 <div><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
 <div><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
+
+<div><a href="/inventory/raw" target="_blank"><button type="button" class="btn btn-light">Raw Inventory</button></a></div>
+<div><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/raw')">Raw Inventory (JSON)</button></div>
 
 </body>
 </html>

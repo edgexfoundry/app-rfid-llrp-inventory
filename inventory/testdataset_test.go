@@ -112,8 +112,8 @@ func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLoca
 		return fmt.Errorf("Expected tag index %d to not be nil! read object: %v\n\tinventory: %#v", tagIndex, read, tagPro)
 	}
 
-	if tag.state != expectedState {
-		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.Epc, tag.state, expectedState, tag)
+	if tag.State != expectedState {
+		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.Epc, tag.State, expectedState, tag)
 	}
 
 	// if expectedRSP is nil, we do not care to validate that field

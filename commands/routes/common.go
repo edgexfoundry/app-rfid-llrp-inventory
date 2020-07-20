@@ -106,10 +106,3 @@ func WritePlainTextHTTPResponse(w http.ResponseWriter, content string, statusCod
 
 	return nil
 }
-
-// WriteHtmlHttpResponse writes HTTP response in HTML format
-func WriteHtmlHttpResponse(w http.ResponseWriter, content []byte) (err error) {
-	w.Header().Set("Content-Type", "text/html")
-	_, err = w.Write(content)
-	return
-}

@@ -36,9 +36,10 @@ type Tag struct {
 	LastArrived  int64
 	LastDeparted int64
 
-	state State
+	State State
 
-	deviceStatsMap map[string]*TagStats // todo: TreeMap??
+	// todo: exporting for ability to print to json
+	DeviceStatsMap map[string]*TagStats
 }
 
 type State string
@@ -72,8 +73,8 @@ type Previous struct {
 func NewTag(epc string) *Tag {
 	return &Tag{
 		Location:       unknown,
-		state:          Unknown,
-		deviceStatsMap: make(map[string]*TagStats),
+		State:          Unknown,
+		DeviceStatsMap: make(map[string]*TagStats),
 		Epc:            epc,
 	}
 }
@@ -84,7 +85,7 @@ func (tag *Tag) asPreviousTag() Previous {
 		lastRead:     tag.LastRead,
 		lastDeparted: tag.LastDeparted,
 		lastArrived:  tag.LastArrived,
-		state:        tag.state,
+		state:        tag.State,
 	}
 }
 
@@ -92,7 +93,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	// todo: double check the implementation on this code
 	// todo: it may not be complete
 
-	srcAlias := read.DeviceId + ":" + string(read.AntennaId)
+	srcAlias := read.AsLocation()
 
 	// only set Tid if it is present
 	if read.Tid != "" {
@@ -102,10 +103,10 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	// update timestamp
 	tag.LastRead = read.Timestamp
 
-	curStats, found := tag.deviceStatsMap[srcAlias]
+	curStats, found := tag.DeviceStatsMap[srcAlias]
 	if !found {
 		curStats = NewTagStats()
-		tag.deviceStatsMap[srcAlias] = curStats
+		tag.DeviceStatsMap[srcAlias] = curStats
 	}
 	curStats.update(read)
 
@@ -114,7 +115,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 		return
 	}
 
-	locationStats, found := tag.deviceStatsMap[tag.Location]
+	locationStats, found := tag.DeviceStatsMap[tag.Location]
 	if !found {
 		// this means the tag has never been read (somehow)
 		tag.Location = srcAlias
@@ -150,7 +151,7 @@ func (tag *Tag) setStateAt(newState State, timestamp int64) {
 		break
 	}
 
-	tag.state = newState
+	tag.State = newState
 }
 
 func (tag *Tag) addHistory(timestamp int64) {

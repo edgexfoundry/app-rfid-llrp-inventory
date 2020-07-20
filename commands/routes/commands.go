@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -30,8 +32,31 @@ func indexBytes() []byte {
 // Index returns main page
 func Index(writer http.ResponseWriter, req *http.Request) {
 	logger, _, err := GetSettingsHandler(req)
-	if err = WriteHtmlHttpResponse(writer, indexBytes()); err != nil {
+
+	writer.Header().Set("Content-Type", "text/html")
+	if _, err = writer.Write(indexBytes()); err != nil {
 		logger.Error(err.Error())
+	}
+}
+
+// RawInventory returns the raw inventory algorithm data
+func RawInventory(writer http.ResponseWriter, req *http.Request) {
+	logger, _, err := GetSettingsHandler(req)
+
+	writer.Header().Set("Content-Type", "application/json")
+
+	tags := inventory.GetRawInventory()
+	bytes, err := json.Marshal(tags)
+
+	if err != nil {
+		logger.Error(err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = writer.Write(bytes); err != nil {
+		logger.Error(err.Error())
+		writer.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
