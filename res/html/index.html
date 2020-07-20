@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+
+  <style>
+    div {
+      margin: 20px;
+    }
+  </style>
+
+  <title>RFID Inventory Service</title>
+</head>
+<body>
+<script>
+    function call(method, url) {
+        let xhr = new XMLHttpRequest();
+        console.log(method + ' ' + url);
+        xhr.open(method, url);
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                console.log('200 OK: ' + xhr.responseText);
+                if (xhr.responseText[0] === "{") {
+                    console.log(JSON.parse(xhr.responseText));
+                }
+            } else {
+                console.log('Request failed.  Returned status of ' + xhr.status);
+            }
+        };
+
+        xhr.send();
+    }
+</script>
+
+<div><button type="button" class="btn btn-success" onclick="call('PUT', '/command/readings/StartReading')">Start Reading</button></div>
+<div><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
+<div><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
+
+</body>
+</html>

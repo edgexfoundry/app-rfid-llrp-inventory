@@ -84,7 +84,10 @@ func main() {
 	settingsHandlerVar := routes.SettingsHandler{Logger: app.edgexSdk.LoggingClient, AppSettings: appSettings}
 	settingsMap := map[string]routes.SettingsHandler{routes.SettingsHandlerKey: settingsHandlerVar}
 
-	err := app.edgexSdk.AddRoute("/ping", passSettings(settingsMap, routes.PingResponse), http.MethodGet)
+	err := app.edgexSdk.AddRoute("/", passSettings(settingsMap, routes.Index), http.MethodGet)
+	errorAddRouteHandler(app.edgexSdk, err)
+
+	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsMap, routes.PingResponse), http.MethodGet)
 	errorAddRouteHandler(app.edgexSdk, err)
 
 	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsMap, routes.GetDevicesCommand), http.MethodGet)
@@ -213,7 +216,7 @@ func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 			return
 		// TODO: publish these events somewhere (MQTT, rest, database?)
 		case e := <-app.eventCh:
-			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event %s", e.OfType()))
+			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
 			app.pushEventToCoreData(e)
 		}
 	}

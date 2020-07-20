@@ -151,8 +151,8 @@ func TestGetSensorsCommand(t *testing.T) {
 		expectedStatusCode int
 		settingsMap        map[string]SettingsHandler
 	}{
-		{"issueSTARTReadCommandTestSuccessful", "http://localhost:49993/command/readings/readCommand", StartReadingCommand, "PUT", "Successfully sent START_READING Command  to all registered rfid devices via EdgeX Core-Command", http.StatusOK, initialize()},
-		{"issueSTOPReadCommandTestSuccessful", "http://localhost:49993/command/readings/readCommand", StopReadingCommand, "PUT", "Successfully sent STOP_READING Command  to all registered rfid devices via EdgeX Core-Command", http.StatusOK, initialize()},
+		{"issueSTARTReadCommandTestSuccessful", "http://localhost:49993/command/readings/readCommand", StartReadingCommand, "PUT", "OK", http.StatusOK, initialize()},
+		{"issueSTOPReadCommandTestSuccessful", "http://localhost:49993/command/readings/readCommand", StopReadingCommand, "PUT", "OK", http.StatusOK, initialize()},
 		{"issueSTARTReadCommandTestUnsuccessful", "http://localhost:49993/command/readings/readCommand", StartReadingCommand, "PUT", "Unsuccessful in sending START_READING Command", http.StatusInternalServerError, initialize()},
 		{"issueSTOPReadCommandTestUnsuccessful", "http://localhost:49993/command/readings/readCommand", StopReadingCommand, "PUT", "Unsuccessful in sending STOP_READING Command", http.StatusInternalServerError, initialize()},
 		{"issueSTARTReadCommandWithZeroDeviceTest", "http://localhost:49993/command/readings/readCommand", StartReadingCommand, "PUT", "No Sensors Available", http.StatusInternalServerError, initialize()},

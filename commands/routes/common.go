@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"net/http"
 	"time"
 )
@@ -11,30 +12,21 @@ import (
 const (
 	// SettingsMapKey is used to store the appSetting in the handler's request context
 	SettingsMapKey mapKey = "settingsMap"
-
 	// SettingsHandlerKey is used to store the appSetting in the handler's request context
 	SettingsHandlerKey = "settingHandler"
-
-	////StartReadingCommand to start tag reading in readers
-	//StartReadingCommand = "START_READING"
-	//
-	////StopReadingCommand to stop tag reading in readers
-	//StopReadingCommand = "STOP_READING"
-	//
-	////ReadCommand Read Command Map key
-	//ReadCommand = "readCommand"
-
+	//StartReadingCommand to start tag reading in readers
+	StartReadingCommand = "StartReading"
+	//StopReadingCommand to stop tag reading in readers
+	StopReadingCommand = "StopReading"
+	//ReadCommandKey Read Command Map key
+	ReadCommandKey = "readCommand"
 	//CoreCommandPUTDevice app settings
 	CoreCommandPUTDevice = "CoreCommandPUTDevice"
-
 	//CoreCommandGETDevices app settings
 	CoreCommandGETDevices = "CoreCommandGETDevices"
+	// LLRPDeviceProfile specifies the name of the device profile in use for LLRP readers, used to determine device type
+	LLRPDeviceProfile = "Device.LLRP.Profile"
 )
-
-// Device list from edgex
-type Device struct {
-	Name string `json:"name"`
-}
 
 type mapKey string
 
@@ -57,13 +49,13 @@ func GetSettingsHandler(req *http.Request) (logger.LoggingClient, map[string]str
 	}
 
 	settingsHandlerVar := settingsMap[SettingsHandlerKey]
-	logger := settingsHandlerVar.Logger
+	loggingClient := settingsHandlerVar.Logger
 	appSettings := settingsHandlerVar.AppSettings
-	if logger == nil || appSettings == nil {
-		return nil, nil, fmt.Errorf("logger/appSettings is nil")
+	if loggingClient == nil || appSettings == nil {
+		return nil, nil, fmt.Errorf("loggingClient/appSettings is nil")
 	}
 
-	return logger, appSettings, nil
+	return loggingClient, appSettings, nil
 
 }
 
@@ -76,15 +68,19 @@ func NewHTTPClient() *http.Client {
 
 //GetDeviceList parses response body & sends back list of registered rfid devices
 func GetDeviceList(respBody []byte) (deviceList []string, err error) {
-	var deviceSlice []Device
+	var deviceSlice []contract.Device
 
 	err = json.Unmarshal(respBody, &deviceSlice)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, result := range deviceSlice {
-		deviceList = append(deviceList, result.Name)
+	for _, d := range deviceSlice {
+
+		// filter only llrp readers
+		if d.Profile.Name == LLRPDeviceProfile {
+			deviceList = append(deviceList, d.Name)
+		}
 	}
 	return deviceList, nil
 }
@@ -109,4 +105,11 @@ func WritePlainTextHTTPResponse(w http.ResponseWriter, content string, statusCod
 	fmt.Fprintf(w, content)
 
 	return nil
+}
+
+// WriteHtmlHttpResponse writes HTTP response in HTML format
+func WriteHtmlHttpResponse(w http.ResponseWriter, content []byte) (err error) {
+	w.Header().Set("Content-Type", "text/html")
+	_, err = w.Write(content)
+	return
 }

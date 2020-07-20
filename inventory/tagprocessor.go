@@ -23,6 +23,8 @@ const (
 	pfxTagEVents           = "tag-events:"
 )
 
+// todo: add/fix persistence
+
 type TagProcessor struct {
 	log      logger.LoggingClient
 	cnxPool  *redis.Pool

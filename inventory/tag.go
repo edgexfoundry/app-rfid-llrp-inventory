@@ -6,6 +6,8 @@
 
 package inventory
 
+import "strconv"
+
 type Gen2Read struct {
 	Epc       string `json:"epc"`
 	Tid       string `json:"tid"`
@@ -17,8 +19,9 @@ type Gen2Read struct {
 	Rssi      int    `json:"rssi"`
 }
 
+// todo: alias support
 func (r *Gen2Read) AsLocation() string {
-	return r.DeviceId + ":" + string(r.AntennaId)
+	return r.DeviceId + "_" + strconv.Itoa(r.AntennaId)
 }
 
 type Tag struct {

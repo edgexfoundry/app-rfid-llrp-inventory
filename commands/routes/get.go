@@ -1,13 +1,14 @@
 package routes
 
 import (
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/pkg/errors"
 )
 
-// SendHTTPGetDeviceRequest GET rest call to edgex-core-command to get the devices/readers list
+// SendHTTPGetDevicesRequest GET rest call to edgex-core-command to get the devices/readers list
 func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Client) ([]string, error) {
 	coreCommandGetDevices, ok := appSettings[CoreCommandGETDevices]
 	if !ok || coreCommandGetDevices == "" {
@@ -18,7 +19,6 @@ func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Clien
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -41,4 +41,33 @@ func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Clien
 		}
 		return deviceList, nil
 	}
+}
+
+// SendHTTPGETRequest sends GET Request to Edgex Core Command
+func SendHTTPGETRequest(endpoint string, logger logger.LoggingClient, client *http.Client) error {
+	// create New GET request
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	//Check & report for any error from EdgeX Core
+	if resp.StatusCode != http.StatusOK {
+		return errors.Errorf("PUT to EdgeX Core failed with status %d; body: %q", resp.StatusCode, string(body))
+	}
+
+	logger.Debug("Response from Edgex Core: " + string(body))
+	return nil
+
 }

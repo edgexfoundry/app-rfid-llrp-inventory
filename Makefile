@@ -8,7 +8,7 @@ MICROSERVICES=rfid-inventory
 
 DOCKERS=docker_rfid_inventory
 
-.PHONY: $(DOCKERS)
+.PHONY: $(DOCKERS) run up clean fmt deploy iterate tail stop-container down stop
 
 VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
 GIT_SHA=$(shell git rev-parse HEAD)
@@ -29,6 +29,19 @@ clean:
 fmt:
 	go fmt ./...
 
+tail:
+	docker logs -f $(shell docker ps -qf name=rfid-inventory)
+
+kill:
+	docker kill $(shell docker ps -qf name=rfid-inventory) || true
+
+stop-container:
+	docker stop $(shell docker ps -qf name=rfid-inventory) || true
+
+iterate: fmt
+	$(MAKE) -j docker stop-container
+	$(MAKE) deploy tail
+
 docker: $(DOCKERS)
 
 docker_rfid_inventory:
@@ -40,11 +53,14 @@ docker_rfid_inventory:
 			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
 			.
 
-run:
-	docker-compose -f docker-compose.yml up -d
+run up:
+	docker-compose up
+
+deploy:
+	docker-compose up -d
 
 stop:
-	docker-compose -f docker-compose.yml stop
+	docker-compose stop
 
 down:
-	docker-compose -f docker-compose.yml down
+	docker-compose down
