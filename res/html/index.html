@@ -51,8 +51,10 @@
 <div><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
 <div><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
 
-<div><a href="/inventory/raw" target="_blank"><button type="button" class="btn btn-light">Raw Inventory</button></a></div>
+<div><a href="/inventory/raw" target="_blank"><button type="button" class="btn btn-light">Raw Inventory (Link)</button></a></div>
 <div><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/raw')">Raw Inventory (JSON)</button></div>
+
+<div><a href="http://localhost:48080/api/v1/event/device/LLRPDeviceService/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events (Link)</button></a></div>
 
 </body>
 </html>
