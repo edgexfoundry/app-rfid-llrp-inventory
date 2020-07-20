@@ -9,9 +9,9 @@ import (
 
 // SendHTTPGetDeviceRequest GET rest call to edgex-core-command to get the devices/readers list
 func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Client) ([]string, error) {
-	coreCommandGetDevices, ok := appSettings[CoreCommandGETDevices]
-	if !ok || coreCommandGetDevices == "" {
-		return nil, errors.Errorf("App settings for edgex-core-command api to get readers/devices is not set")
+	coreCommandGetDevices, err := GetAppSetting(appSettings, CoreCommandGETDevices)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, coreCommandGetDevices, nil)

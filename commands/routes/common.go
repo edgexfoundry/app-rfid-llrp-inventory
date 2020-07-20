@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.com/pkg/errors"
 	"net/http"
 	"time"
 )
 
 const (
 	// SettingsMapKey is used to store the appSetting in the handler's request context
-	SettingsMapKey mapKey = "settingsMap"
+	SettingsKey mapKey = "settingsMap"
 
 	// SettingsHandlerKey is used to store the appSetting in the handler's request context
 	SettingsHandlerKey = "settingHandler"
@@ -29,6 +30,8 @@ const (
 
 	//CoreCommandGETDevices app settings
 	CoreCommandGETDevices = "CoreCommandGETDevices"
+
+	ApiConnectionTimeout = 60 * time.Second
 )
 
 // Device list from edgex
@@ -51,26 +54,33 @@ type SettingsHandler struct {
 
 //GetSettingsHandler will return the logger and app settings
 func GetSettingsHandler(req *http.Request) (logger.LoggingClient, map[string]string, error) {
-	settingsMap, ok := req.Context().Value(SettingsMapKey).(map[string]SettingsHandler)
-	if !ok || settingsMap == nil {
+	settingsHandler, ok := req.Context().Value(SettingsKey).(SettingsHandler)
+	if !ok {
 		return nil, nil, fmt.Errorf("cannot find appsettings")
 	}
 
-	settingsHandlerVar := settingsMap[SettingsHandlerKey]
-	logger := settingsHandlerVar.Logger
-	appSettings := settingsHandlerVar.AppSettings
+	logger := settingsHandler.Logger
+	appSettings := settingsHandler.AppSettings
 	if logger == nil || appSettings == nil {
 		return nil, nil, fmt.Errorf("logger/appSettings is nil")
 	}
 
 	return logger, appSettings, nil
+}
 
+func GetAppSetting(settings map[string]string, name string) (string, error) {
+	value, ok := settings[name]
+
+	if ok {
+		return value, nil
+	}
+	return "", errors.Errorf("Application setting %s not found", name)
 }
 
 //NewHTTPClient returns HTTP Client variable
 func NewHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 10 * time.Minute,
+		Timeout: ApiConnectionTimeout,
 	}
 }
 
