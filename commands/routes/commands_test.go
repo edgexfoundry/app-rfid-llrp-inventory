@@ -1,14 +1,9 @@
 package routes
 
-import (
-	"path/filepath"
+/* The tests here are integration tests which have dependency on edgex services running hence they will fail as
+unit tests. Just commented out for now as some parts of it might be useful in future */
 
-	"github.com/pelletier/go-toml"
-
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-)
-
-var appSettings map[string]string
+/*var appSettings map[string]string
 
 func initialize() map[string]SettingsHandler {
 
@@ -42,7 +37,6 @@ func initialize() map[string]SettingsHandler {
 	return settingsMap
 }
 
-/*
 func TestPingResponse(t *testing.T) {
 
 	tests := []struct {
@@ -138,9 +132,9 @@ func TestGetSensorsCommand(t *testing.T) {
 
 		})
 	}
-}*/
+}
 
-/*func TestIssueReadCommand(t *testing.T) {
+func TestIssueReadCommand(t *testing.T) {
 
 	tests := []struct {
 		name               string
@@ -191,4 +185,5 @@ func TestGetSensorsCommand(t *testing.T) {
 
 		})
 	}
-}*/
+}
+*/
