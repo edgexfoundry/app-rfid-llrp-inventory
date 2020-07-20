@@ -88,7 +88,7 @@ func (ds *testDataset) size() int {
 	return len(ds.tagReads)
 }
 
-func (ds *testDataset) verifyAll(expectedState State, expectedLocation string) error {
+func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
 	ds.updateTagRefs()
 
 	var errs []string
@@ -104,7 +104,7 @@ func (ds *testDataset) verifyAll(expectedState State, expectedLocation string) e
 	return nil
 }
 
-func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLocation string) error {
+func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expectedLocation string) error {
 	tag := ds.tags[tagIndex]
 
 	if tag == nil {
@@ -124,15 +124,15 @@ func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLoca
 	return nil
 }
 
-func (ds *testDataset) verifyStateOf(expectedState State, tagIndex int) error {
+func (ds *testDataset) verifyStateOf(expectedState TagState, tagIndex int) error {
 	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
-func (ds *testDataset) verifyState(tagIndex int, expectedState State) error {
+func (ds *testDataset) verifyState(tagIndex int, expectedState TagState) error {
 	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
-func (ds *testDataset) verifyStateAll(expectedState State) error {
+func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, "")
 }
 

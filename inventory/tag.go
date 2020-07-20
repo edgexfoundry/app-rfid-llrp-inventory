@@ -36,20 +36,19 @@ type Tag struct {
 	LastArrived  int64
 	LastDeparted int64
 
-	State State
+	State TagState
 
-	// todo: exporting for ability to print to json
-	DeviceStatsMap map[string]*TagStats
+	deviceStatsMap map[string]*TagStats
 }
 
-type State string
+type TagState string
 
 const (
-	Unknown      State = "Unknown"
-	Present      State = "Present"
-	Exiting      State = "Exiting"
-	DepartedExit State = "DepartedExit"
-	DepartedPos  State = "DepartedPos"
+	Unknown      TagState = "Unknown"
+	Present      TagState = "Present"
+	Exiting      TagState = "Exiting"
+	DepartedExit TagState = "DepartedExit"
+	DepartedPos  TagState = "DepartedPos"
 )
 
 type Waypoint struct {
@@ -67,14 +66,14 @@ type Previous struct {
 	lastRead     int64
 	lastArrived  int64
 	lastDeparted int64
-	state        State
+	state        TagState
 }
 
 func NewTag(epc string) *Tag {
 	return &Tag{
 		Location:       unknown,
 		State:          Unknown,
-		DeviceStatsMap: make(map[string]*TagStats),
+		deviceStatsMap: make(map[string]*TagStats),
 		Epc:            epc,
 	}
 }
@@ -103,10 +102,10 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	// update timestamp
 	tag.LastRead = read.Timestamp
 
-	curStats, found := tag.DeviceStatsMap[srcAlias]
+	curStats, found := tag.deviceStatsMap[srcAlias]
 	if !found {
 		curStats = NewTagStats()
-		tag.DeviceStatsMap[srcAlias] = curStats
+		tag.deviceStatsMap[srcAlias] = curStats
 	}
 	curStats.update(read)
 
@@ -115,7 +114,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 		return
 	}
 
-	locationStats, found := tag.DeviceStatsMap[tag.Location]
+	locationStats, found := tag.deviceStatsMap[tag.Location]
 	if !found {
 		// this means the tag has never been read (somehow)
 		tag.Location = srcAlias
@@ -135,11 +134,11 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	}
 }
 
-func (tag *Tag) setState(newState State) {
+func (tag *Tag) setState(newState TagState) {
 	tag.setStateAt(newState, tag.LastRead)
 }
 
-func (tag *Tag) setStateAt(newState State, timestamp int64) {
+func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 	// capture transition times
 	switch newState {
 	case Present:

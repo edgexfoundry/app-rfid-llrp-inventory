@@ -12,16 +12,15 @@ package inventory
 // such that no new memory allocations need to be made.
 type CircularBuffer struct {
 	windowSize int
-	// todo: exported only for ability to marshal to json for now
-	Values  []float64
-	counter int
+	values     []float64
+	counter    int
 }
 
 // NewCircularBuffer allocates memory for a new CircularBuffer with the given windowSize
 func NewCircularBuffer(windowSize int) *CircularBuffer {
 	return &CircularBuffer{
 		windowSize: windowSize,
-		Values:     make([]float64, windowSize),
+		values:     make([]float64, windowSize),
 	}
 }
 
@@ -40,7 +39,7 @@ func (buff *CircularBuffer) GetMean() float64 {
 	count := buff.GetCount()
 	var total float64
 	for i := 0; i < count; i++ {
-		total += buff.Values[i]
+		total += buff.values[i]
 	}
 	return total / float64(count)
 }
@@ -48,6 +47,6 @@ func (buff *CircularBuffer) GetMean() float64 {
 // AddValue appends a new value onto the backing slice,
 // overriding the oldest existing value if count has reached windowSize
 func (buff *CircularBuffer) AddValue(value float64) {
-	buff.Values[buff.counter%buff.windowSize] = value
+	buff.values[buff.counter%buff.windowSize] = value
 	buff.counter++
 }
