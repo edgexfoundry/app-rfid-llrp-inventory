@@ -62,7 +62,6 @@ func main() {
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
-	// access the application's specific commands settings.
 	valueDescriptor, err := app.edgexSdk.GetAppSettingStrings("ValueDescriptor")
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error(err.Error())
@@ -70,7 +69,6 @@ func main() {
 	}
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Filtering for tag reads only %v", valueDescriptor))
 
-	// Retrieve the application settings from configuration.toml
 	appSettings := app.edgexSdk.ApplicationSettings()
 	if appSettings == nil {
 		app.edgexSdk.LoggingClient.Error("No application settings found")
