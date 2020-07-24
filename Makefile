@@ -15,6 +15,9 @@ GIT_SHA=$(shell git rev-parse HEAD)
 
 GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-inventory.Version=$(VERSION)"
 
+# default tail lines
+n = 100
+
 build: $(MICROSERVICES)
 
 rfid-inventory:
@@ -30,7 +33,7 @@ fmt:
 	go fmt ./...
 
 tail:
-	docker logs -f $(shell docker ps -qf name=rfid-inventory)
+	docker logs -f --tail $(n) $(shell docker ps -qf name=rfid-inventory)
 
 kill:
 	docker kill $(shell docker ps -qf name=rfid-inventory) || true

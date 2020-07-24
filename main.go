@@ -200,15 +200,11 @@ func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 }
 
 func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read from %s", read.DeviceId))
+	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read: %+v", read))
 	e := app.processor.ProcessReadData(read)
-	switch e.(type) {
-	case inventory.Arrived:
-		app.eventCh <- e
-	case inventory.Moved:
+	if e != nil {
 		app.eventCh <- e
 	}
-
 }
 
 func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {

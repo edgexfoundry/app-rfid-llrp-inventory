@@ -6,7 +6,10 @@
 
 package inventory
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 type Gen2Read struct {
 	Epc       string `json:"epc"`
@@ -38,7 +41,8 @@ type Tag struct {
 
 	State TagState
 
-	deviceStatsMap map[string]*TagStats
+	// todo: exported just for visibility in raw inventory api
+	DeviceStatsMap map[string]*TagStats
 }
 
 type TagState string
@@ -73,7 +77,7 @@ func NewTag(epc string) *Tag {
 	return &Tag{
 		Location:       unknown,
 		State:          Unknown,
-		deviceStatsMap: make(map[string]*TagStats),
+		DeviceStatsMap: make(map[string]*TagStats),
 		Epc:            epc,
 	}
 }
@@ -102,10 +106,10 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	// update timestamp
 	tag.LastRead = read.Timestamp
 
-	curStats, found := tag.deviceStatsMap[srcAlias]
+	curStats, found := tag.DeviceStatsMap[srcAlias]
 	if !found {
 		curStats = NewTagStats()
-		tag.deviceStatsMap[srcAlias] = curStats
+		tag.DeviceStatsMap[srcAlias] = curStats
 	}
 	curStats.update(read)
 
@@ -114,7 +118,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 		return
 	}
 
-	locationStats, found := tag.deviceStatsMap[tag.Location]
+	locationStats, found := tag.DeviceStatsMap[tag.Location]
 	if !found {
 		// this means the tag has never been read (somehow)
 		tag.Location = srcAlias
@@ -125,7 +129,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 			weight = weighter.getWeight(locationStats.LastRead)
 		}
 
-		//logrus.Debugf("%f, %f", curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM())
+		tagPro.log.Info(fmt.Sprintf("%f, %f", curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM()))
 
 		if curStats.getRssiMeanDBM() > locationStats.getRssiMeanDBM()+weight {
 			tag.Location = srcAlias

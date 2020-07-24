@@ -75,6 +75,8 @@ func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 	prev := tag.asPreviousTag()
 	tag.update(read, &tagPro.adjuster)
 
+	tagPro.log.Info(fmt.Sprintf("prev: %+v\ncurr: %+v", prev, tag))
+
 	switch prev.state {
 
 	case Unknown:

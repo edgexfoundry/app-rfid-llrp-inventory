@@ -46,7 +46,7 @@ func RawInventory(writer http.ResponseWriter, req *http.Request) {
 	writer.Header().Set("Content-Type", "application/json")
 
 	tags := inventory.GetRawInventory()
-	bytes, err := json.Marshal(tags)
+	bytes, err := json.MarshalIndent(tags, "", "  ")
 
 	if err != nil {
 		logger.Error(err.Error())
