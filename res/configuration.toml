@@ -58,5 +58,3 @@ PublishTopic="somewhere"
 
 [ApplicationSettings]
 ValueDescriptor = "Tag reads"
-CoreCommandPUTDevice = "http://edgex-core-command:48082/api/v1/device/name"
-CoreCommandGETDevices = "http://edgex-core-command:48082/api/v1/device"

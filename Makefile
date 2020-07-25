@@ -1,4 +1,4 @@
-.PHONY: build test clean fmt docker
+.PHONY: build test clean fmt docker run stop down
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
@@ -41,3 +41,11 @@ docker_rfid_inventory:
 			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
 			.
 
+run:
+	docker-compose -f docker-compose.yml up -d
+
+stop:
+	docker-compose -f docker-compose.yml stop
+
+down:
+	docker-compose -f docker-compose.yml down
