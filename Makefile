@@ -1,4 +1,4 @@
-.PHONY: build test clean fmt docker run stop down
+.PHONY: build test clean fmt docker
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
