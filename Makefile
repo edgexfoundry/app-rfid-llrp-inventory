@@ -2,7 +2,7 @@
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
-MICROSERVICES=rfid-inventory
+MICROSERVICES=cmd/rfid-inventory
 
 .PHONY: $(MICROSERVICES)
 
@@ -20,7 +20,7 @@ n = 100
 
 build: $(MICROSERVICES)
 
-rfid-inventory:
+cmd/rfid-inventory:
 	$(GO) build $(GOFLAGS) -o $@ ./main.go
 
 test:
@@ -57,7 +57,10 @@ docker_rfid_inventory:
 			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
 			.
 
-run up:
+run: cmd/rfid-inventory
+	cd ./cmd && ./rfid-inventory -cp=consul://localhost:8500 -registry -confdir=res
+
+up:
 	docker-compose up
 
 deploy:

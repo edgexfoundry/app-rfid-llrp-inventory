@@ -36,4 +36,4 @@ RUN apk --no-cache add zeromq
 
 COPY --from=builder /rfid-inventory-service/res /res
 COPY --from=builder /rfid-inventory-service /
-CMD [ "/rfid-inventory","-registry","-confdir=/res/docker"]
+CMD [ "/rfid-inventory","-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res/docker"]
