@@ -1,7 +1,7 @@
 # RFID Inventory Service
 ## Overview
-RFID Inventory Service - Edgex application service for processing tag reads
-and producing events [ARRIVED, MOVED]
+RFID Inventory Service - Edgex application service for processing tag reads,
+producing events [ARRIVED, MOVED], configure and manage the LLRP readers via commands
 
 ## Installation and Execution ##
 
@@ -12,44 +12,35 @@ and producing events [ARRIVED, MOVED]
  - Docker
  - Docker-compose
 
-#### Build ####
-
+##### Build #####
 ```
 make build
 ```
-
-#### Execute unit tests with coverage ####
-
+##### Execute unit tests with coverage #####
 ```
 make test
 ```
-
-#### Format ####
-
+##### Format #####
 ```
 make fmt
 ```
-
-
-#### Build Docker image ####
+##### Build Docker image #####
 ```
 make docker
 ```
 
-#### Docker-compose run with other Edgex services (Geneva Release) ####
+#### Commands Available
+- Ping command to see if the service is up and running.
 ```
-make run
-```
+curl -o- http://localhost:48086/ping
 
-#### Docker-compose stop ####
+pong
 ```
-make stop
+- Command to get all the list of LLRP readers registered in edgex.
 ```
+curl -o- http://localhost:48086/command/readers
 
-#### Docker-compose down ####
+{"ReaderList":["192.168.1.78_5084"]}
 ```
-make down
-```
-
-## License
+#### License
 [Apache-2.0](LICENSE)
