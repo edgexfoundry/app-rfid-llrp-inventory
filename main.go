@@ -92,9 +92,6 @@ func main() {
 	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsHandlerVar, routes.RawInventory), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.PingResponse), http.MethodGet)
-	addRouteErrorHandler(app.edgexSdk, err)
-
 	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevicesCommand), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 

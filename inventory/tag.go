@@ -41,8 +41,7 @@ type Tag struct {
 
 	State TagState
 
-	// todo: exported just for visibility in raw inventory api
-	DeviceStatsMap map[string]*TagStats
+	deviceStatsMap map[string]*TagStats
 }
 
 type TagState string
@@ -77,7 +76,7 @@ func NewTag(epc string) *Tag {
 	return &Tag{
 		Location:       unknown,
 		State:          Unknown,
-		DeviceStatsMap: make(map[string]*TagStats),
+		deviceStatsMap: make(map[string]*TagStats),
 		Epc:            epc,
 	}
 }
@@ -106,10 +105,10 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	// update timestamp
 	tag.LastRead = read.Timestamp
 
-	curStats, found := tag.DeviceStatsMap[srcAlias]
+	curStats, found := tag.deviceStatsMap[srcAlias]
 	if !found {
 		curStats = NewTagStats()
-		tag.DeviceStatsMap[srcAlias] = curStats
+		tag.deviceStatsMap[srcAlias] = curStats
 	}
 	curStats.update(read)
 
@@ -118,7 +117,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 		return
 	}
 
-	locationStats, found := tag.DeviceStatsMap[tag.Location]
+	locationStats, found := tag.deviceStatsMap[tag.Location]
 	if !found {
 		// this means the tag has never been read (somehow)
 		tag.Location = srcAlias
@@ -159,4 +158,51 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 
 func (tag *Tag) addHistory(timestamp int64) {
 	// todo: implement
+}
+
+// StaticTag represents a Tag object stuck in time for use with APIs
+type StaticTag struct {
+	Epc            string                    `json:"epc"`
+	Tid            string                    `json:"tid"`
+	Location       string                    `json:"location"`
+	LastRead       int64                     `json:"last_read"`
+	LastArrived    int64                     `json:"last_arrived"`
+	LastDeparted   int64                     `json:"last_departed"`
+	State          TagState                  `json:"state"`
+	DeviceStatsMap map[string]StaticTagStats `json:"device_stats_map"`
+}
+
+// newStaticTag constructs a StaticTag object from an existing Tag pointer
+func newStaticTag(tag *Tag) StaticTag {
+	s := StaticTag{
+		Epc:            tag.Epc,
+		Tid:            tag.Tid,
+		Location:       tag.Location,
+		LastRead:       tag.LastRead,
+		LastArrived:    tag.LastArrived,
+		LastDeparted:   tag.LastDeparted,
+		State:          tag.State,
+		DeviceStatsMap: make(map[string]StaticTagStats, len(tag.deviceStatsMap)),
+	}
+
+	for k, v := range tag.deviceStatsMap {
+		s.DeviceStatsMap[k] = newStaticTagStats(v)
+	}
+
+	return s
+}
+
+// StaticTagStats represents a TagStats object stuck in time for use with APIs
+// and includes pre-calculated data
+type StaticTagStats struct {
+	LastRead int64   `json:"last_read"`
+	MeanRSSI float64 `json:"mean_rssi"`
+}
+
+// newStaticTagStats constructs a StaticTagStats object from an existing TagStats pointer
+func newStaticTagStats(stats *TagStats) StaticTagStats {
+	return StaticTagStats{
+		LastRead: stats.LastRead,
+		MeanRSSI: stats.getRssiMeanDBM(),
+	}
 }

@@ -12,26 +12,45 @@
   <link rel="stylesheet" href="https://bootswatch.com/4/darkly/bootstrap.min.css">
 
   <style>
-    div {
+    /* button divs */
+    .b {
       margin: 20px;
+    }
+
+    #output_log {
+      background: rgba(255,255,255,0.1); /* translucent */
+      margin: 20px;
+      padding: 20px;
     }
   </style>
 
   <script>
+      function log(str, alternate) {
+          console.log(alternate !== undefined ? alternate : str);
+          document.getElementById("output_log").innerHTML += "<pre>" + str + "</pre>";
+      }
+
+      function clear_log() {
+          document.getElementById("output_log").innerHTML = "";
+      }
+
       function call(method, url) {
+          clear_log();
+
           let xhr = new XMLHttpRequest();
-          console.log(method + ' ' + url);
+          log(method + ' ' + url);
           xhr.open(method, url);
 
           xhr.onload = function() {
               if (xhr.status === 200) {
                   if (xhr.getResponseHeader("Content-Type") === "application/json") {
-                      console.log(JSON.parse(xhr.responseText));
+                      let obj = JSON.parse(xhr.responseText);
+                      log(JSON.stringify(obj, null, 2), obj);
                   } else {
-                      console.log('200 OK: ' + xhr.responseText);
+                      log('200 OK: ' + xhr.responseText);
                   }
               } else {
-                  console.log('Request failed.  Returned status of ' + xhr.status);
+                  log('Request failed.  Returned status of ' + xhr.status);
               }
           };
 
@@ -47,14 +66,17 @@
   <span class="navbar-brand mb-0 h1">RFID Inventory Service - Developer Console</span>
 </nav>
 
-<div><button type="button" class="btn btn-success" onclick="call('PUT', '/command/readings/StartReading')">Start Reading</button></div>
-<div><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
-<div><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
+<div id="content" style="height: 100%">
+  <div class="b"><button type="button" class="btn btn-success" onclick="call('PUT', '/command/readings/StartReading')">Start Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
+  <div class="b"><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/raw')">Raw Inventory</button></div>
+  <div class="b"><a href="http://localhost:48080/api/v1/event/device/LLRPDeviceService/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
 
-<div><a href="/inventory/raw" target="_blank"><button type="button" class="btn btn-light">Raw Inventory (Link)</button></a></div>
-<div><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/raw')">Raw Inventory (JSON)</button></div>
+  <div id="output_log">
+  </div>
 
-<div><a href="http://localhost:48080/api/v1/event/device/LLRPDeviceService/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events (Link)</button></a></div>
+</div>
 
 </body>
 </html>

@@ -47,15 +47,15 @@ func NewTagProcessor(lc logger.LoggingClient) *TagProcessor {
 	return tagPro
 }
 
-func GetRawInventory() []Tag {
+func GetRawInventory() []StaticTag {
 	tagPro.mutex.Lock()
 	defer tagPro.mutex.Unlock()
 
 	// convert tag map of pointers into a flat array of non-pointers
-	res := make([]Tag, len(tagPro.tags))
+	res := make([]StaticTag, len(tagPro.tags))
 	var i int
 	for _, tag := range tagPro.tags {
-		res[i] = *tag
+		res[i] = newStaticTag(tag)
 		i++
 	}
 	return res

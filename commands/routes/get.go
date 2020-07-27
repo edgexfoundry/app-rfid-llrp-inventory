@@ -45,6 +45,7 @@ func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Clien
 
 // SendHTTPGETRequest sends GET Request to Edgex Core Command
 func SendHTTPGETRequest(endpoint string, logger logger.LoggingClient, client *http.Client) error {
+	logger.Debug(http.MethodGet + " " + endpoint)
 	// create New GET request
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -64,7 +65,7 @@ func SendHTTPGETRequest(endpoint string, logger logger.LoggingClient, client *ht
 
 	//Check & report for any error from EdgeX Core
 	if resp.StatusCode != http.StatusOK {
-		return errors.Errorf("PUT to EdgeX Core failed with status %d; body: %q", resp.StatusCode, string(body))
+		return errors.Errorf("GET to EdgeX Core failed with status %d; body: %q", resp.StatusCode, string(body))
 	}
 
 	logger.Debug("Response from Edgex Core: " + string(body))
