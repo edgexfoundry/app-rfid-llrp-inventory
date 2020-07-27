@@ -25,7 +25,10 @@ RUN go mod download
 
 COPY . .
 
-RUN make rfid-inventory
+# To run tests in the build container:
+#   docker build --build-arg 'MAKE=build test' .
+ARG MAKE='build'
+RUN make $MAKE
 
 FROM alpine
 
@@ -34,6 +37,7 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
 
 RUN apk --no-cache add zeromq
 
-COPY --from=builder /rfid-inventory-service/res /res
-COPY --from=builder /rfid-inventory-service /
+COPY --from=builder /rfid-inventory-service/cmd /
+COPY --from=builder /rfid-inventory-service/LICENSE /
+COPY --from=builder /rfid-inventory-service/Attribution.txt /
 CMD [ "/rfid-inventory","-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res/docker"]

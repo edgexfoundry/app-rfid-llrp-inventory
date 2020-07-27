@@ -58,7 +58,7 @@ docker_rfid_inventory:
 			.
 
 run: cmd/rfid-inventory
-	cd ./cmd && ./rfid-inventory -cp=consul://localhost:8500 -registry -confdir=res
+	cd ./cmd && ./rfid-inventory -cp=consul://localhost:8500 --registry -confdir=res
 
 up:
 	docker-compose up
