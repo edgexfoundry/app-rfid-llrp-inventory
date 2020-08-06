@@ -14,33 +14,46 @@ producing events [ARRIVED, MOVED], configure and manage the LLRP readers via com
 
 ##### Build #####
 ```
-make build
+$ make build
 ```
 ##### Execute unit tests with coverage #####
 ```
-make test
+$ make test
 ```
 ##### Format #####
 ```
-make fmt
+$ make fmt
 ```
 ##### Build Docker image #####
 ```
-make docker
+$ make docker
 ```
 
 #### Commands Available
 - Ping command to see if the service is up and running.
 ```
-curl -o- http://localhost:48086/ping
+GET http://localhost:48086/ping
 
 pong
 ```
 - Command to get all the list of LLRP readers registered in edgex.
 ```
-curl -o- http://localhost:48086/command/readers
+GET http://localhost:48086/command/readers
 
 {"ReaderList":["192.168.1.78_5084"]}
 ```
+- Command to make the LLRP reader start reading tags
+```
+POST http://localhost:48086/command/readings/StartReading
+
+OK
+```
+- Command to make the LLRP reader stop reading tags
+```
+POST http://localhost:48086/command/readings/StopReading
+
+OK
+```
+
 #### License
 [Apache-2.0](LICENSE)

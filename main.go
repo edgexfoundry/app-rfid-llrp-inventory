@@ -24,8 +24,8 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/commands/routes"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
 	"os"
@@ -86,19 +86,19 @@ func main() {
 	err := app.edgexSdk.AddRoute("/", passSettings(settingsHandlerVar, routes.Index), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.PingResponse), http.MethodGet)
+	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.Ping), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
 	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsHandlerVar, routes.RawInventory), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevicesCommand), http.MethodGet)
+	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevices), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/command/readings/{readCommand}", passSettings(settingsHandlerVar, routes.IssueReadCommand), http.MethodPut)
+	err = app.edgexSdk.AddRoute("/command/readings/{readCommand}", passSettings(settingsHandlerVar, routes.IssueReadOrStop), http.MethodPost)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/command/behaviors/{behaviorCommand}", passSettings(settingsHandlerVar, routes.IssueBehaviorCommand), http.MethodPut)
+	err = app.edgexSdk.AddRoute("/command/behaviors/{behaviorCommand}", passSettings(settingsHandlerVar, routes.IssueBehavior), http.MethodPut)
 	addRouteErrorHandler(app.edgexSdk, err)
 
 	// the collection of functions to execute every time an event is triggered.
