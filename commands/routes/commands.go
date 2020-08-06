@@ -1,230 +1,116 @@
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/gorilla/mux"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"io/ioutil"
 	"net/http"
-	"os"
-	"strings"
-	"sync"
+	"time"
+)
+
+const (
+	httpTimeout = 60 * time.Second
 )
 
 var (
-	client      = NewHTTPClient()
-	_indexBytes []byte
+	client = &http.Client{
+		Timeout: httpTimeout,
+	}
 )
 
-// indexBytes lazy-loads html index page
-func indexBytes() []byte {
-	if _indexBytes == nil {
-		var err error
-		_indexBytes, err = ioutil.ReadFile("res/html/index.html")
-		if err != nil {
-			return nil
-		}
-	}
-	return _indexBytes
-}
-
 // Index returns main page
-func Index(writer http.ResponseWriter, req *http.Request) {
-	logger, _, err := GetSettingsHandler(req)
-
-	writer.Header().Set("Content-Type", "text/html")
-	if _, err = writer.Write(indexBytes()); err != nil {
-		logger.Error(err.Error())
-	}
+func Index(w http.ResponseWriter, req *http.Request) {
+	http.ServeFile(w, req, "res/html/index.html")
 }
 
-// RawInventory returns the raw inventory algorithm data
-func RawInventory(writer http.ResponseWriter, req *http.Request) {
-	logger, _, err := GetSettingsHandler(req)
+// RawInventory returns a handler bound to the TagProcessor.
+// When called, it returns the raw inventory algorithm data.
+func RawInventory(lc logger.LoggingClient, tagPro *inventory.TagProcessor) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		bytes, err := json.Marshal(tagPro.GetRawInventory())
 
-	writer.Header().Set("Content-Type", "application/json")
-
-	tags := inventory.GetRawInventory()
-	bytes, err := json.MarshalIndent(tags, "", "  ")
-
-	if err != nil {
-		logger.Error(err.Error())
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if _, err = writer.Write(bytes); err != nil {
-		logger.Error(err.Error())
-		writer.WriteHeader(http.StatusInternalServerError)
-	}
-}
-
-// PingResponse sends pong back to client indicating service is up
-func PingResponse(writer http.ResponseWriter, req *http.Request) {
-	responseMessage := "pong"
-	logger, _, err := GetSettingsHandler(req)
-
-	if err != nil {
-		if err = WritePlainTextHTTPResponse(writer, "", http.StatusInternalServerError); err != nil {
-			logger.Error(err.Error())
+		if err != nil {
+			lc.Error("Failed to marshal inventory", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-	} else {
-		if err = WritePlainTextHTTPResponse(writer, responseMessage, http.StatusOK); err != nil {
-			logger.Error(err.Error())
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, err = w.Write(bytes); err != nil {
+			lc.Error("Failed to write inventory response.", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
 }
 
-// GetDevicesCommand gets device/reader list via EdgeX Core Command API
-func GetDevicesCommand(writer http.ResponseWriter, req *http.Request) {
-	logger, appSettings, err := GetSettingsHandler(req)
-	if err != nil {
-		if err = WritePlainTextHTTPResponse(writer, "", http.StatusInternalServerError); err != nil {
-			logger.Error(err.Error())
-		}
-		return
-	}
+// StartReaders sends start/stop reading command via EdgeX Core Command API
+func StartReaders(lc logger.LoggingClient, apiBase, cmdName, deviceURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
 
-	logger.Info("Command to get the reader list called")
-	deviceList, err := SendHTTPGetDevicesRequest(appSettings, client)
-	if err != nil {
-		responseMessage := err.Error()
-		logger.Error(err.Error())
-		if err = WritePlainTextHTTPResponse(writer, responseMessage, http.StatusInternalServerError); err != nil {
-			logger.Error(err.Error())
-		}
-	} else {
-		//Send list of registered rfid devices to Client request
-		if err = WriteJSONDeviceListHTTPResponse(writer, deviceList); err != nil {
-			logger.Error(err.Error())
-		}
-	}
-}
+		deviceList, err := GetDevices(deviceURL, client)
+		if err != nil {
+			lc.Error("Failed to get devices", "error", err.Error())
 
-// IssueReadCommand sends start/stop reading command via EdgeX Core Command API
-func IssueReadCommand(writer http.ResponseWriter, req *http.Request) {
-	//Initialize response parameters
-	responseMessage := ""
-	httpResponseCode := http.StatusOK
-
-	logger, appSettings, err := GetSettingsHandler(req)
-
-	if err != nil {
-		responseMessage = http.StatusText(http.StatusInternalServerError)
-		httpResponseCode = http.StatusInternalServerError
-		if logger != nil {
-			logger.Error(err.Error())
-		} else {
-			fmt.Fprintln(os.Stderr, err.Error())
-		}
-		if werr := WritePlainTextHTTPResponse(writer, responseMessage, httpResponseCode); werr != nil {
-			logger.Error(werr.Error())
-		}
-		return
-	}
-
-	putCommandEndpoint := appSettings[CoreCommandPUTDevice]
-	//Check for empty putCommandEndpoint
-	if strings.TrimSpace(putCommandEndpoint) == "" {
-		responseMessage = http.StatusText(http.StatusInternalServerError)
-		httpResponseCode = http.StatusInternalServerError
-		logger.Error("PUT command Endpoint to EdgeX Core is nil")
-		if werr := WritePlainTextHTTPResponse(writer, responseMessage, httpResponseCode); werr != nil {
-			logger.Error(werr.Error())
-		}
-		return
-	}
-
-	vars := mux.Vars(req)
-	readCommand := vars[ReadCommandKey]
-
-	logger.Info(fmt.Sprintf("readCommand to be sent to registered devices is %s", readCommand))
-
-	//Return back with error message if unable to parse Read Command
-	if !(readCommand == StartReadingCommand || readCommand == StopReadingCommand) {
-
-		responseMessage = fmt.Sprintf("Unable to parse %v Command", readCommand)
-		httpResponseCode = http.StatusBadRequest
-		logger.Error(responseMessage)
-
-		//Send response back to Client request
-		if werr := WritePlainTextHTTPResponse(writer, responseMessage, httpResponseCode); werr != nil {
-			logger.Error(werr.Error())
-		}
-		return
-
-	}
-
-	// todo: this should not be done here
-	// Get Device List from EdgeX Core Command
-	deviceList, err := SendHTTPGetDevicesRequest(appSettings, client)
-	if err != nil {
-		//Log the actual error & display response message to Client as "Internal Server Error"
-		if deviceList != nil {
-			responseMessage = err.Error()
-		} else {
-			responseMessage = http.StatusText(http.StatusInternalServerError)
-		}
-		httpResponseCode = http.StatusInternalServerError
-		logger.Error(err.Error())
-
-		if werr := WritePlainTextHTTPResponse(writer, responseMessage, httpResponseCode); werr != nil {
-			logger.Error(werr.Error())
-		}
-		return
-	}
-
-	//Empty device List check done in SendHTTPGetRequest function, error logged in 122 & return back
-	deviceListLength := len(deviceList)
-
-	//sendErrs track any unsuccessful PUT request to EdgeX Core Command
-	sendErrs := make([]bool, deviceListLength)
-
-	//Create & Add devices count into waitgroup
-	var wg sync.WaitGroup
-	wg.Add(deviceListLength)
-
-	logger.Info(fmt.Sprintf("Sending %v Command to all rfid registered devices", readCommand))
-
-	for i, deviceName := range deviceList {
-		go func(i int, deviceName string) {
-
-			//Delete from waitgroup
-			defer wg.Done()
-
-			//PUT request to device-deviceName via EdgeX Core Command
-			finalEndpoint := putCommandEndpoint + "/" + deviceName + "/command/" + readCommand
-			err := SendHTTPGETRequest(finalEndpoint, logger, client)
-			if err != nil {
-				sendErrs[i] = true
-				logger.Error(fmt.Sprintf("Error sending %v Command to device %v via EdgeX Core-Command", readCommand, deviceName))
+			w.WriteHeader(http.StatusInternalServerError)
+			if _, err := w.Write([]byte("Unable to complete request.")); err != nil {
+				lc.Error("Failed to write response.", "error", err.Error())
 			}
-		}(i, deviceName)
-	}
-
-	//Wait until all in waitgroup are executed
-	wg.Wait()
-
-	//Successful Response back to Client Request
-	responseMessage = "OK"
-	for _, errYes := range sendErrs {
-		if errYes {
-			//Unsuccessful Response back to Client Request
-			httpResponseCode = http.StatusInternalServerError
-			responseMessage = fmt.Sprintf("Unsuccessful in sending %v Command", readCommand)
-			break
+			return
 		}
 
-	}
+		if len(deviceList) == 0 {
+			lc.Info("No devices.")
+			return
+		}
 
-	//Send response back to Client requent
-	if werr := WritePlainTextHTTPResponse(writer, responseMessage, httpResponseCode); werr != nil {
-		logger.Error(werr.Error())
+		for _, deviceName := range deviceList {
+			endpoint := apiBase + "/" + deviceName + "/command/" + cmdName
+			go func(endpoint string) {
+				req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+				if err != nil {
+					lc.Error("Failed to construct request.", "error", err)
+					return
+				}
+
+				resp, err := client.Do(req)
+				if err != nil {
+					lc.Error("Request failed.", "command", cmdName, "error", err)
+					return
+				}
+				defer resp.Body.Close()
+
+				if 200 <= resp.StatusCode && resp.StatusCode < 300 {
+					// Best effort: see if the body has anything useful.
+					body, _ := ioutil.ReadAll(resp.Body)
+					if len(body) > 0 {
+						lc.Error("Request failed.", "command", cmdName,
+							"endpoint", endpoint, "status", resp.StatusCode,
+							"body", string(body))
+					} else {
+						lc.Error("Request failed.", "command", cmdName,
+							"endpoint", endpoint, "status", resp.StatusCode)
+					}
+					return
+				}
+			}(endpoint)
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+		if _, err := w.Write([]byte("Request received.")); err != nil {
+			lc.Error("Failed to write response.", "error", err.Error())
+		}
 	}
 }
 
-// IssueBehaviorCommand sends command to set/apply behavior command
-func IssueBehaviorCommand(writer http.ResponseWriter, req *http.Request) {
-	//TODO
+// SetBehaviors sends command to set/apply behavior command
+func SetBehaviors() http.HandlerFunc {
+	return func(writer http.ResponseWriter, req *http.Request) {
+		// TODO
+	}
 }

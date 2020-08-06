@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -33,71 +32,65 @@ type TagProcessor struct {
 	mutex    sync.Mutex
 }
 
-var once sync.Once
-var tagPro *TagProcessor
-
 func NewTagProcessor(lc logger.LoggingClient) *TagProcessor {
-	once.Do(func() {
-		tagPro = new(TagProcessor)
-		tagPro.log = lc
-		tagPro.tags = make(map[string]*Tag)
-		tagPro.adjuster = newRssiAdjuster()
-		// initializeDB()
-	})
+	tagPro := &TagProcessor{
+		log:      lc,
+		tags:     make(map[string]*Tag),
+		adjuster: newRssiAdjuster(),
+	}
+
+	// tagPro.initializeDB()
 	return tagPro
 }
 
-func GetRawInventory() []StaticTag {
+func (tagPro *TagProcessor) GetRawInventory() []StaticTag {
 	tagPro.mutex.Lock()
 	defer tagPro.mutex.Unlock()
 
 	// convert tag map of pointers into a flat array of non-pointers
-	res := make([]StaticTag, len(tagPro.tags))
-	var i int
+	res := make([]StaticTag, 0, len(tagPro.tags))
 	for _, tag := range tagPro.tags {
-		res[i] = newStaticTag(tag)
-		i++
+		res = append(res, newStaticTag(tag))
 	}
 	return res
 }
 
 func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
-
 	tagPro.mutex.Lock()
 	defer tagPro.mutex.Unlock()
 
-	tag, exists := tagPro.tags[read.Epc]
+	tag, exists := tagPro.tags[read.EPC]
 	if !exists {
-		tag = NewTag(read.Epc)
-		tagPro.tags[read.Epc] = tag
+		tag = NewTag(read.EPC)
+		tagPro.tags[read.EPC] = tag
 	}
 
 	prev := tag.asPreviousTag()
 	tag.update(read, &tagPro.adjuster)
 
-	tagPro.log.Info(fmt.Sprintf("prev: %+v\ncurr: %+v", prev, tag))
+	tagPro.log.Debug("Tag updated.",
+		"previous", fmt.Sprintf("%+v", prev),
+		"current", fmt.Sprintf("%+v", tag))
 
 	switch prev.state {
-
 	case Unknown:
 		tag.setState(Present)
 		e = Arrived{
-			Epc:       read.Epc,
+			Epc:       read.EPC,
 			Timestamp: read.Timestamp,
-			DeviceId:  read.DeviceId,
+			DeviceId:  read.DeviceID,
 			Location:  read.AsLocation(),
 		}
 
 	case Present:
 		if prev.location != "" && prev.location != tag.Location {
 			e = Moved{
-				Epc:          read.Epc,
+				Epc:          read.EPC,
 				Timestamp:    read.Timestamp,
 				PrevLocation: prev.location,
 				NextLocation: tag.Location,
 			}
 		}
-		break
 
 	}
 	return

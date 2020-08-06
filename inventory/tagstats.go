@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -30,11 +29,11 @@ func (stats *TagStats) update(read *Gen2Read) {
 	}
 	stats.LastRead = read.Timestamp
 
-	mw := rssiToMilliwatts(float64(read.Rssi))
+	mw := rssiToMilliwatts(float64(read.RSSI))
 	stats.rssiMw.AddValue(mw)
 }
 
-func (stats *TagStats) getRssiMeanDBM() float64 {
+func (stats *TagStats) getMeanRSSI() float64 {
 	return milliwattsToRssi(stats.rssiMw.GetMean())
 }
 

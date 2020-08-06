@@ -1,264 +1,161 @@
 //
-// Copyright (c) 2020 Intel Corporation
+// Copyright (C) 2020 Intel Corporation
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+// SPDX-License-Identifier: Apache-2.0
 
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
-	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/commands/routes"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
-	"golang.org/x/net/context"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
 
 const (
-	serviceKey    = "rfid-inventory"
-	readChBuffSz  = 1000
-	eventChBuffSz = 10
+	serviceKey = "rfid-inventory"
 
 	ResourceGen2TagRead    = "Gen2TagRead"
 	ResourceInventoryEvent = "InventoryEvent"
 
-	// todo: this should probably be configurable
-	LLRPDeviceService = "LLRPDeviceService"
+	// CoreCommandPUTDevice app settings
+	CoreCommandPUTDevice = "CoreCommandPUTDevice"
+	// CoreCommandGETDevices app settings
+	CoreCommandGETDevices = "CoreCommandGETDevices"
 )
-
-type inventoryApp struct {
-	edgexSdk        *appsdk.AppFunctionsSDK
-	edgexSdkContext *appcontext.Context
-
-	processor *inventory.TagProcessor
-	readCh    chan inventory.Gen2Read
-	eventCh   chan inventory.Event
-
-	done chan interface{}
-}
-
-var app inventoryApp
 
 func main() {
 
-	app = inventoryApp{}
-	// initialize Edgex App functions SDK
-	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
-	if err := app.edgexSdk.Initialize(); err != nil {
-		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
-		os.Exit(-1)
+	// initialize EdgeX App functions SDK
+	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
+	if err := edgexSdk.Initialize(); err != nil {
+		panic(fmt.Sprintf("SDK initialization failed: %v\n", err))
 	}
-	app.done = make(chan interface{})
-	app.readCh = make(chan inventory.Gen2Read, readChBuffSz)
-	app.eventCh = make(chan inventory.Event, eventChBuffSz)
-	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
-	// Retrieve the application settings from configuration.toml
-	appSettings := app.edgexSdk.ApplicationSettings()
+	lgr := edgexSdk.LoggingClient
+
+	lgr.Info("Starting.")
+
+	appSettings := edgexSdk.ApplicationSettings()
 	if appSettings == nil {
-		app.edgexSdk.LoggingClient.Error("No application settings found")
-		os.Exit(-1)
+		lgr.Error("No application settings found.")
+		os.Exit(1)
 	}
 
-	// Create SettingsHandler struct with logger & appsettings to be passed to http response context object
-	settingsHandlerVar := routes.SettingsHandler{Logger: app.edgexSdk.LoggingClient, AppSettings: appSettings}
-
-	err := app.edgexSdk.AddRoute("/", passSettings(settingsHandlerVar, routes.Index), http.MethodGet)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.PingResponse), http.MethodGet)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsHandlerVar, routes.RawInventory), http.MethodGet)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevicesCommand), http.MethodGet)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	err = app.edgexSdk.AddRoute("/command/readings/{readCommand}", passSettings(settingsHandlerVar, routes.IssueReadCommand), http.MethodPut)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	err = app.edgexSdk.AddRoute("/command/behaviors/{behaviorCommand}", passSettings(settingsHandlerVar, routes.IssueBehaviorCommand), http.MethodPut)
-	addRouteErrorHandler(app.edgexSdk, err)
-
-	// the collection of functions to execute every time an event is triggered.
-	err = app.edgexSdk.SetFunctionsPipeline(
-		app.contextGrabber,
-		transforms.NewFilter([]string{ResourceGen2TagRead}).FilterByValueDescriptor,
-		app.processEvents,
-	)
-	if err != nil {
-		app.edgexSdk.LoggingClient.Error("Error in the pipeline: ", err.Error())
+	apiBase := strings.TrimSpace(appSettings[CoreCommandPUTDevice])
+	getDevURL := strings.TrimSpace(appSettings[CoreCommandGETDevices])
+	if apiBase == "" || getDevURL == "" {
+		lgr.Error("Missing endpoint configuration.")
+		os.Exit(1)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go app.processReadChannel(&wg)
-	wg.Add(1)
-	go app.processEventChannel(&wg)
+	tagProc := inventory.NewTagProcessor(lgr)
 
-	// tell SDK to "start" and begin listening for events to trigger the pipeline.
-	err = app.edgexSdk.MakeItRun()
-	if err != nil {
-		app.edgexSdk.LoggingClient.Error("MakeItRun returned error: ", err.Error())
-		os.Exit(-1)
+	for _, rte := range []struct {
+		path, method string
+		f            http.HandlerFunc
+	}{
+		{"/", http.MethodGet, routes.Index},
+		{"/api/v1/inventory/raw", http.MethodGet, routes.RawInventory(lgr, tagProc)},
+		{"/api/v1/command/reading/start", http.MethodPut,
+			routes.StartReaders(lgr, apiBase, "StartReading", getDevURL)},
+		{"/api/v1/command/behaviors/{behaviorCommand}", http.MethodPut,
+			routes.SetBehaviors()},
+	} {
+		if err := edgexSdk.AddRoute(rte.path, rte.f, rte.path); err != nil {
+			lgr.Error("Failed to add route.", "error", err.Error(),
+				"path", rte.path, "method", rte.method)
+			os.Exit(1)
+		}
 	}
 
-	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
-	close(app.done)
-	wg.Wait()
+	// Use the functions pipeline to subscribe to events,
+	// but just process them directly so we don't have to
+	// sacrifice compile-time type checking,
+	// eat the efficiency costs of run-time type checking,
+	// or iterate over the same list of Readings multiple times.
+	if err := edgexSdk.SetFunctionsPipeline(newEventHandler(tagProc)); err != nil {
+		edgexSdk.LoggingClient.Error("Failed to build pipeline.", "error", err.Error())
+		os.Exit(1)
+	}
 
-	// Do any required cleanup here
-	os.Exit(0)
+	if err := edgexSdk.MakeItRun(); err != nil {
+		edgexSdk.LoggingClient.Error("Failed to MakeItRun.", "error", err.Error())
+		os.Exit(1)
+	}
+
+	// TODO: subscribe to notifications about readers connect/disconnect.
+	//   Upon connection, set Reader config/ROSpecs/AccessSpecs.
+	//   Check if Supports Events and Report Holding & send messages as needed.
 }
 
-// contextGrabber does what it sounds like, it grabs the app-functions-sdk's appcontext.Context. This is needed
-// because the context is not available outside of a pipeline without using reflection and unsafe pointers
-func (app *inventoryApp) contextGrabber(edgexcontext *appcontext.Context, params ...interface{}) (bool, interface{}) {
-	if app.edgexSdkContext == nil {
-		app.edgexSdkContext = edgexcontext
-		app.edgexSdk.LoggingClient.Debug("grabbed app-functions-sdk context")
-	}
+func newEventHandler(lgr logger.LoggingClient, tagPro *inventory.TagProcessor) appcontext.AppFunction {
+	return func(edgeXCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
+		if len(params) != 1 {
+			return false, errors.Errorf("expected a single parameter, but got %d", len(params))
+		}
 
-	if len(params) < 1 {
-		return false, errors.New("no event received")
-	}
+		event, ok := params[0].(models.Event)
+		if !ok {
+			// You know what's cool in compiled languages? Type safety.
+			return false, errors.Errorf("expected an EdgeX Event, but got %T", event)
+		}
 
-	existingEvent, ok := params[0].(models.Event)
-	if !ok {
-		return false, errors.New("type received is not an Event")
-	}
+		if len(event.Readings) < 1 {
+			// Is this really an error? EdgeX's Filter functions say yes.
+			return false, errors.New("event contains no Readings")
+		}
 
-	return true, existingEvent
-}
+		r := bytes.Buffer{}
+		decoder := json.NewDecoder(&r)
+		decoder.UseNumber()
+		decoder.DisallowUnknownFields()
 
-func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
-
-	if len(params) < 1 {
-		return false, errors.New("no event received")
-	}
-	event, ok := params[0].(models.Event)
-	if !ok {
-		return false, errors.New("type received is not an Event")
-	}
-	if len(event.Readings) < 1 {
-		return false, errors.New("event contains no Readings")
-	}
-
-	for _, reading := range event.Readings {
-		switch reading.Name {
-
-		case ResourceGen2TagRead:
-			gen2Read := inventory.Gen2Read{}
-			if err := decode(reading.Value, &gen2Read); err == nil {
-				app.readCh <- gen2Read
-			} else {
-				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
+		for i := range event.Readings {
+			reading := &event.Readings[i] // Readings is 169 bytes. Let's avoid the copy.
+			if reading.Name != ResourceGen2TagRead {
+				continue
 			}
 
+			r.Reset()
+			r.WriteString(reading.Value)
+
+			gen2Read := inventory.Gen2Read{}
+			if err := decoder.Decode(&gen2Read); err != nil {
+				lgr.Error("Failed to decode tag read", "error", err.Error())
+				continue
+			}
+
+			lgr.Debug("Decoded tag data.", "tagData", gen2Read)
+			if e := tagPro.ProcessReadData(&gen2Read); e != nil {
+				lgr.Debug("Processing event.", "eventType", e.OfType(),
+					"event", fmt.Sprintf("%+v", e))
+
+				payload, err := json.Marshal(e)
+				if err != nil {
+					lgr.Error("error marshalling event: " + err.Error())
+					lgr.Error("Failed to marshal output event.",
+						"eventType", e.OfType(), "error", err.Error())
+					continue
+				}
+
+				eventName := ResourceInventoryEvent + e.OfType()
+				if _, err := edgeXCtx.PushToCoreData(event.Device, eventName, string(payload)); err != nil {
+					lgr.Error("Failed to push inventory event to core-data.", "error", err.Error())
+					continue
+				}
+			}
 		}
+
+		return false, nil
 	}
-
-	return false, nil
-}
-
-func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
-	app.edgexSdk.LoggingClient.Info("starting read channel processing")
-	for {
-		select {
-		case <-app.done:
-			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
-			return
-		case r := <-app.readCh:
-			app.handleGen2Read(&r)
-		}
-	}
-}
-
-func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read: %+v", read))
-	e := app.processor.ProcessReadData(read)
-	if e != nil {
-		app.eventCh <- e
-	}
-}
-
-func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
-	app.edgexSdk.LoggingClient.Info("starting event channel processing")
-	for {
-		select {
-		case <-app.done:
-			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
-			return
-		// TODO: publish these events somewhere (MQTT, rest, database?)
-		case e := <-app.eventCh:
-			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-			app.pushEventToCoreData(e)
-		}
-	}
-}
-
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
-	payload, err := json.Marshal(event)
-	if err != nil {
-		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
-		return
-	}
-
-	if app.edgexSdkContext == nil {
-		app.edgexSdk.LoggingClient.Error("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
-		return
-	}
-
-	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
-		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
-	}
-}
-
-func passSettings(settings routes.SettingsHandler, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter,
-		r *http.Request) {
-		ctx := context.WithValue(r.Context(), routes.SettingsKey, settings)
-		handler(w, r.WithContext(ctx))
-	}
-}
-
-func addRouteErrorHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
-	if err != nil {
-		edgexSdk.LoggingClient.Error("Error adding route: %v", err.Error())
-		os.Exit(-1)
-	}
-}
-
-func decode(value string, data interface{}) error {
-	decoder := json.NewDecoder(strings.NewReader(value))
-	decoder.UseNumber()
-
-	if err := decoder.Decode(data); err != nil {
-		return err
-	}
-
-	return nil
 }

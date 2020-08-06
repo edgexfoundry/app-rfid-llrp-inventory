@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -22,6 +21,7 @@ func TestRssiConversions(t *testing.T) {
 	sampleRssis := []float64{-640, -320, -654, -1000, -290, -126, -1, 0, 1, 100, 333, 950}
 
 	for _, sampleRssi := range sampleRssis {
+		sampleRssi := sampleRssi
 		t.Run(fmt.Sprintf("Rssi %v", sampleRssi), func(t *testing.T) {
 			mw := rssiToMilliwatts(sampleRssi)
 			rssi := milliwattsToRssi(mw)

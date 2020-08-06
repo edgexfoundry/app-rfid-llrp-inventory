@@ -1,21 +1,47 @@
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package routes
 
 import (
+	"encoding/json"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/pkg/errors"
 )
 
-// SendHTTPGetDevicesRequest GET rest call to edgex-core-command to get the devices/readers list
-func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Client) ([]string, error) {
-	coreCommandGetDevices, err := GetAppSetting(appSettings, CoreCommandGETDevices)
+const (
+	// LLRPDeviceProfile specifies the name of the device profile
+	// in use for LLRP readers, used to determine device type
+	LLRPDeviceProfile = "Device.LLRP.Profile"
+)
+
+func getDeviceList(respBody []byte) (deviceList []string, err error) {
+	var deviceSlice []contract.Device
+
+	err = json.Unmarshal(respBody, &deviceSlice)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodGet, coreCommandGetDevices, nil)
+	for _, d := range deviceSlice {
+
+		// filter only llrp readers
+		if d.Profile.Name == LLRPDeviceProfile {
+			deviceList = append(deviceList, d.Name)
+		}
+	}
+	return deviceList, nil
+}
+
+// GetDevices GET rest call to edgex-core-command to get the devices/readers list
+func GetDevices(devicesURL string, client *http.Client) ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, devicesURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +58,7 @@ func SendHTTPGetDevicesRequest(appSettings map[string]string, client *http.Clien
 		if err != nil {
 			return nil, err
 		}
-		deviceList, err := GetDeviceList(respBody)
+		deviceList, err := getDeviceList(respBody)
 		if err != nil {
 			return nil, errors.Errorf("Unable to parse device list from EdgeX: %s", err.Error())
 		}
@@ -63,7 +89,7 @@ func SendHTTPGETRequest(endpoint string, logger logger.LoggingClient, client *ht
 		return err
 	}
 
-	//Check & report for any error from EdgeX Core
+	// Check & report for any error from EdgeX Core
 	if resp.StatusCode != http.StatusOK {
 		return errors.Errorf("GET to EdgeX Core failed with status %d; body: %q", resp.StatusCode, string(body))
 	}

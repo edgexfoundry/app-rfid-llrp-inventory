@@ -1,13 +1,13 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -18,7 +18,7 @@ const (
 )
 
 func asLocation(devId string, antId int) string {
-	return devId + ":" + string(antId)
+	return devId + ":" + strconv.Itoa(antId)
 }
 
 var (
@@ -38,13 +38,13 @@ func customReadData(dev string, ant int, rssi int, timestamp int64) *Gen2Read {
 	serial := atomic.AddUint32(&tagSerialCounter, 1)
 
 	return &Gen2Read{
-		Epc:       fmt.Sprintf("EPC%06d", serial),
-		Tid:       fmt.Sprintf("TID%06d", serial),
+		EPC:       fmt.Sprintf("EPC%06d", serial),
+		TID:       fmt.Sprintf("TID%06d", serial),
 		User:      fmt.Sprintf("USR%06d", serial),
 		Reserved:  fmt.Sprintf("RES%06d", serial),
-		DeviceId:  dev,
-		AntennaId: ant,
+		DeviceID:  dev,
+		AntennaID: ant,
 		Timestamp: timestamp,
-		Rssi:      rssi,
+		RSSI:      rssi,
 	}
 }

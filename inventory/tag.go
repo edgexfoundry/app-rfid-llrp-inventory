@@ -1,30 +1,28 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
 import (
-	"fmt"
 	"strconv"
 )
 
 type Gen2Read struct {
-	Epc       string `json:"epc"`
-	Tid       string `json:"tid"`
+	EPC       string `json:"epc"`
+	TID       string `json:"tid"`
 	User      string `json:"user"`
 	Reserved  string `json:"reserved"`
-	DeviceId  string `json:"device_id"`
-	AntennaId int    `json:"antenna_id"`
+	DeviceID  string `json:"device_id"`
+	AntennaID int    `json:"antenna_id"`
 	Timestamp int64  `json:"timestamp"`
-	Rssi      int    `json:"rssi"`
+	RSSI      int    `json:"rssi"`
 }
 
 // todo: alias support
 func (r *Gen2Read) AsLocation() string {
-	return r.DeviceId + "_" + strconv.Itoa(r.AntennaId)
+	return r.DeviceID + "_" + strconv.Itoa(r.AntennaID)
 }
 
 type Tag struct {
@@ -98,8 +96,8 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 	srcAlias := read.AsLocation()
 
 	// only set Tid if it is present
-	if read.Tid != "" {
-		tag.Tid = read.Tid
+	if read.TID != "" {
+		tag.Tid = read.TID
 	}
 
 	// update timestamp
@@ -128,9 +126,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 			weight = weighter.getWeight(locationStats.LastRead)
 		}
 
-		tagPro.log.Info(fmt.Sprintf("%f, %f", curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM()))
-
-		if curStats.getRssiMeanDBM() > locationStats.getRssiMeanDBM()+weight {
+		if curStats.getMeanRSSI() > locationStats.getMeanRSSI()+weight {
 			tag.Location = srcAlias
 			tag.addHistory(read.Timestamp)
 		}
@@ -203,6 +199,6 @@ type StaticTagStats struct {
 func newStaticTagStats(stats *TagStats) StaticTagStats {
 	return StaticTagStats{
 		LastRead: stats.LastRead,
-		MeanRSSI: stats.getRssiMeanDBM(),
+		MeanRSSI: stats.getMeanRSSI(),
 	}
 }

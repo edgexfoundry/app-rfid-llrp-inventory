@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -72,6 +71,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 	antennaIds := []int{1, 4, 33, 15, 99}
 
 	for _, antId := range antennaIds {
+		antId := antId
 		t.Run(fmt.Sprintf("Antenna-%d", antId), func(t *testing.T) {
 			ds := newTestDataset(1, testTagPro)
 
@@ -85,7 +85,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.tagReads[0].AntennaId = antId
+			ds.tagReads[0].AntennaID = antId
 			ds.readAll(Dev1, antId, rssiStrong, 4)
 			expected := asLocation(Dev1, antId)
 			if ds.tags[0].Location != expected {

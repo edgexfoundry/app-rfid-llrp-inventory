@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -47,13 +46,13 @@ func (ds *testDataset) initialize(tagCount int) {
 // update the tag pointers based on actual ingested data
 func (ds *testDataset) updateTagRefs() {
 	for i, tagRead := range ds.tagReads {
-		ds.tags[i] = tagPro.tags[tagRead.Epc]
+		ds.tags[i] = tagPro.tags[tagRead.EPC]
 	}
 }
 
 func (ds *testDataset) setRssiAll(rssi int) {
 	for _, tagRead := range ds.tagReads {
-		tagRead.Rssi = rssi
+		tagRead.RSSI = rssi
 	}
 }
 
@@ -77,9 +76,9 @@ func (ds *testDataset) readTag(read *Gen2Read, times int) {
 
 func (ds *testDataset) readAll(devId string, antId int, rssi int, times int) {
 	for _, r := range ds.tagReads {
-		r.DeviceId = devId
-		r.AntennaId = antId
-		r.Rssi = rssi
+		r.DeviceID = devId
+		r.AntennaID = antId
+		r.RSSI = rssi
 		ds.readTag(r, times)
 	}
 }
