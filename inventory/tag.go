@@ -128,7 +128,8 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 			weight = weighter.getWeight(locationStats.LastRead)
 		}
 
-		tagPro.log.Info(fmt.Sprintf("%f, %f", curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM()))
+		tagPro.log.Info("Current Mean RSSI: %f dBm, Location Mean RSSI: %f dBm", 
+		    curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM()))
 
 		if curStats.getRssiMeanDBM() > locationStats.getRssiMeanDBM()+weight {
 			tag.Location = srcAlias

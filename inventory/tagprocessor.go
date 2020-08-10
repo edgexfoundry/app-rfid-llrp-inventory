@@ -53,10 +53,9 @@ func GetRawInventory() []StaticTag {
 
 	// convert tag map of pointers into a flat array of non-pointers
 	res := make([]StaticTag, len(tagPro.tags))
-	var i int
+	res := make([]StaticTag, 0, len(tagPro.tags))
 	for _, tag := range tagPro.tags {
-		res[i] = newStaticTag(tag)
-		i++
+		res = append(res, newStaticTag(tag))
 	}
 	return res
 }

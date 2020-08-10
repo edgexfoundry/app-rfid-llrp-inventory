@@ -53,7 +53,7 @@ type inventoryApp struct {
 	readCh    chan inventory.Gen2Read
 	eventCh   chan inventory.Event
 
-	done chan interface{}
+	done chan struct{}
 }
 
 var app inventoryApp
@@ -67,7 +67,7 @@ func main() {
 		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
 		os.Exit(-1)
 	}
-	app.done = make(chan interface{})
+	app.done = make(chan struct{})
 	app.readCh = make(chan inventory.Gen2Read, readChBuffSz)
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
