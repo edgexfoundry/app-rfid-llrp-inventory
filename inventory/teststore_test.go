@@ -8,6 +8,7 @@ package inventory
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -18,7 +19,7 @@ const (
 )
 
 func asLocation(devId string, antId int) string {
-	return devId + ":" + string(antId)
+	return devId + "_" + strconv.Itoa(antId)
 }
 
 var (
@@ -42,8 +43,8 @@ func customReadData(dev string, ant int, rssi int, timestamp int64) *Gen2Read {
 		Tid:       fmt.Sprintf("TID%06d", serial),
 		User:      fmt.Sprintf("USR%06d", serial),
 		Reserved:  fmt.Sprintf("RES%06d", serial),
-		DeviceId:  dev,
-		AntennaId: ant,
+		DeviceID:  dev,
+		AntennaID: ant,
 		Timestamp: timestamp,
 		Rssi:      rssi,
 	}

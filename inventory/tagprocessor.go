@@ -52,7 +52,6 @@ func GetRawInventory() []StaticTag {
 	defer tagPro.mutex.Unlock()
 
 	// convert tag map of pointers into a flat array of non-pointers
-	res := make([]StaticTag, len(tagPro.tags))
 	res := make([]StaticTag, 0, len(tagPro.tags))
 	for _, tag := range tagPro.tags {
 		res = append(res, newStaticTag(tag))
@@ -83,7 +82,7 @@ func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 		e = Arrived{
 			Epc:       read.Epc,
 			Timestamp: read.Timestamp,
-			DeviceId:  read.DeviceId,
+			DeviceId:  read.DeviceID,
 			Location:  read.AsLocation(),
 		}
 

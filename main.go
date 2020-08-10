@@ -134,9 +134,9 @@ func main() {
 
 // contextGrabber does what it sounds like, it grabs the app-functions-sdk's appcontext.Context. This is needed
 // because the context is not available outside of a pipeline without using reflection and unsafe pointers
-func (app *inventoryApp) contextGrabber(edgexcontext *appcontext.Context, params ...interface{}) (bool, interface{}) {
+func (app *inventoryApp) contextGrabber(edgexContext *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	if app.edgexSdkContext == nil {
-		app.edgexSdkContext = edgexcontext
+		app.edgexSdkContext = edgexContext
 		app.edgexSdk.LoggingClient.Debug("grabbed app-functions-sdk context")
 	}
 
@@ -170,10 +170,13 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 
 		case ResourceGen2TagRead:
 			gen2Read := inventory.Gen2Read{}
-			if err := decode(reading.Value, &gen2Read); err == nil {
-				app.readCh <- gen2Read
-			} else {
+			decoder := json.NewDecoder(strings.NewReader(reading.Value))
+			decoder.UseNumber()
+
+			if err := decoder.Decode(&gen2Read); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
+			} else {
+				app.readCh <- gen2Read
 			}
 
 		}
@@ -250,15 +253,4 @@ func addRouteErrorHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
 		edgexSdk.LoggingClient.Error("Error adding route: %v", err.Error())
 		os.Exit(-1)
 	}
-}
-
-func decode(value string, data interface{}) error {
-	decoder := json.NewDecoder(strings.NewReader(value))
-	decoder.UseNumber()
-
-	if err := decoder.Decode(data); err != nil {
-		return err
-	}
-
-	return nil
 }

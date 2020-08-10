@@ -7,7 +7,6 @@
 package inventory
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -16,15 +15,15 @@ type Gen2Read struct {
 	Tid       string `json:"tid"`
 	User      string `json:"user"`
 	Reserved  string `json:"reserved"`
-	DeviceId  string `json:"device_id"`
-	AntennaId int    `json:"antenna_id"`
+	DeviceID  string `json:"device_id"`
+	AntennaID int    `json:"antenna_id"`
 	Timestamp int64  `json:"timestamp"`
 	Rssi      int    `json:"rssi"`
 }
 
 // todo: alias support
 func (r *Gen2Read) AsLocation() string {
-	return r.DeviceId + "_" + strconv.Itoa(r.AntennaId)
+	return r.DeviceID + "_" + strconv.Itoa(r.AntennaID)
 }
 
 type Tag struct {
@@ -128,8 +127,8 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 			weight = weighter.getWeight(locationStats.LastRead)
 		}
 
-		tagPro.log.Info("Current Mean RSSI: %f dBm, Location Mean RSSI: %f dBm", 
-		    curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM()))
+		tagPro.log.Info("Current Mean RSSI: %f dBm, Location Mean RSSI: %f dBm",
+			curStats.getRssiMeanDBM(), locationStats.getRssiMeanDBM())
 
 		if curStats.getRssiMeanDBM() > locationStats.getRssiMeanDBM()+weight {
 			tag.Location = srcAlias
@@ -147,11 +146,8 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 	switch newState {
 	case Present:
 		tag.LastArrived = timestamp
-		break
-	case DepartedExit:
-	case DepartedPos:
+	case DepartedExit, DepartedPos:
 		tag.LastDeparted = timestamp
-		break
 	}
 
 	tag.State = newState

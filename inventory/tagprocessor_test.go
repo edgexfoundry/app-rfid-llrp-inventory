@@ -85,7 +85,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.tagReads[0].AntennaId = antId
+			ds.tagReads[0].AntennaID = antId
 			ds.readAll(Dev1, antId, rssiStrong, 4)
 			expected := asLocation(Dev1, antId)
 			if ds.tags[0].Location != expected {

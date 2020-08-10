@@ -77,8 +77,8 @@ func (ds *testDataset) readTag(read *Gen2Read, times int) {
 
 func (ds *testDataset) readAll(devId string, antId int, rssi int, times int) {
 	for _, r := range ds.tagReads {
-		r.DeviceId = devId
-		r.AntennaId = antId
+		r.DeviceID = devId
+		r.AntennaID = antId
 		r.Rssi = rssi
 		ds.readTag(r, times)
 	}
