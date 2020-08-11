@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestRSPAntennaAlias(t *testing.T) {
+func TestSensorAntennaAlias(t *testing.T) {
 	tests := []struct {
 		deviceID  string
 		antennaID int
@@ -35,8 +35,8 @@ func TestRSPAntennaAlias(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
-			rsp := NewSensor(test.deviceID)
-			alias := rsp.AntennaAlias(test.antennaID)
+			s := NewSensor(test.deviceID)
+			alias := s.AntennaAlias(test.antennaID)
 			if alias != test.expected {
 				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
 			}

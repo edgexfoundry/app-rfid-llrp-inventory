@@ -20,7 +20,7 @@ func TestDefaultAssetTracking(t *testing.T) {
 
 func TestNewMobilityProfile(t *testing.T) {
 	// test sane values
-	mp := GetMobilityProfile()
+	mp := loadMobilityProfile()
 	if mp.Slope >= 0.0 {
 		t.Errorf("mobility profile: Slope is %v, but should be a negative number.\n\t%#v", mp.Slope, mp)
 	}

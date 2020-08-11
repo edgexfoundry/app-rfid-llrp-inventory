@@ -13,18 +13,22 @@ import (
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"strings"
 )
 
 type testDataset struct {
-	tagReads       []*llrp.TagReportData
+	tagReads       []*TagReport
 	tags           []*Tag
 	readTimeOrig   int64
 	inventoryEvent *jsonrpc.InventoryEvent
+	tp *TagProcessor
 }
 
-func newTestDataset(tagCount int) testDataset {
-	ds := testDataset{}
+func newTestDataset(tp *TagProcessor, tagCount int) testDataset {
+	ds := testDataset{
+		tp: tp,
+	}
 	ds.initialize(tagCount)
 	return ds
 }
@@ -36,7 +40,7 @@ func (ds *testDataset) resetEvents() {
 
 // will generate tagread objects but NOT ingest them yet
 func (ds *testDataset) initialize(tagCount int) {
-	ds.tagReads = make([]*llrp.TagReportData, tagCount)
+	ds.tagReads = make([]*TagReport, tagCount)
 	ds.tags = make([]*Tag, tagCount)
 	ds.readTimeOrig = helper.UnixMilliNow()
 
@@ -50,37 +54,40 @@ func (ds *testDataset) initialize(tagCount int) {
 // update the tag pointers based on actual ingested data
 func (ds *testDataset) updateTagRefs() {
 	for i, tagRead := range ds.tagReads {
-		ds.tags[i] = inventory[tagRead.Epc]
+		ds.tags[i] = ds.tp.inventory[tagRead.EPC()]
 	}
 }
 
 func (ds *testDataset) setRssi(tagIndex int, rssi int) {
-	ds.tagReads[tagIndex].Rssi = rssi
+	v := llrp.PeakRSSI(rssi)
+	ds.tagReads[tagIndex].PeakRSSI = &v
 }
 
 func (ds *testDataset) setRssiAll(rssi int) {
+	v := llrp.PeakRSSI(rssi)
 	for _, tagRead := range ds.tagReads {
-		tagRead.Rssi = rssi
+		tagRead.PeakRSSI = &v
 	}
 }
 
 func (ds *testDataset) setLastReadOnAll(timestamp int64) {
+	ts := llrp.LastSeenUTC(timestamp)
 	for _, tagRead := range ds.tagReads {
-		tagRead.LastReadOn = timestamp
+		tagRead.LastSeenUTC = &ts
 	}
 }
 
-func (ds *testDataset) readTag(tagIndex int, rsp *sensor.RSP, rssi int, times int) {
+func (ds *testDataset) readTag(tagIndex int, s *sensor.Sensor, rssi int, times int) {
 	ds.setRssi(tagIndex, rssi)
 
 	for i := 0; i < times; i++ {
-		processTagReportData(helper.UnixMilliNow(), ds.inventoryEvent, ds.tagReads[tagIndex], rsp)
+		ds.tp.process(ds.inventoryEvent, ds.tagReads[tagIndex], s)
 	}
 }
 
-func (ds *testDataset) readAll(rsp *sensor.RSP, rssi int, times int) {
+func (ds *testDataset) readAll(s *sensor.Sensor, rssi int, times int) {
 	for tagIndex := range ds.tagReads {
-		ds.readTag(tagIndex, rsp, rssi, times)
+		ds.readTag(tagIndex, s, rssi, times)
 	}
 }
 
@@ -88,12 +95,12 @@ func (ds *testDataset) size() int {
 	return len(ds.tagReads)
 }
 
-func (ds *testDataset) verifyAll(expectedState TagState, expectedRSP *sensor.RSP) error {
+func (ds *testDataset) verifyAll(expectedState TagState, expecteds *sensor.Sensor) error {
 	ds.updateTagRefs()
 
 	var errs []string
 	for i := range ds.tags {
-		if err := ds.verifyTag(i, expectedState, expectedRSP); err != nil {
+		if err := ds.verifyTag(i, expectedState, expecteds); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -104,21 +111,21 @@ func (ds *testDataset) verifyAll(expectedState TagState, expectedRSP *sensor.RSP
 	return nil
 }
 
-func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expectedRSP *sensor.RSP) error {
+func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expecteds *sensor.Sensor) error {
 	tag := ds.tags[tagIndex]
 
 	if tag == nil {
 		read := ds.tagReads[tagIndex]
-		return fmt.Errorf("Expected tag index %d to not be nil! read object: %v\n\tinventory: %#v", tagIndex, read, inventory)
+		return fmt.Errorf("Expected tag index %d to not be nil! read object: %v\n\tinventory: %#v", tagIndex, read, ds.tp.inventory)
 	}
 
 	if tag.state != expectedState {
 		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.EPC, tag.state, expectedState, tag)
 	}
 
-	// if expectedRSP is nil, we do not care to validate that field
-	if expectedRSP != nil && tag.Location != expectedRSP.AntennaAlias(0) {
-		return fmt.Errorf("tag index %d (%s): location %v does not match expected location %v\n\t%#v", tagIndex, tag.EPC, tag.Location, expectedRSP.AntennaAlias(0), tag)
+	// if expecteds is nil, we do not care to validate that field
+	if expecteds != nil && tag.Location != expecteds.AntennaAlias(0) {
+		return fmt.Errorf("tag index %d (%s): location %v does not match expected location %v\n\t%#v", tagIndex, tag.EPC, tag.Location, expecteds.AntennaAlias(0), tag)
 	}
 
 	return nil
@@ -136,7 +143,7 @@ func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, nil)
 }
 
-func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...Event) error {
+func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...EventType) error {
 	if expectedCount%len(expectedEvents) != 0 {
 		return fmt.Errorf("invalid event pattern specified. pattern length of %d is not evenly divisible by expected event count of %d", len(expectedEvents), expectedCount)
 	}

@@ -72,7 +72,7 @@ func (tp *TagProcessor) process(invEvent *jsonrpc.InventoryEvent, report *TagRep
 	}
 
 	prev := tag.asPreviousTag()
-	srcAnt := tag.update(s, report, tp.profile)
+	srcAnt := tag.update(s, report, tp)
 
 	switch prev.state {
 

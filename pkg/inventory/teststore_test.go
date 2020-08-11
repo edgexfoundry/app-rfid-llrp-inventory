@@ -32,18 +32,23 @@ var (
 func generateTestSensor(facilityID string, personality sensor.Personality) *sensor.Sensor {
 	sensorID := atomic.AddUint32(&sensorIdCounter, 1)
 
-	return &sensor.Sensor{
-		DeviceID:   fmt.Sprintf("Sensor-%06d", sensorID),
-		FacilityID: facilityID,
-		// todo: handle persoanlity
-		//Personality: personality,
+	s := sensor.NewSensor(fmt.Sprintf("Sensor-%06d", sensorID))
+	s.FacilityID = facilityID
+
+	// todo: set personalities per antenna
+	for i := 0; i <= 4; i++ {
+		a := s.GetAntenna(i)
+		a.Personality = personality
+		a.FacilityID = facilityID
 	}
+	return s
 }
 
-func generateReadData(lastRead int64, antennaID int) *llrp.TagReportData {
+func generateReadData(lastRead int64, antennaID int) *TagReport {
 	serial := atomic.AddUint32(&tagSerialCounter, 1)
 
-	epcBytes, err := hex.DecodeString(fmt.Sprintf("EPC%06d", serial))
+	// todo: ensure even string length
+	epcBytes, err := hex.DecodeString(fmt.Sprintf("%024X", serial))
 	if err != nil {
 		panic(err)
 	}
@@ -52,12 +57,14 @@ func generateReadData(lastRead int64, antennaID int) *llrp.TagReportData {
 	rssi := llrp.PeakRSSI(rssiMin)
 	seen := llrp.LastSeenUTC(lastRead)
 
-	return &llrp.TagReportData{
-		EPC96: llrp.EPC96{
-			EPC: epcBytes,
+	return &TagReport{
+		TagReportData: &llrp.TagReportData{
+			EPC96: llrp.EPC96{
+				EPC: epcBytes,
+			},
+			AntennaID:   &ant,
+			PeakRSSI:    &rssi,
+			LastSeenUTC: &seen,
 		},
-		AntennaID:   &ant,
-		PeakRSSI:    &rssi,
-		LastSeenUTC: &seen,
 	}
 }

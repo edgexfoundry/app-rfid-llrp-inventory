@@ -7,7 +7,6 @@
 package inventory
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 )
@@ -53,7 +52,7 @@ func (tag *Tag) asPreviousTag() previousTag {
 	}
 }
 
-func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, profile *MobilityProfile) *sensor.Antenna {
+func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) *sensor.Antenna {
 	if report.AntennaID == nil {
 		return nil
 	}
@@ -95,16 +94,18 @@ func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, profile *Mobili
 	} else if incomingStats.getCount() > 2 {
 
 		now := helper.UnixMilliNow()
-		weight := profile.ComputeWeight(now, locationStats.LastRead, sensor.IsInDeepScan)
+		weight := tp.profile.ComputeWeight(now, locationStats.LastRead, sensor.IsInDeepScan)
 		locationMean := locationStats.rssiDbm.GetMean()
 		incomingMean := incomingStats.rssiDbm.GetMean()
 
 		// if the new sensor's average is greater than the weighted existing location, generate a moved event
 		if incomingMean > (locationMean + weight) {
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.Debugf("incoming avg: %f, existing avg: %f, weight: %f, existing adjusted: %f, diff: %f",
-					incomingMean, locationMean, weight, locationMean+weight, (locationMean+weight)-incomingMean)
-			}
+			tp.lc.Debug("tag stats",
+				"incoming avg", incomingMean,
+				"existing avg", locationMean,
+				"weight", weight,
+				"existing adjusted", locationMean+weight,
+				"diff", (locationMean+weight)-incomingMean)
 
 			tag.Location = srcAnt.Alias
 			tag.FacilityID = sensor.FacilityID

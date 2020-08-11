@@ -8,9 +8,15 @@ package inventory
 
 import (
 	"fmt"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"os"
 	"testing"
+)
+
+var (
+	lc logger.LoggingClient
 )
 
 func TestMain(m *testing.M) {
@@ -19,11 +25,13 @@ func TestMain(m *testing.M) {
 	//if err := config.InitConfig(); err != nil {
 	//	log.Fatal(err)
 	//}
+	lc = logger.NewClient("test", false, "", "DEBUG")
 	os.Exit(m.Run())
 }
 
 func TestPosDoesNotGenerateArrival(t *testing.T) {
-	ds := newTestDataset(10)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 10)
 
 	front := generateTestSensor(salesFloor, sensor.NoPersonality)
 	posSensor := generateTestSensor(salesFloor, sensor.POS)
@@ -61,7 +69,8 @@ func TestPosDoesNotGenerateArrival(t *testing.T) {
 }
 
 func TestBasicArrival(t *testing.T) {
-	ds := newTestDataset(10)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 10)
 	front := generateTestSensor(salesFloor, sensor.NoPersonality)
 
 	ds.readAll(front, rssiWeak, 1)
@@ -78,7 +87,8 @@ func TestBasicArrival(t *testing.T) {
 }
 
 func TestTagMoveWeakRssi(t *testing.T) {
-	ds := newTestDataset(10)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 10)
 
 	back1 := generateTestSensor(backStock, sensor.NoPersonality)
 	back2 := generateTestSensor(backStock, sensor.NoPersonality)
@@ -126,7 +136,8 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
-			ds := newTestDataset(1)
+			tp := NewTagProcessor(lc)
+			ds := newTestDataset(tp, 1)
 
 			// start all tags at antenna port 0
 			ds.readAll(back01, rssiMin, 1)
@@ -138,7 +149,8 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.tagReads[0].AntennaID = antID
+			aID := llrp.AntennaID(antID)
+			ds.tagReads[0].AntennaID = &aID
 			ds.readTag(0, back01, rssiStrong, 4)
 			if ds.tags[0].Location != back01.AntennaAlias(antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
@@ -154,7 +166,8 @@ func TestMoveAntennaLocation(t *testing.T) {
 }
 
 func TestMoveSameFacility(t *testing.T) {
-	ds := newTestDataset(10)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 10)
 
 	back1 := generateTestSensor(backStock, sensor.NoPersonality)
 	back2 := generateTestSensor(backStock, sensor.NoPersonality)
@@ -184,7 +197,8 @@ func TestMoveSameFacility(t *testing.T) {
 }
 
 func TestMoveDifferentFacility(t *testing.T) {
-	ds := newTestDataset(10)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 10)
 
 	front := generateTestSensor(salesFloor, sensor.NoPersonality)
 	back := generateTestSensor(backStock, sensor.NoPersonality)
@@ -214,7 +228,8 @@ func TestMoveDifferentFacility(t *testing.T) {
 }
 
 func TestBasicExit(t *testing.T) {
-	ds := newTestDataset(9)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 9)
 
 	back := generateTestSensor(backStock, sensor.NoPersonality)
 	frontExit := generateTestSensor(salesFloor, sensor.Exit)
@@ -275,7 +290,8 @@ func TestBasicExit(t *testing.T) {
 }
 
 func TestExitingArrivalDepartures(t *testing.T) {
-	ds := newTestDataset(5)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 5)
 
 	back := generateTestSensor(backStock, sensor.NoPersonality)
 	frontExit := generateTestSensor(salesFloor, sensor.Exit)
@@ -330,7 +346,8 @@ func TestExitingArrivalDepartures(t *testing.T) {
 }
 
 func TestTagDepartAndReturnFromExit(t *testing.T) {
-	ds := newTestDataset(4)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 4)
 
 	back := generateTestSensor(backStock, sensor.NoPersonality)
 	frontExit := generateTestSensor(salesFloor, sensor.Exit)
@@ -368,7 +385,8 @@ func TestTagDepartAndReturnFromExit(t *testing.T) {
 }
 
 func TestTagDepartAndReturnPOS(t *testing.T) {
-	ds := newTestDataset(5)
+	tp := NewTagProcessor(lc)
+	ds := newTestDataset(tp, 5)
 
 	back := generateTestSensor(backStock, sensor.NoPersonality)
 	frontPos := generateTestSensor(salesFloor, sensor.POS)
