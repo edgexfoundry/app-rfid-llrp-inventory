@@ -54,7 +54,7 @@ const (
 )
 
 type Waypoint struct {
-	DeviceId  string
+	DeviceID  string
 	Timestamp int64
 }
 
@@ -96,7 +96,7 @@ func (tag *Tag) update(read *Gen2Read, weighter *rssiAdjuster) {
 
 	srcAlias := read.AsLocation()
 
-	// only set Tid if it is present
+	// only set TID if it is present
 	if read.Tid != "" {
 		tag.Tid = read.Tid
 	}

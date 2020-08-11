@@ -82,7 +82,7 @@ func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 		e = Arrived{
 			Epc:       read.Epc,
 			Timestamp: read.Timestamp,
-			DeviceId:  read.DeviceID,
+			DeviceID:  read.DeviceID,
 			Location:  read.AsLocation(),
 		}
 

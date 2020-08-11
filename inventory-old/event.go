@@ -18,7 +18,7 @@ type Event interface {
 type Arrived struct {
 	Epc       string
 	Timestamp int64
-	DeviceId  string
+	DeviceID  string
 	Location  string
 }
 
