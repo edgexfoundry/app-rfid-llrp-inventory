@@ -7,7 +7,6 @@
 package inventory
 
 import (
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/app/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,8 +31,6 @@ var (
 		"asset_tracking": assetTracking,
 		"retail_garment": retailGarment,
 	}
-
-	activeProfile *MobilityProfile
 )
 
 // MobilityProfile defines the parameters of the weighted slope formula used in calculating a tag's location.
@@ -55,34 +52,23 @@ func (profile *MobilityProfile) calculateYIntercept() {
 	profile.YIntercept = profile.Threshold - (profile.Slope * profile.HoldoffMillis)
 }
 
-// GetMobilityProfile returns the currently active profile.
-func GetMobilityProfile() *MobilityProfile {
-	if activeProfile == nil {
-		// lazy-load the mobility profile and set as active
-		profile := loadMobilityProfile()
-		activeProfile = &profile
-	}
-
-	return activeProfile
-}
-
 // loadMobilityProfile will attempt to load a mobility profile based on defaults and user's configuration
 func loadMobilityProfile() MobilityProfile {
-	id := config.AppConfig.MobilityProfileBaseProfile
+	id := MobilityProfileBaseProfile
 	profile, ok := mobilityProfiles[id]
 	if !ok {
 		logrus.Errorf("unable to find mobility profile with id: %s. using defaults.", id)
 		profile = defaultProfile
 	}
 
-	if config.AppConfig.MobilityProfileSlopeOverridden {
-		profile.Slope = config.AppConfig.MobilityProfileSlope
+	if MobilityProfileSlopeOverridden {
+		profile.Slope = MobilityProfileSlope
 	}
-	if config.AppConfig.MobilityProfileThresholdOverridden {
-		profile.Threshold = config.AppConfig.MobilityProfileThreshold
+	if MobilityProfileThresholdOverridden {
+		profile.Threshold = MobilityProfileThreshold
 	}
-	if config.AppConfig.MobilityProfileHoldoffMillisOverridden {
-		profile.HoldoffMillis = config.AppConfig.MobilityProfileHoldoffMillis
+	if MobilityProfileHoldoffMillisOverridden {
+		profile.HoldoffMillis = MobilityProfileHoldoffMillis
 	}
 
 	profile.calculateYIntercept()

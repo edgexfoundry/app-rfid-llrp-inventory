@@ -6,9 +6,8 @@
 
 package inventory
 
-import (
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/app/config"
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/pkg/jsonrpc"
+const (
+	TagStatsWindowSize = 20 // todo configure
 )
 
 // TagStats helps keep track of tag read rssi values over time
@@ -21,19 +20,22 @@ type TagStats struct {
 // NewTagStats returns a new TagStats pointer with circular buffers initialized to the configured default window size
 func NewTagStats() *TagStats {
 	return &TagStats{
-		readInterval: NewCircularBuffer(config.AppConfig.TagStatsWindowSize),
-		rssiDbm:      NewCircularBuffer(config.AppConfig.TagStatsWindowSize),
+		readInterval: NewCircularBuffer(TagStatsWindowSize),
+		rssiDbm:      NewCircularBuffer(TagStatsWindowSize),
 	}
 }
 
-func (stats *TagStats) update(read *jsonrpc.TagRead) {
+func (stats *TagStats) update(report *TagReport, lastRead int64) {
 	if stats.LastRead != 0 {
-		stats.readInterval.AddValue(float64(read.LastReadOn - stats.LastRead))
+		stats.readInterval.AddValue(float64(lastRead - stats.LastRead))
 	}
-	stats.LastRead = read.LastReadOn
+	stats.LastRead = lastRead
 
-	dbm := float64(read.Rssi) / 10.0
-	stats.rssiDbm.AddValue(dbm)
+	// todo: what if it is nil?
+	if report.PeakRSSI != nil {
+		dbm := float64(*report.PeakRSSI)
+		stats.rssiDbm.AddValue(dbm)
+	}
 }
 
 func (stats *TagStats) getCount() int {

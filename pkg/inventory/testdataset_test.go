@@ -9,15 +9,15 @@ package inventory
 import (
 	"errors"
 	"fmt"
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/app/sensor"
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/pkg/jsonrpc"
-	"github.com/intel/rsp-sw-toolkit-im-suite-utilities/helper"
 	"github.com/sirupsen/logrus"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"strings"
 )
 
 type testDataset struct {
-	tagReads       []*jsonrpc.TagRead
+	tagReads       []*llrp.TagReportData
 	tags           []*Tag
 	readTimeOrig   int64
 	inventoryEvent *jsonrpc.InventoryEvent
@@ -36,12 +36,12 @@ func (ds *testDataset) resetEvents() {
 
 // will generate tagread objects but NOT ingest them yet
 func (ds *testDataset) initialize(tagCount int) {
-	ds.tagReads = make([]*jsonrpc.TagRead, tagCount)
+	ds.tagReads = make([]*llrp.TagReportData, tagCount)
 	ds.tags = make([]*Tag, tagCount)
 	ds.readTimeOrig = helper.UnixMilliNow()
 
 	for i := 0; i < tagCount; i++ {
-		ds.tagReads[i] = generateReadData(ds.readTimeOrig)
+		ds.tagReads[i] = generateReadData(ds.readTimeOrig, 1)
 	}
 
 	ds.resetEvents()
@@ -74,7 +74,7 @@ func (ds *testDataset) readTag(tagIndex int, rsp *sensor.RSP, rssi int, times in
 	ds.setRssi(tagIndex, rssi)
 
 	for i := 0; i < times; i++ {
-		processReadData(helper.UnixMilliNow(), ds.inventoryEvent, ds.tagReads[tagIndex], rsp)
+		processTagReportData(helper.UnixMilliNow(), ds.inventoryEvent, ds.tagReads[tagIndex], rsp)
 	}
 }
 

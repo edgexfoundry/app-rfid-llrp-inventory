@@ -8,7 +8,7 @@ package routes
 
 import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
 	"golang.org/x/net/context"
 	"net/http"
 	"net/http/httptest"

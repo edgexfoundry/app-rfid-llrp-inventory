@@ -1,10 +1,8 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"io/ioutil"
 	"net/http"
 	"sync"
@@ -43,26 +41,29 @@ func Index(writer http.ResponseWriter, req *http.Request) {
 
 // RawInventory returns the raw inventory algorithm data
 func RawInventory(writer http.ResponseWriter, req *http.Request) {
-	logger, _, err := GetSettingsHandler(req)
-	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	// todo: fix
 
-	writer.Header().Set("Content-Type", "application/json")
-
-	tags := inventory.GetRawInventory()
-	bytes, err := json.MarshalIndent(tags, "", "  ")
-	if err != nil {
-		logger.Error(err.Error())
-		writer.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if _, err = writer.Write(bytes); err != nil {
-		logger.Error(err.Error())
-		writer.WriteHeader(http.StatusInternalServerError)
-	}
+	//logger, _, err := GetSettingsHandler(req)
+	//if err != nil {
+	//	writer.WriteHeader(http.StatusBadRequest)
+	//	return
+	//}
+	//
+	//writer.Header().Set("Content-Type", "application/json")
+	//
+	//// todo
+	//tags := inventory.GetRawInventory()
+	//bytes, err := json.MarshalIndent(tags, "", "  ")
+	//if err != nil {
+	//	logger.Error(err.Error())
+	//	writer.WriteHeader(http.StatusInternalServerError)
+	//	return
+	//}
+	//
+	//if _, err = writer.Write(bytes); err != nil {
+	//	logger.Error(err.Error())
+	//	writer.WriteHeader(http.StatusInternalServerError)
+	//}
 }
 
 // PingResponse sends pong back to client indicating service is up

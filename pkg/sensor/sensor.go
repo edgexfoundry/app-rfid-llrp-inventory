@@ -15,6 +15,11 @@ const (
 	DefaultFacility = "DEFAULT_FACILITY"
 )
 
+var (
+	sensorMap = map[string]*Sensor{}
+	sensorMu  sync.Mutex
+)
+
 type Personality string
 
 const (
@@ -40,13 +45,13 @@ type Antenna struct {
 	FacilityID  string
 }
 
-func NewSensor(deviceId string) *Sensor {
-	rsp := Sensor{
-		DeviceID:   deviceId,
+func NewSensor(deviceID string) *Sensor {
+	sensor := Sensor{
+		DeviceID:   deviceID,
 		FacilityID: DefaultFacility,
 		UpdatedOn:  0,
 	}
-	return &rsp
+	return &sensor
 }
 
 func makeAlias(deviceID string, antID int) string {
@@ -90,4 +95,16 @@ func (a *Antenna) IsExitAntenna() bool {
 // IsPOSAntenna returns true if this Antenna has the POS personality
 func (a *Antenna) IsPOSAntenna() bool {
 	return a.Personality == POS
+}
+
+func Get(deviceName string) *Sensor {
+	sensorMu.Lock()
+	defer sensorMu.Unlock()
+
+	s, ok := sensorMap[deviceName]
+	if !ok {
+		s = NewSensor(deviceName)
+		sensorMap[deviceName] = s
+	}
+	return s
 }

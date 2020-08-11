@@ -24,7 +24,9 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
@@ -38,10 +40,9 @@ const (
 	readChBuffSz  = 1000
 	eventChBuffSz = 10
 
-	ResourceGen2TagRead    = "Gen2TagRead"
-	ResourceInventoryEvent = "InventoryEvent"
+	ResourceTagReportData  = "TagReportData"
+	ResourceInventoryEvent = "inventory_event"
 
-	// todo: this should probably be configurable
 	LLRPDeviceService = "LLRPDeviceService"
 )
 
@@ -50,8 +51,8 @@ type inventoryApp struct {
 	edgexSdkContext *appcontext.Context
 
 	processor *inventory.TagProcessor
-	readCh    chan inventory.Gen2Read
-	eventCh   chan inventory.Event
+	readCh    chan *inventory.TagReport
+	eventCh   chan *jsonrpc.InventoryEvent
 
 	done chan struct{}
 }
@@ -64,12 +65,16 @@ func main() {
 	// initialize Edgex App functions SDK
 	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := app.edgexSdk.Initialize(); err != nil {
-		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
+		if app.edgexSdk.LoggingClient == nil {
+			fmt.Printf("SDK initialization failed: %v\n", err)
+		} else {
+			app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
+		}
 		os.Exit(-1)
 	}
 	app.done = make(chan struct{})
-	app.readCh = make(chan inventory.Gen2Read, readChBuffSz)
-	app.eventCh = make(chan inventory.Event, eventChBuffSz)
+	app.readCh = make(chan *inventory.TagReport, readChBuffSz)
+	app.eventCh = make(chan *jsonrpc.InventoryEvent, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
@@ -104,7 +109,7 @@ func main() {
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
 		app.contextGrabber,
-		transforms.NewFilter([]string{ResourceGen2TagRead}).FilterByValueDescriptor,
+		transforms.NewFilter([]string{ResourceTagReportData}).FilterByValueDescriptor,
 		app.processEvents,
 	)
 	if err != nil {
@@ -168,15 +173,15 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 	for _, reading := range event.Readings {
 		switch reading.Name {
 
-		case ResourceGen2TagRead:
-			gen2Read := inventory.Gen2Read{}
+		case ResourceTagReportData:
+			reportData := llrp.TagReportData{}
 			decoder := json.NewDecoder(strings.NewReader(reading.Value))
 			decoder.UseNumber()
 
-			if err := decoder.Decode(&gen2Read); err != nil {
+			if err := decoder.Decode(&reportData); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
 			} else {
-				app.readCh <- gen2Read
+				app.readCh <- inventory.NewTagReport(reading.Device, &reportData)
 			}
 
 		}
@@ -194,16 +199,12 @@ func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
 			return
 		case r := <-app.readCh:
-			app.handleGen2Read(&r)
+			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleTagReportData: %+v", r))
+			e, err := app.processor.Process(r)
+			if err == nil && e != nil {
+				app.eventCh <- e
+			}
 		}
-	}
-}
-
-func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read: %+v", read))
-	e := app.processor.ProcessReadData(read)
-	if e != nil {
-		app.eventCh <- e
 	}
 }
 
@@ -217,13 +218,13 @@ func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
 			return
 		// TODO: publish these events somewhere (MQTT, rest, database?)
 		case e := <-app.eventCh:
-			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
+			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event: %+v", e))
 			app.pushEventToCoreData(e)
 		}
 	}
 }
 
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
+func (app *inventoryApp) pushEventToCoreData(event *jsonrpc.InventoryEvent) {
 	payload, err := json.Marshal(event)
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
@@ -235,7 +236,7 @@ func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
 		return
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
+	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent, string(payload)); err != nil {
 		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
 	}
 }

@@ -18,8 +18,8 @@ const (
 	Dev3 = "device03"
 )
 
-func asLocation(devId string, antId int) string {
-	return devId + "_" + strconv.Itoa(antId)
+func asLocation(devID string, antID int) string {
+	return devID + "_" + strconv.Itoa(antID)
 }
 
 var (

@@ -14,30 +14,30 @@ import (
 
 var (
 	assetTrackingDefault = MobilityProfile{
-		Id:            "asset_tracking_default",
+		ID:            "asset_tracking_default",
 		Slope:         -0.008,
 		Threshold:     6.0,
 		HoldoffMillis: 0.0,
 	}
 
 	retailGarmentDefault = MobilityProfile{
-		Id:            "retail_garment_default",
+		ID:            "retail_garment_default",
 		Slope:         -0.0005,
 		Threshold:     6.0,
 		HoldoffMillis: 60000.0,
 	}
 
 	defaultProfile = MobilityProfile{
-		Id:            "default",
+		ID:            "default",
 		Slope:         assetTrackingDefault.Slope,
 		Threshold:     assetTrackingDefault.Threshold,
 		HoldoffMillis: assetTrackingDefault.HoldoffMillis,
 	}
 
 	mobilityProfiles = map[string]MobilityProfile{
-		assetTrackingDefault.Id: assetTrackingDefault,
-		retailGarmentDefault.Id: retailGarmentDefault,
-		defaultProfile.Id:       defaultProfile,
+		assetTrackingDefault.ID: assetTrackingDefault,
+		retailGarmentDefault.ID: retailGarmentDefault,
+		defaultProfile.ID:       defaultProfile,
 	}
 
 	activeProfile = getDefaultMobilityProfile()
@@ -47,7 +47,7 @@ var (
 // Tag location is determined based on the quality of tag reads associated with a sensor/antenna averaged over time.
 // For a tag to move from one location to another, the other location must be either a better signal or be more recent.
 type MobilityProfile struct {
-	Id string `json:"id"`
+	ID string `json:"id"`
 	// Slope (dBm per millisecond): Used to determine the weight applied to older RSSI values
 	Slope float64 `json:"m"`
 	// Threshold (dBm) RSSI threshold that must be exceeded for the tag to move from the previous sensor
@@ -68,11 +68,11 @@ func GetActiveMobilityProfile() MobilityProfile {
 }
 
 func getDefaultMobilityProfile() MobilityProfile {
-	profile, err := GetMobilityProfile(defaultProfile.Id)
+	profile, err := GetMobilityProfile(defaultProfile.ID)
 
 	// default should always exist
 	if err != nil {
-		err = errors.Wrapf(err, "default mobility profile with id %s does not exist!", defaultProfile.Id)
+		err = errors.Wrapf(err, "default mobility profile with id %s does not exist!", defaultProfile.ID)
 		panic(err)
 	}
 
@@ -88,7 +88,7 @@ func GetMobilityProfile(id string) (MobilityProfile, error) {
 	// check if y-intercept has been computed yet
 	if profile.YIntercept == 0 {
 		profile.calculateYIntercept()
-		mobilityProfiles[profile.Id] = profile
+		mobilityProfiles[profile.ID] = profile
 	}
 
 	return profile, nil

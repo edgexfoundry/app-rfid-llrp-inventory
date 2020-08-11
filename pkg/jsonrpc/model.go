@@ -20,8 +20,8 @@ var (
 	ErrInvalidVersion = errors.New("invalid jsonrpc version")
 	//ErrMissingMethod error returned when method field is missing or empty
 	ErrMissingMethod = errors.New("missing or empty method field")
-	//ErrMissingId error returned when id field is missing or empty
-	ErrMissingId = errors.New("missing or empty id field")
+	//ErrMissingID error returned when id field is missing or empty
+	ErrMissingID = errors.New("missing or empty id field")
 )
 
 type Message interface {
@@ -36,7 +36,7 @@ type Notification struct {
 
 type Request struct {
 	Notification        // embed
-	Id           string `json:"id"`
+	ID           string `json:"id"`
 }
 
 func (js *Notification) Validate() error {
@@ -52,8 +52,8 @@ func (js *Notification) Validate() error {
 }
 
 func (js *Request) Validate() error {
-	if js.Id == "" {
-		return ErrMissingId
+	if js.ID == "" {
+		return ErrMissingID
 	}
 
 	return js.Notification.Validate()

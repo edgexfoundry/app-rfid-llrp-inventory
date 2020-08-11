@@ -24,15 +24,15 @@ const (
 	Away       TagDirection = "Away"
 )
 
-type Event string
+type EventType string
 
 const (
-	NoEvent    Event = "none"
-	Arrival    Event = "arrival"
-	Moved      Event = "moved"
-	Departed   Event = "departed"
-	Returned   Event = "returned"
-	CycleCount Event = "cycle_count"
+	NoEvent    EventType = "none"
+	Arrival    EventType = "arrival"
+	Moved      EventType = "moved"
+	Departed   EventType = "departed"
+	Returned   EventType = "returned"
+	CycleCount EventType = "cycle_count"
 )
 
 type Waypoint struct {
@@ -46,12 +46,11 @@ type TagHistory struct {
 }
 
 type previousTag struct {
-	location       string
-	deviceLocation string
-	facilityId     string
-	lastRead       int64
-	lastDeparted   int64
-	lastArrived    int64
-	state          TagState
-	direction      TagDirection
+	location     string
+	facilityID   string
+	lastRead     int64
+	lastDeparted int64
+	lastArrived  int64
+	state        TagState
+	direction    TagDirection
 }

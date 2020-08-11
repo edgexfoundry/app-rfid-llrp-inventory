@@ -71,8 +71,8 @@ func TestTagMoveWeakRssi(t *testing.T) {
 func TestMoveAntennaLocation(t *testing.T) {
 	antennaIds := []int{1, 4, 33, 15, 99}
 
-	for _, antId := range antennaIds {
-		t.Run(fmt.Sprintf("Antenna-%d", antId), func(t *testing.T) {
+	for _, antID := range antennaIds {
+		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
 			ds := newTestDataset(1, testTagPro)
 
 			// start all tags at antenna port 0
@@ -85,9 +85,9 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.tagReads[0].AntennaID = antId
-			ds.readAll(Dev1, antId, rssiStrong, 4)
-			expected := asLocation(Dev1, antId)
+			ds.tagReads[0].AntennaID = antID
+			ds.readAll(Dev1, antID, rssiStrong, 4)
+			expected := asLocation(Dev1, antID)
 			if ds.tags[0].Location != expected {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
 					ds.tags[0].Location, expected, ds.tags[0])

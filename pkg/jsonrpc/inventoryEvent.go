@@ -22,7 +22,7 @@ type InventoryEvent struct {
 
 type InventoryEventParams struct {
 	SentOn       int64      `json:"sent_on"`
-	ControllerId string     `json:"controller_id,omitempty"` // ok to be empty for handheld
+	ControllerID string     `json:"controller_id,omitempty"` // ok to be empty for handheld
 	Data         []TagEvent `json:"data"`
 }
 
@@ -52,7 +52,7 @@ func NewInventoryEvent() *InventoryEvent {
 			Version: RpcVersion,
 		},
 		Params: InventoryEventParams{
-			SentOn:       helper.UnixMilliNow(),
+			SentOn: helper.UnixMilliNow(),
 		},
 	}
 }

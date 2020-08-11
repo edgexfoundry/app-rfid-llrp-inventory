@@ -8,17 +8,17 @@ package inventory
 
 import (
 	"fmt"
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/app/config"
-	"github.com/intel/rsp-sw-toolkit-im-suite-inventory-service/app/sensor"
-	log "github.com/sirupsen/logrus"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"os"
 	"testing"
 )
 
 func TestMain(m *testing.M) {
-	if err := config.InitConfig(); err != nil {
-		log.Fatal(err)
-	}
+	// todo: when config is implemented again
+
+	//if err := config.InitConfig(); err != nil {
+	//	log.Fatal(err)
+	//}
 	os.Exit(m.Run())
 }
 
@@ -124,8 +124,8 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	back01 := generateTestSensor(backStock, sensor.NoPersonality)
 
-	for _, antId := range antennaIds {
-		t.Run(fmt.Sprintf("Antenna-%d", antId), func(t *testing.T) {
+	for _, antID := range antennaIds {
+		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
 			ds := newTestDataset(1)
 
 			// start all tags at antenna port 0
@@ -138,11 +138,11 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.tagReads[0].AntennaID = antId
+			ds.tagReads[0].AntennaID = antID
 			ds.readTag(0, back01, rssiStrong, 4)
-			if ds.tags[0].Location != back01.AntennaAlias(antId) {
+			if ds.tags[0].Location != back01.AntennaAlias(antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					ds.tags[0].Location, back01.AntennaAlias(antId), ds.tags[0])
+					ds.tags[0].Location, back01.AntennaAlias(antID), ds.tags[0])
 			}
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(1, Moved); err != nil {
@@ -382,7 +382,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	ds.resetEvents()
 
 	// read by the front POS. should still be Present in the back stock
-	ds.setLastReadOnAll(ds.readTimeOrig + (int64(config.AppConfig.PosDepartedThresholdMillis) / 2))
+	ds.setLastReadOnAll(ds.readTimeOrig + (int64(PosDepartedThresholdMillis) / 2))
 	ds.readAll(frontPos, rssiWeak, 1)
 	if err := ds.verifyAll(Present, back); err != nil {
 		t.Error(err)
@@ -393,7 +393,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	}
 
 	// read the tag shortly AFTER the pos DEPART threshold
-	ds.setLastReadOnAll(ds.readTimeOrig + int64(config.AppConfig.PosDepartedThresholdMillis) + 250)
+	ds.setLastReadOnAll(ds.readTimeOrig + int64(PosDepartedThresholdMillis) + 250)
 	ds.readAll(frontPos, rssiWeak, 1)
 	if err := ds.verifyStateAll(DepartedPos); err != nil {
 		t.Error(err)
@@ -405,7 +405,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	ds.resetEvents()
 
 	// and it should stay gone for a while (but not long enough to return)
-	ds.setLastReadOnAll(ds.readTimeOrig + int64(config.AppConfig.PosReturnThresholdMillis/2))
+	ds.setLastReadOnAll(ds.readTimeOrig + int64(PosReturnThresholdMillis/2))
 	ds.readAll(front1, rssiWeak, 20)
 	if err := ds.verifyStateAll(DepartedPos); err != nil {
 		t.Error(err)
@@ -419,7 +419,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	lastDeparted := ds.tags[0].LastDeparted
 
 	// read it by another sensor shortly BEFORE pos RETURN threshold
-	ds.setLastReadOnAll(lastDeparted + int64(config.AppConfig.PosReturnThresholdMillis) - 500)
+	ds.setLastReadOnAll(lastDeparted + int64(PosReturnThresholdMillis) - 500)
 	ds.readAll(front2, rssiStrong, 20)
 	if err := ds.verifyStateAll(DepartedPos); err != nil {
 		t.Error(err)
@@ -430,7 +430,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	}
 
 	// read a few tags by the POS sensor shortly AFTER pos RETURN threshold but they should NOT return
-	ds.setLastReadOnAll(lastDeparted + int64(config.AppConfig.PosReturnThresholdMillis) + 300)
+	ds.setLastReadOnAll(lastDeparted + int64(PosReturnThresholdMillis) + 300)
 	ds.readTag(0, frontPos, rssiWeak, 20)
 	ds.readTag(1, frontPos, rssiWeak, 20)
 	if err := ds.verifyState(0, DepartedPos); err != nil {
@@ -445,7 +445,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	}
 
 	// read it by another sensor shortly AFTER pos RETURN threshold
-	ds.setLastReadOnAll(lastDeparted + int64(config.AppConfig.PosReturnThresholdMillis) + 1500)
+	ds.setLastReadOnAll(lastDeparted + int64(PosReturnThresholdMillis) + 1500)
 	ds.readAll(front3, rssiWeak, 20)
 	// note that location is still front2 NOT front3 because it was read stronger by front2
 	if err := ds.verifyAll(Present, front2); err != nil {
@@ -461,7 +461,7 @@ func TestTagDepartAndReturnPOS(t *testing.T) {
 	lastArrived := ds.tags[0].LastArrived
 
 	// read it by POS sensor again, and it should depart again
-	ds.setLastReadOnAll(lastArrived + int64(config.AppConfig.PosDepartedThresholdMillis) + 9999)
+	ds.setLastReadOnAll(lastArrived + int64(PosDepartedThresholdMillis) + 9999)
 	ds.readAll(frontPos, rssiWeak, 20)
 	if err := ds.verifyStateAll(DepartedPos); err != nil {
 		t.Error(err)
