@@ -25,6 +25,8 @@ const (
 	IssueCommandApi = "IssueCommandApi"
 	// GetDevicesApi app settings
 	GetDevicesApi = "GetDevicesApi"
+
+	// todo: we should query the device service directly to only get those devices
 	// LLRPDeviceProfile specifies the name of the device profile in use for LLRP readers, used to determine device type
 	LLRPDeviceProfile = "Device.LLRP.Profile"
 

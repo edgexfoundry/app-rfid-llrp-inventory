@@ -53,7 +53,7 @@ func RawInventory(writer http.ResponseWriter, req *http.Request) {
 	//
 	//// todo
 	//tags := inventory.GetRawInventory()
-	//bytes, err := json.MarshalIndent(tags, "", "  ")
+	//bytes, err := json.Marshal(tags)
 	//if err != nil {
 	//	logger.Error(err.Error())
 	//	writer.WriteHeader(http.StatusInternalServerError)

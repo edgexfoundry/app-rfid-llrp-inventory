@@ -20,7 +20,7 @@ func TestDefaultAssetTracking(t *testing.T) {
 
 func TestNewMobilityProfile(t *testing.T) {
 	// test sane values
-	mp := loadMobilityProfile()
+	mp := loadMobilityProfile(lc)
 	if mp.Slope >= 0.0 {
 		t.Errorf("mobility profile: Slope is %v, but should be a negative number.\n\t%#v", mp.Slope, mp)
 	}
@@ -33,11 +33,11 @@ func TestNewMobilityProfile(t *testing.T) {
 }
 
 func TestMobilityProfileOverrideThreshold(t *testing.T) {
-	mp1 := loadMobilityProfile()
+	mp1 := loadMobilityProfile(lc)
 
 	MobilityProfileThresholdOverridden = true
 	MobilityProfileThreshold = mp1.Threshold * 2
-	mp2 := loadMobilityProfile()
+	mp2 := loadMobilityProfile(lc)
 	if mp2.Threshold != mp1.Threshold*2 {
 		t.Errorf("mobility profile 2 threshold of %v does not equal the expected: %v", mp2.Threshold, mp1.Threshold*2)
 	}
@@ -48,11 +48,11 @@ func TestMobilityProfileOverrideThreshold(t *testing.T) {
 }
 
 func TestMobilityProfileOverrideSlope(t *testing.T) {
-	mp1 := loadMobilityProfile()
+	mp1 := loadMobilityProfile(lc)
 
 	MobilityProfileSlopeOverridden = true
 	MobilityProfileSlope = mp1.Slope * 2
-	mp2 := loadMobilityProfile()
+	mp2 := loadMobilityProfile(lc)
 
 	if mp2.Slope != mp1.Slope*2 {
 		t.Errorf("mobility profile 2 Slope of %v does not equal the expected: %v", mp2.Slope, mp1.Slope*2)
@@ -64,11 +64,11 @@ func TestMobilityProfileOverrideSlope(t *testing.T) {
 }
 
 func TestMobilityProfileOverrideHoldoff(t *testing.T) {
-	mp1 := loadMobilityProfile()
+	mp1 := loadMobilityProfile(lc)
 
 	MobilityProfileHoldoffMillisOverridden = true
 	MobilityProfileHoldoffMillis = mp1.HoldoffMillis + 10000
-	mp2 := loadMobilityProfile()
+	mp2 := loadMobilityProfile(lc)
 
 	if mp2.HoldoffMillis != mp1.HoldoffMillis+10000 {
 		t.Errorf("mobility profile 2 HoldoffMillis of %v does not equal the expected: %v", mp2.HoldoffMillis, mp1.HoldoffMillis+10000)

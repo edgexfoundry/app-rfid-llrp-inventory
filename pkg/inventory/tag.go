@@ -7,6 +7,7 @@
 package inventory
 
 import (
+	"fmt"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 )
@@ -15,46 +16,38 @@ type Tag struct {
 	EPC string
 	TID string
 
-	Location   string
-	FacilityID string
+	Location string
 
 	LastRead     int64
 	LastDeparted int64
 	LastArrived  int64
 
-	state     TagState
-	Direction TagDirection
-	History   []*TagHistory
-
+	state          TagState
 	deviceStatsMap map[string]*TagStats
 }
 
 func NewTag(epc string) *Tag {
 	return &Tag{
+		EPC:            epc,
 		Location:       unknown,
-		FacilityID:     unknown,
-		Direction:      Stationary,
 		state:          Unknown,
 		deviceStatsMap: make(map[string]*TagStats),
-		EPC:            epc,
 	}
 }
 
 func (tag *Tag) asPreviousTag() previousTag {
 	return previousTag{
 		location:     tag.Location,
-		facilityID:   tag.FacilityID,
 		lastRead:     tag.LastRead,
 		lastDeparted: tag.LastDeparted,
 		lastArrived:  tag.LastArrived,
 		state:        tag.state,
-		direction:    tag.Direction,
 	}
 }
 
-func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) *sensor.Antenna {
+func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) {
 	if report.AntennaID == nil {
-		return nil
+		return
 	}
 
 	srcAnt := sensor.GetAntenna(int(*report.AntennaID))
@@ -81,7 +74,7 @@ func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcesso
 
 	if tag.Location == srcAnt.Alias {
 		// nothing to do
-		return srcAnt
+		return
 	}
 
 	// locationStats represents the statistics for the tag's current/existing location
@@ -89,11 +82,10 @@ func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcesso
 	if !found {
 		// this means the tag has never been read (somehow)
 		tag.Location = srcAnt.Alias
-		tag.FacilityID = sensor.FacilityID
 
 	} else if incomingStats.getCount() > 2 {
-
 		now := helper.UnixMilliNow()
+		tp.lc.Debug(fmt.Sprintf("now: %v, lastRead: %v, diff: %v", now, locationStats.LastRead, now-locationStats.LastRead))
 		weight := tp.profile.ComputeWeight(now, locationStats.LastRead, sensor.IsInDeepScan)
 		locationMean := locationStats.rssiDbm.GetMean()
 		incomingMean := incomingStats.rssiDbm.GetMean()
@@ -108,11 +100,8 @@ func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcesso
 				"diff", (locationMean+weight)-incomingMean)
 
 			tag.Location = srcAnt.Alias
-			tag.FacilityID = sensor.FacilityID
 		}
 	}
-
-	return srcAnt
 }
 
 func (tag *Tag) setState(newState TagState) {
@@ -124,7 +113,7 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 	switch newState {
 	case Present:
 		tag.LastArrived = timestamp
-	case DepartedExit, DepartedPos:
+	case Departed:
 		tag.LastDeparted = timestamp
 	}
 

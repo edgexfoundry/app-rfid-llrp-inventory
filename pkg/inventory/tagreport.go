@@ -7,13 +7,13 @@ import (
 
 type TagReport struct {
 	*llrp.TagReportData
-	deviceName string
+	DeviceName string
 }
 
 func NewTagReport(deviceName string, data *llrp.TagReportData) *TagReport {
 	return &TagReport{
 		TagReportData: data,
-		deviceName:    deviceName,
+		DeviceName:    deviceName,
 	}
 }
 

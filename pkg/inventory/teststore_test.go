@@ -26,13 +26,13 @@ var (
 	rssiWeak   = rssiMin + (rssiMax-rssiMin)/3
 
 	tagSerialCounter uint32
-	sensorIdCounter  uint32 = 150000 - 1
+	sensorIdCounter  uint32 = 0
 )
 
 func generateTestSensor(facilityID string, personality sensor.Personality) *sensor.Sensor {
 	sensorID := atomic.AddUint32(&sensorIdCounter, 1)
 
-	s := sensor.NewSensor(fmt.Sprintf("Sensor-%06d", sensorID))
+	s := sensor.NewSensor(fmt.Sprintf("Sensor-%02X", sensorID))
 	s.FacilityID = facilityID
 
 	// todo: set personalities per antenna

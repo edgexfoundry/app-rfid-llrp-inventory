@@ -18,18 +18,19 @@ import (
 )
 
 type testDataset struct {
+	tp *TagProcessor
+
 	tagReads       []*TagReport
 	tags           []*Tag
 	readTimeOrig   int64
 	inventoryEvent *jsonrpc.InventoryEvent
-	tp *TagProcessor
 }
 
-func newTestDataset(tp *TagProcessor, tagCount int) testDataset {
+func newTestDataset(tp *TagProcessor, tagCount int, initialAntenna int) testDataset {
 	ds := testDataset{
 		tp: tp,
 	}
-	ds.initialize(tagCount)
+	ds.initialize(tagCount, initialAntenna)
 	return ds
 }
 
@@ -39,13 +40,13 @@ func (ds *testDataset) resetEvents() {
 }
 
 // will generate tagread objects but NOT ingest them yet
-func (ds *testDataset) initialize(tagCount int) {
+func (ds *testDataset) initialize(tagCount int, initialAntenna int) {
 	ds.tagReads = make([]*TagReport, tagCount)
 	ds.tags = make([]*Tag, tagCount)
 	ds.readTimeOrig = helper.UnixMilliNow()
 
 	for i := 0; i < tagCount; i++ {
-		ds.tagReads[i] = generateReadData(ds.readTimeOrig, 1)
+		ds.tagReads[i] = generateReadData(ds.readTimeOrig, initialAntenna)
 	}
 
 	ds.resetEvents()
@@ -67,6 +68,18 @@ func (ds *testDataset) setRssiAll(rssi int) {
 	v := llrp.PeakRSSI(rssi)
 	for _, tagRead := range ds.tagReads {
 		tagRead.PeakRSSI = &v
+	}
+}
+
+func (ds *testDataset) setAntenna(tagIndex int, antenna int) {
+	aID := llrp.AntennaID(antenna)
+	ds.tagReads[tagIndex].AntennaID = &aID
+}
+
+func (ds *testDataset) setAntennaAll(antenna int) {
+	aID := llrp.AntennaID(antenna)
+	for _, tagRead := range ds.tagReads {
+		tagRead.AntennaID = &aID
 	}
 }
 
@@ -95,12 +108,12 @@ func (ds *testDataset) size() int {
 	return len(ds.tagReads)
 }
 
-func (ds *testDataset) verifyAll(expectedState TagState, expecteds *sensor.Sensor) error {
+func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
 	ds.updateTagRefs()
 
 	var errs []string
 	for i := range ds.tags {
-		if err := ds.verifyTag(i, expectedState, expecteds); err != nil {
+		if err := ds.verifyTag(i, expectedState, expectedLocation); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -111,7 +124,7 @@ func (ds *testDataset) verifyAll(expectedState TagState, expecteds *sensor.Senso
 	return nil
 }
 
-func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expecteds *sensor.Sensor) error {
+func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expectedLocation string) error {
 	tag := ds.tags[tagIndex]
 
 	if tag == nil {
@@ -123,24 +136,24 @@ func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expecteds
 		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.EPC, tag.state, expectedState, tag)
 	}
 
-	// if expecteds is nil, we do not care to validate that field
-	if expecteds != nil && tag.Location != expecteds.AntennaAlias(0) {
-		return fmt.Errorf("tag index %d (%s): location %v does not match expected location %v\n\t%#v", tagIndex, tag.EPC, tag.Location, expecteds.AntennaAlias(0), tag)
+	// if expectedLocation is empty string, we do not care to validate that field
+	if expectedLocation != "" && tag.Location != expectedLocation {
+		return fmt.Errorf("tag index %d (%s): location %v does not match expected location %v\n\t%#v", tagIndex, tag.EPC, tag.Location, expectedLocation, tag)
 	}
 
 	return nil
 }
 
 func (ds *testDataset) verifyStateOf(expectedState TagState, tagIndex int) error {
-	return ds.verifyTag(tagIndex, expectedState, nil)
+	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
 func (ds *testDataset) verifyState(tagIndex int, expectedState TagState) error {
-	return ds.verifyTag(tagIndex, expectedState, nil)
+	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
 func (ds *testDataset) verifyStateAll(expectedState TagState) error {
-	return ds.verifyAll(expectedState, nil)
+	return ds.verifyAll(expectedState, "")
 }
 
 func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...EventType) error {

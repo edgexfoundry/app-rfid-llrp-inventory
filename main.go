@@ -40,7 +40,7 @@ const (
 	readChBuffSz  = 1000
 	eventChBuffSz = 10
 
-	ResourceTagReportData  = "TagReportData"
+	ResourceROAccessReport = "ROAccessReport"
 	ResourceInventoryEvent = "inventory_event"
 
 	LLRPDeviceService = "LLRPDeviceService"
@@ -57,11 +57,9 @@ type inventoryApp struct {
 	done chan struct{}
 }
 
-var app inventoryApp
-
 func main() {
 
-	app = inventoryApp{}
+	app := inventoryApp{}
 	// initialize Edgex App functions SDK
 	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := app.edgexSdk.Initialize(); err != nil {
@@ -109,7 +107,7 @@ func main() {
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
 		app.contextGrabber,
-		transforms.NewFilter([]string{ResourceTagReportData}).FilterByValueDescriptor,
+		transforms.NewFilter([]string{ResourceROAccessReport}).FilterByValueDescriptor,
 		app.processEvents,
 	)
 	if err != nil {
@@ -173,15 +171,17 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 	for _, reading := range event.Readings {
 		switch reading.Name {
 
-		case ResourceTagReportData:
-			reportData := llrp.TagReportData{}
+		case ResourceROAccessReport:
+			report := llrp.ROAccessReport{}
 			decoder := json.NewDecoder(strings.NewReader(reading.Value))
 			decoder.UseNumber()
 
-			if err := decoder.Decode(&reportData); err != nil {
+			if err := decoder.Decode(&report); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
 			} else {
-				app.readCh <- inventory.NewTagReport(reading.Device, &reportData)
+				for _, r := range report.TagReportData {
+					app.readCh <- inventory.NewTagReport(reading.Device, &r)
+				}
 			}
 
 		}
@@ -199,9 +199,9 @@ func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
 			return
 		case r := <-app.readCh:
-			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleTagReportData: %+v", r))
+			app.edgexSdk.LoggingClient.Debug("handleTagReportData", "deviceName", r.DeviceName, "epc", r.EPC())
 			e, err := app.processor.Process(r)
-			if err == nil && e != nil {
+			if err == nil && e != nil && len(e.Params.Data) > 0 {
 				app.eventCh <- e
 			}
 		}

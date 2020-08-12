@@ -7,7 +7,9 @@
 package inventory
 
 import (
-	"github.com/sirupsen/logrus"
+	"fmt"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -31,6 +33,8 @@ var (
 		"asset_tracking": assetTracking,
 		"retail_garment": retailGarment,
 	}
+
+	ErrMissingProfile = errors.New("unable to find mobility profile, using defaults")
 )
 
 // MobilityProfile defines the parameters of the weighted slope formula used in calculating a tag's location.
@@ -53,11 +57,11 @@ func (profile *MobilityProfile) calculateYIntercept() {
 }
 
 // loadMobilityProfile will attempt to load a mobility profile based on defaults and user's configuration
-func loadMobilityProfile() MobilityProfile {
+func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
 	id := MobilityProfileBaseProfile
 	profile, ok := mobilityProfiles[id]
 	if !ok {
-		logrus.Errorf("unable to find mobility profile with id: %s. using defaults.", id)
+		lc.Warn(fmt.Sprintf("Unable to find mobility profile with id: %s. using defaults.", id))
 		profile = defaultProfile
 	}
 

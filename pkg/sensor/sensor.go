@@ -50,7 +50,7 @@ func NewSensor(deviceID string) *Sensor {
 		DeviceID:   deviceID,
 		FacilityID: DefaultFacility,
 		UpdatedOn:  0,
-		antennas: make(map[int]*Antenna, 0),
+		antennas:   make(map[int]*Antenna, 0),
 	}
 	return &sensor
 }

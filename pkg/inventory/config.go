@@ -12,8 +12,6 @@ var (
 	MobilityProfileThresholdOverridden     = false // todo
 	MobilityProfileHoldoffMillisOverridden = false // todo
 
-	PosReturnThresholdMillis         = 0 // todo
-	PosDepartedThresholdMillis       = 0 // todo
 	AggregateDepartedThresholdMillis = 0 // todo
 	AgeOutHours                      = 0 // todo
 )
