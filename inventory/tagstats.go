@@ -30,7 +30,7 @@ func (stats *TagStats) update(read *Gen2Read) {
 	}
 	stats.LastRead = read.Timestamp
 
-	mw := rssiToMilliwatts(float64(read.Rssi) / 10.0)
+	mw := rssiToMilliwatts(float64(read.Rssi))
 	stats.rssiMw.AddValue(mw)
 }
 

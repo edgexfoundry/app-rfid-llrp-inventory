@@ -7,8 +7,8 @@
 package inventory
 
 const (
-	ArrivedType string = "arrived"
-	MovedType   string = "moved"
+	ArrivedType string = "Arrived"
+	MovedType   string = "Moved"
 )
 
 type Event interface {

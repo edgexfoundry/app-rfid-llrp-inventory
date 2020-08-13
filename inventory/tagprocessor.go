@@ -23,6 +23,8 @@ const (
 	pfxTagEVents           = "tag-events:"
 )
 
+// todo: add/fix persistence
+
 type TagProcessor struct {
 	log      logger.LoggingClient
 	cnxPool  *redis.Pool
@@ -45,6 +47,18 @@ func NewTagProcessor(lc logger.LoggingClient) *TagProcessor {
 	return tagPro
 }
 
+func GetRawInventory() []StaticTag {
+	tagPro.mutex.Lock()
+	defer tagPro.mutex.Unlock()
+
+	// convert tag map of pointers into a flat array of non-pointers
+	res := make([]StaticTag, 0, len(tagPro.tags))
+	for _, tag := range tagPro.tags {
+		res = append(res, newStaticTag(tag))
+	}
+	return res
+}
+
 func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 
 	tagPro.mutex.Lock()
@@ -59,6 +73,8 @@ func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 	prev := tag.asPreviousTag()
 	tag.update(read, &tagPro.adjuster)
 
+	tagPro.log.Info(fmt.Sprintf("prev: %+v\ncurr: %+v", prev, tag))
+
 	switch prev.state {
 
 	case Unknown:
@@ -66,7 +82,7 @@ func (tagPro *TagProcessor) ProcessReadData(read *Gen2Read) (e Event) {
 		e = Arrived{
 			Epc:       read.Epc,
 			Timestamp: read.Timestamp,
-			DeviceId:  read.DeviceId,
+			DeviceId:  read.DeviceID,
 			Location:  read.AsLocation(),
 		}
 

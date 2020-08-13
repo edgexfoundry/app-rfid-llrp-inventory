@@ -77,8 +77,8 @@ func (ds *testDataset) readTag(read *Gen2Read, times int) {
 
 func (ds *testDataset) readAll(devId string, antId int, rssi int, times int) {
 	for _, r := range ds.tagReads {
-		r.DeviceId = devId
-		r.AntennaId = antId
+		r.DeviceID = devId
+		r.AntennaID = antId
 		r.Rssi = rssi
 		ds.readTag(r, times)
 	}
@@ -88,7 +88,7 @@ func (ds *testDataset) size() int {
 	return len(ds.tagReads)
 }
 
-func (ds *testDataset) verifyAll(expectedState State, expectedLocation string) error {
+func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
 	ds.updateTagRefs()
 
 	var errs []string
@@ -104,7 +104,7 @@ func (ds *testDataset) verifyAll(expectedState State, expectedLocation string) e
 	return nil
 }
 
-func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLocation string) error {
+func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expectedLocation string) error {
 	tag := ds.tags[tagIndex]
 
 	if tag == nil {
@@ -112,8 +112,8 @@ func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLoca
 		return fmt.Errorf("Expected tag index %d to not be nil! read object: %v\n\tinventory: %#v", tagIndex, read, tagPro)
 	}
 
-	if tag.state != expectedState {
-		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.Epc, tag.state, expectedState, tag)
+	if tag.State != expectedState {
+		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.Epc, tag.State, expectedState, tag)
 	}
 
 	// if expectedRSP is nil, we do not care to validate that field
@@ -124,15 +124,15 @@ func (ds *testDataset) verifyTag(tagIndex int, expectedState State, expectedLoca
 	return nil
 }
 
-func (ds *testDataset) verifyStateOf(expectedState State, tagIndex int) error {
+func (ds *testDataset) verifyStateOf(expectedState TagState, tagIndex int) error {
 	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
-func (ds *testDataset) verifyState(tagIndex int, expectedState State) error {
+func (ds *testDataset) verifyState(tagIndex int, expectedState TagState) error {
 	return ds.verifyTag(tagIndex, expectedState, "")
 }
 
-func (ds *testDataset) verifyStateAll(expectedState State) error {
+func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, "")
 }
 
