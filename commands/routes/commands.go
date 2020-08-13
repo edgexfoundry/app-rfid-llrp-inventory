@@ -6,10 +6,11 @@
 package routes
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 )
@@ -24,17 +25,11 @@ var (
 	}
 )
 
-// Index returns main page
-func Index(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "res/html/index.html")
-}
-
 // RawInventory returns a handler bound to the TagProcessor.
 // When called, it returns the raw inventory algorithm data.
 func RawInventory(lc logger.LoggingClient, tagPro *inventory.TagProcessor) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		bytes, err := json.Marshal(tagPro.GetRawInventory())
-
+		payload, err := json.Marshal(tagPro.GetRawInventory())
 		if err != nil {
 			lc.Error("Failed to marshal inventory", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -42,70 +37,77 @@ func RawInventory(lc logger.LoggingClient, tagPro *inventory.TagProcessor) http.
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if _, err = w.Write(bytes); err != nil {
+		if _, err = w.Write(payload); err != nil {
 			lc.Error("Failed to write inventory response.", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}
 }
 
-// StartReaders sends start/stop reading command via EdgeX Core Command API
-func StartReaders(lc logger.LoggingClient, apiBase, cmdName, deviceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
+type Proxy struct {
+	Request func() (*http.Request, error)
+	LC      logger.LoggingClient
+}
 
-		deviceList, err := GetDevices(deviceURL, client)
-		if err != nil {
-			lc.Error("Failed to get devices", "error", err.Error())
+func NewGetProxy(logger logger.LoggingClient, endpoint string) Proxy {
+	return Proxy{
+		LC: logger,
+		Request: func() (*http.Request, error) {
+			return http.NewRequest(http.MethodGet, endpoint, nil)
+		},
+	}
+}
 
-			w.WriteHeader(http.StatusInternalServerError)
-			if _, err := w.Write([]byte("Unable to complete request.")); err != nil {
-				lc.Error("Failed to write response.", "error", err.Error())
-			}
-			return
-		}
+func NewPutProxy(logger logger.LoggingClient, endpoint string, body []byte) Proxy {
+	return Proxy{
+		LC: logger,
+		Request: func() (*http.Request, error) {
+			return http.NewRequest(http.MethodPut, endpoint, bytes.NewReader(body))
+		},
+	}
+}
 
-		if len(deviceList) == 0 {
-			lc.Info("No devices.")
-			return
-		}
+func (p Proxy) HandleRequest(w http.ResponseWriter, _ *http.Request) {
+	p.LC.Debug("Handling new proxy request.")
 
-		for _, deviceName := range deviceList {
-			endpoint := apiBase + "/" + deviceName + "/command/" + cmdName
-			go func(endpoint string) {
-				req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-				if err != nil {
-					lc.Error("Failed to construct request.", "error", err)
-					return
-				}
+	req, err := p.Request()
+	if err != nil {
+		p.LC.Error("Failed to construct proxy request.", "error", err.Error())
+		return
+	}
 
-				resp, err := client.Do(req)
-				if err != nil {
-					lc.Error("Request failed.", "command", cmdName, "error", err)
-					return
-				}
-				defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		p.LC.Error("Failed to send proxy request.", "error", err.Error())
+		return
+	}
 
-				if 200 <= resp.StatusCode && resp.StatusCode < 300 {
-					// Best effort: see if the body has anything useful.
-					body, _ := ioutil.ReadAll(resp.Body)
-					if len(body) > 0 {
-						lc.Error("Request failed.", "command", cmdName,
-							"endpoint", endpoint, "status", resp.StatusCode,
-							"body", string(body))
-					} else {
-						lc.Error("Request failed.", "command", cmdName,
-							"endpoint", endpoint, "status", resp.StatusCode)
-					}
-					return
-				}
-			}(endpoint)
-		}
+	defer resp.Body.Close()
+	logs := []interface{}{"status", resp.StatusCode}
 
-		w.WriteHeader(http.StatusAccepted)
-		if _, err := w.Write([]byte("Request received.")); err != nil {
-			lc.Error("Failed to write response.", "error", err.Error())
+	// Best effort: see if the body has anything useful.
+	body := make([]byte, 100)
+	switch n, err := io.ReadFull(resp.Body, body); err {
+	case io.EOF: // no response body
+	case io.ErrUnexpectedEOF:
+		logs = append(logs, "response", string(body[:n]))
+	case nil:
+		logs = append(logs, "response (truncated)", string(body[:100]))
+	default:
+		logs = append(logs, "response", "<read failed: "+err.Error()+">")
+	}
+
+	if 200 <= resp.StatusCode && resp.StatusCode < 300 {
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		p.LC.Error("Upstream request failed.", logs...)
+		w.WriteHeader(http.StatusBadGateway)
+		if _, err := w.Write([]byte("Upstream server failed.")); err != nil {
+			p.LC.Error("Failed to write response.", "error", err.Error())
 		}
 	}
+
+	p.LC.Debug("Request processed.", logs...)
 }
 
 // SetBehaviors sends command to set/apply behavior command

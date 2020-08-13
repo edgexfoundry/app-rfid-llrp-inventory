@@ -233,9 +233,19 @@ func newROSpec() *llrp.ROSpec {
 			// then we need to generate separate AISpecs for each antenna.
 			AntennaIDs: []llrp.AntennaID{0},
 			InventoryParameterSpecs: []llrp.InventoryParameterSpec{{
-				InventoryParameterSpecID: 1,   // must be >= 1
-				AntennaConfigurations:    nil, // see notes in newReaderConfig
-				AirProtocolID:            llrp.AirProtoEPCGlobalClass1Gen2,
+				InventoryParameterSpecID: 1, // must be >= 1
+				AntennaConfigurations: []llrp.AntennaConfiguration{{
+					AntennaID:  0,
+					RFReceiver: nil,
+					RFTransmitter: &llrp.RFTransmitter{
+						HopTableID:         0,
+						ChannelIndex:       0,
+						TransmitPowerIndex: 0,
+					},
+					C1G2InventoryCommand: nil,
+					Custom:               nil,
+				}},
+				AirProtocolID: llrp.AirProtoEPCGlobalClass1Gen2,
 			}},
 		}},
 		RFSurveySpecs: nil, // requires CanDoRFSurvey (not supported by Impinj Speedway)
