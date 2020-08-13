@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"sync"
 	"time"
 )
@@ -56,10 +55,9 @@ func GetRawInventory() []StaticTag {
 	return res
 }
 
-// ProcessReports
+// ProcessReport
 // todo: desc
-func (tp *TagProcessor) ProcessReports(r *AccessReport) (*jsonrpc.InventoryEvent, error) {
-	s := sensor.Get(r.DeviceName)
+func (tp *TagProcessor) ProcessReport(r *AccessReport) (*jsonrpc.InventoryEvent, error) {
 	invEvent := jsonrpc.NewInventoryEvent()
 
 	var offset int64
@@ -84,12 +82,12 @@ func (tp *TagProcessor) ProcessReports(r *AccessReport) (*jsonrpc.InventoryEvent
 		// offset each read (if offset is disabled, this will do nothing)
 		rt.LastRead += offset
 		// compare reads based on the time it was received
-		tp.process(r.OriginMillis, invEvent, rt, s)
+		tp.process(r.OriginMillis, invEvent, rt)
 	}
 	return invEvent, nil
 }
 
-func (tp *TagProcessor) process(referenceTimestamp int64, invEvent *jsonrpc.InventoryEvent, report *TagReport, s *sensor.Sensor) {
+func (tp *TagProcessor) process(referenceTimestamp int64, invEvent *jsonrpc.InventoryEvent, report *TagReport) {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
@@ -100,7 +98,7 @@ func (tp *TagProcessor) process(referenceTimestamp int64, invEvent *jsonrpc.Inve
 	}
 
 	prev := tag.asPreviousTag()
-	tag.update(referenceTimestamp, s, report, tp)
+	tag.update(referenceTimestamp, report, tp)
 
 	switch prev.state {
 

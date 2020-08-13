@@ -46,21 +46,21 @@ func (tag *Tag) asPreviousTag() previousTag {
 	}
 }
 
-func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) {
+func (tag *Tag) update(referenceTimestamp int64, report *TagReport, tp *TagProcessor) {
 	if report.Antenna == UnknownAntenna {
 		return
 	}
 
-	srcAnt := sensor.GetAntenna(report.Antenna)
+	srcAlias := sensor.GetAntennaAlias(report.DeviceName, report.Antenna)
 
 	// update timestamp
 	tag.LastRead = report.LastRead
 
 	// incomingStats represents the statistics for the sensor alias that just read the tag (potential new location)
-	incomingStats, found := tag.deviceStatsMap[srcAnt.Alias]
+	incomingStats, found := tag.deviceStatsMap[srcAlias]
 	if !found {
 		incomingStats = NewTagStats()
-		tag.deviceStatsMap[srcAnt.Alias] = incomingStats
+		tag.deviceStatsMap[srcAlias] = incomingStats
 	}
 	incomingStats.update(report, tag.LastRead)
 
@@ -70,7 +70,7 @@ func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *
 	//	tag.TID = read.TID
 	//}
 
-	if tag.Location == srcAnt.Alias {
+	if tag.Location == srcAlias {
 		// nothing to do
 		return
 	}
@@ -79,7 +79,7 @@ func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *
 	locationStats, found := tag.deviceStatsMap[tag.Location]
 	if !found {
 		// this means the tag has never been read (somehow)
-		tag.Location = srcAnt.Alias
+		tag.Location = srcAlias
 
 	} else if incomingStats.getCount() > 2 {
 		now := helper.UnixMilliNow()
@@ -91,13 +91,13 @@ func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *
 			"lastRead", tag.LastRead,
 			"diff", fmt.Sprintf("%v", time.Duration(tag.LastRead-locationStats.LastRead)*time.Millisecond))
 
-		weight := tp.profile.ComputeWeight(referenceTimestamp, locationStats.LastRead, sensor.IsInDeepScan)
+		weight := tp.profile.ComputeWeight(referenceTimestamp, locationStats.LastRead)
 		locationMean := locationStats.rssiDbm.GetMean()
 		incomingMean := incomingStats.rssiDbm.GetMean()
 
 		tp.lc.Debug("tag stats",
 			"epc", tag.EPC,
-			"incomingLoc", srcAnt.Alias,
+			"incomingLoc", srcAlias,
 			"existingLoc", tag.Location,
 			"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
 			"existingAvg", fmt.Sprintf("%.2f", locationMean),
@@ -108,7 +108,7 @@ func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *
 
 		// if the new sensor's average is greater than the weighted existing location, generate a moved event
 		if incomingMean > (locationMean + weight) {
-			tag.Location = srcAnt.Alias
+			tag.Location = srcAlias
 		}
 	}
 }

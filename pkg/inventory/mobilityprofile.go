@@ -77,11 +77,7 @@ func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
 }
 
 // ComputeWeight computes the weight to be applied to a value based on the time it was read vs the reference timestamp.
-func (profile *MobilityProfile) ComputeWeight(referenceTimestamp int64, lastRead int64, isInDeepScan bool) float64 {
-	if isInDeepScan {
-		return profile.Threshold
-	}
-
+func (profile *MobilityProfile) ComputeWeight(referenceTimestamp int64, lastRead int64) float64 {
 	// y = mx + b
 	weight := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.YIntercept
 

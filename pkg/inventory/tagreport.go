@@ -34,7 +34,7 @@ func NewAccessReport(deviceName string, origin int64, data *llrp.ROAccessReport)
 		TagReports:     make([]*TagReport, 0, len(data.TagReportData)),
 	}
 	for _, r := range data.TagReportData {
-		a.TagReports = append(a.TagReports, NewTagReport(&r))
+		a.TagReports = append(a.TagReports, NewTagReport(deviceName, &r))
 	}
 	return &a
 }
@@ -42,15 +42,17 @@ func NewAccessReport(deviceName string, origin int64, data *llrp.ROAccessReport)
 type TagReport struct {
 	Data *llrp.TagReportData
 
-	EPC      string
-	LastRead int64
-	Antenna  int
-	RSSI     float64
+	DeviceName string
+	EPC        string
+	LastRead   int64
+	Antenna    int
+	RSSI       float64
 }
 
-func NewTagReport(r *llrp.TagReportData) *TagReport {
+func NewTagReport(deviceName string, r *llrp.TagReportData) *TagReport {
 	t := TagReport{
-		Data: r,
+		Data:       r,
+		DeviceName: deviceName,
 	}
 
 	if r.EPC96.EPC != nil && len(r.EPC96.EPC) > 0 {

@@ -32,18 +32,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
 
 const (
 	serviceKey    = "rfid-inventory"
-	readChBuffSz  = 1000
 	eventChBuffSz = 10
 
 	ResourceROAccessReport = "ROAccessReport"
 	ResourceInventoryEvent = "inventory_event"
-
-	LLRPDeviceService = "LLRPDeviceService"
 )
 
 type inventoryApp struct {
@@ -51,7 +47,6 @@ type inventoryApp struct {
 	edgexSdkContext *appcontext.Context
 
 	processor *inventory.TagProcessor
-	readCh    chan *inventory.AccessReport
 	eventCh   chan *jsonrpc.InventoryEvent
 
 	done chan struct{}
@@ -71,7 +66,6 @@ func main() {
 		os.Exit(-1)
 	}
 	app.done = make(chan struct{})
-	app.readCh = make(chan *inventory.AccessReport, readChBuffSz)
 	app.eventCh = make(chan *jsonrpc.InventoryEvent, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
@@ -114,12 +108,6 @@ func main() {
 		app.edgexSdk.LoggingClient.Error("Error in the pipeline: ", err.Error())
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go app.processReadChannel(&wg)
-	wg.Add(1)
-	go app.processEventChannel(&wg)
-
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
 	if err != nil {
@@ -129,7 +117,6 @@ func main() {
 
 	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
 	close(app.done)
-	wg.Wait()
 
 	// Do any required cleanup here
 	os.Exit(0)
@@ -170,7 +157,6 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 
 	for _, reading := range event.Readings {
 		switch reading.Name {
-
 		case ResourceROAccessReport:
 			report := llrp.ROAccessReport{}
 			decoder := json.NewDecoder(strings.NewReader(reading.Value))
@@ -178,52 +164,21 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 
 			if err := decoder.Decode(&report); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
-			} else {
-				app.readCh <- inventory.NewAccessReport(reading.Device, reading.Origin, &report)
+				continue
 			}
 
+			r := inventory.NewAccessReport(reading.Device, reading.Origin, &report)
+			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", r.DeviceName, "tagCount", len(r.TagReports))
+
+			invEvent, err := app.processor.ProcessReport(r)
+			if err == nil && invEvent != nil && len(invEvent.Params.Data) > 0 {
+				app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event: %+v", invEvent))
+				app.pushEventToCoreData(invEvent)
+			}
 		}
 	}
 
 	return false, nil
-}
-
-func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
-	app.edgexSdk.LoggingClient.Info("starting read channel processing")
-	for {
-		select {
-		case <-app.done:
-			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
-			return
-		case r, ok := <-app.readCh:
-			if !ok {
-				return
-			}
-
-			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", r.DeviceName, "tagCount", len(r.TagReports))
-			e, err := app.processor.ProcessReports(r)
-			if err == nil && e != nil && len(e.Params.Data) > 0 {
-				app.eventCh <- e
-			}
-		}
-	}
-}
-
-func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
-	app.edgexSdk.LoggingClient.Info("starting event channel processing")
-	for {
-		select {
-		case <-app.done:
-			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
-			return
-		// TODO: publish these events somewhere (MQTT, rest, database?)
-		case e := <-app.eventCh:
-			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event: %+v", e))
-			app.pushEventToCoreData(e)
-		}
-	}
 }
 
 func (app *inventoryApp) pushEventToCoreData(event *jsonrpc.InventoryEvent) {
@@ -238,7 +193,7 @@ func (app *inventoryApp) pushEventToCoreData(event *jsonrpc.InventoryEvent) {
 		return
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent, string(payload)); err != nil {
+	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, ResourceInventoryEvent, string(payload)); err != nil {
 		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
 	}
 }

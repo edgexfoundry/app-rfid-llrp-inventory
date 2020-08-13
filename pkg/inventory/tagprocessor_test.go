@@ -37,12 +37,12 @@ func TestMain(m *testing.M) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 10)
 //
-//	front := generateTestSensor(salesFloor, sensor.NoPersonality)
-//	posSensor := generateTestSensor(salesFloor, sensor.POS)
+//	front := generateTestSensor()
+//	posSensor := generateTestSensor()
 //
 //	ds.readAll(posSensor, rssiMin, 1)
 //	ds.updateTagRefs()
-//	if err := ds.verifyAll(Unknown, posSensor.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Unknown, sensor.GetAntennaAlias(posSensor, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// check no new events
@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 //
 //	// read a few more times, we still do not want to arrive
 //	ds.readAll(posSensor, rssiMin, 4)
-//	if err := ds.verifyAll(Unknown, posSensor.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Unknown, sensor.GetAntennaAlias(posSensor, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// check no new events
@@ -62,7 +62,7 @@ func TestMain(m *testing.M) {
 //
 //	ds.readAll(front, rssiStrong, 1)
 //	// tags will have arrived now, but will still be in the location of the pos sensor
-//	if err := ds.verifyAll(Present, posSensor.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(posSensor, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure ALL arrivals WERE generated
@@ -74,13 +74,15 @@ func TestMain(m *testing.M) {
 
 func TestBasicArrival(t *testing.T) {
 	tp := NewTagProcessor(lc)
-	ds := newTestDataset(tp, 10, defaultAntenna)
-	front := generateTestSensor(salesFloor, sensor.NoPersonality)
 
-	ds.readAll(front, rssiWeak, 1)
+	front := generateTestSensor()
+
+	ds := newTestDataset(tp, 10)
+
+	ds.readAll(front, defaultAntenna, rssiWeak, 1)
 	ds.updateTagRefs()
 
-	if err := ds.verifyAll(Present, front.AntennaAlias(defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
@@ -92,16 +94,16 @@ func TestBasicArrival(t *testing.T) {
 
 func TestTagMoveWeakRssi(t *testing.T) {
 	tp := NewTagProcessor(lc)
-	ds := newTestDataset(tp, 10, defaultAntenna)
 
-	back1 := generateTestSensor(backStock, sensor.NoPersonality)
-	back2 := generateTestSensor(backStock, sensor.NoPersonality)
-	back3 := generateTestSensor(backStock, sensor.NoPersonality)
+	back1 := generateTestSensor()
+	back2 := generateTestSensor()
+	back3 := generateTestSensor()
 
+	ds := newTestDataset(tp, 10)
 	// start all tags in the back stock
-	ds.readAll(back1, rssiMin, 1)
+	ds.readAll(back1, defaultAntenna, rssiMin, 1)
 	ds.updateTagRefs()
-	if err := ds.verifyAll(Present, back1.AntennaAlias(defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure arrival events generated
@@ -111,8 +113,8 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	ds.resetEvents()
 
 	// move tags to same facility, different sensor
-	ds.readAll(back2, rssiStrong, 4)
-	if err := ds.verifyAll(Present, back2.AntennaAlias(defaultAntenna)); err != nil {
+	ds.readAll(back2, defaultAntenna, rssiStrong, 4)
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -123,8 +125,8 @@ func TestTagMoveWeakRssi(t *testing.T) {
 
 	// test that tag stays at new location even with concurrent reads from weaker sensor
 	// MOVE back doesn't happen with weak RSSI
-	ds.readAll(back3, rssiWeak, 1)
-	if err := ds.verifyAll(Present, back2.AntennaAlias(defaultAntenna)); err != nil {
+	ds.readAll(back3, defaultAntenna, rssiWeak, 1)
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure no events generated
@@ -137,15 +139,15 @@ func TestMoveAntennaLocation(t *testing.T) {
 	initialAntenna := defaultAntenna
 	antennaIds := []int{2, 4, 33, 15, 99}
 
-	back01 := generateTestSensor(backStock, sensor.NoPersonality)
+	back01 := generateTestSensor()
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
 			tp := NewTagProcessor(lc)
-			ds := newTestDataset(tp, 1, initialAntenna)
+			ds := newTestDataset(tp, 1)
 
-			// start all tags at antenna port 0
-			ds.readAll(back01, rssiMin, 1)
+			// start all tags at initialAntenna
+			ds.readAll(back01, initialAntenna, rssiMin, 1)
 			ds.updateTagRefs()
 			// ensure arrival events generated
 			if err := ds.verifyEventPattern(1, ArrivalEvent); err != nil {
@@ -154,11 +156,10 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.resetEvents()
 
 			// move tag to a different antenna port on same sensor
-			ds.setAntenna(0, antID)
-			ds.readTag(0, back01, rssiStrong, 4)
-			if ds.tags[0].Location != back01.AntennaAlias(antID) {
+			ds.readTag(0, back01, antID, rssiStrong, 4)
+			if ds.tags[0].Location != sensor.GetAntennaAlias(back01, antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					ds.tags[0].Location, back01.AntennaAlias(antID), ds.tags[0])
+					ds.tags[0].Location, sensor.GetAntennaAlias(back01, antID), ds.tags[0])
 			}
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(1, MovedEvent); err != nil {
@@ -171,15 +172,15 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 func TestMoveSameFacility(t *testing.T) {
 	tp := NewTagProcessor(lc)
-	ds := newTestDataset(tp, 10, defaultAntenna)
+	ds := newTestDataset(tp, 10)
 
-	back1 := generateTestSensor(backStock, sensor.NoPersonality)
-	back2 := generateTestSensor(backStock, sensor.NoPersonality)
+	back1 := generateTestSensor()
+	back2 := generateTestSensor()
 
 	// start all tags in the back stock
-	ds.readAll(back1, rssiMin, 1)
+	ds.readAll(back1, defaultAntenna, rssiMin, 1)
 	ds.updateTagRefs()
-	if err := ds.verifyAll(Present, back1.AntennaAlias(defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -189,8 +190,8 @@ func TestMoveSameFacility(t *testing.T) {
 	ds.resetEvents()
 
 	// move tag to same facility, different sensor
-	ds.readAll(back2, rssiStrong, 4)
-	if err := ds.verifyAll(Present, back2.AntennaAlias(defaultAntenna)); err != nil {
+	ds.readAll(back2, defaultAntenna, rssiStrong, 4)
+	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -204,13 +205,13 @@ func TestMoveSameFacility(t *testing.T) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 10)
 //
-//	front := generateTestSensor(salesFloor, sensor.NoPersonality)
-//	back := generateTestSensor(backStock, sensor.NoPersonality)
+//	front := generateTestSensor()
+//	back := generateTestSensor()
 //
 //	// start all tags in the front sales floor
 //	ds.readAll(front, rssiMin, 1)
 //	ds.updateTagRefs()
-//	if err := ds.verifyAll(Present, front.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure arrival events
@@ -221,7 +222,7 @@ func TestMoveSameFacility(t *testing.T) {
 //
 //	// move tag to different facility
 //	ds.readAll(back, rssiStrong, 4)
-//	if err := ds.verifyAll(Present, back.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure moved facilities departed/arrival sequence
@@ -235,9 +236,9 @@ func TestMoveSameFacility(t *testing.T) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 9)
 //
-//	back := generateTestSensor(backStock, sensor.NoPersonality)
-//	frontExit := generateTestSensor(salesFloor, sensor.Exit)
-//	front := generateTestSensor(salesFloor, sensor.NoPersonality)
+//	back := generateTestSensor()
+//	frontExit := generateTestSensor()
+//	front := generateTestSensor()
 //
 //	// get it in the system
 //	ds.readAll(back, rssiMin, 4)
@@ -246,7 +247,7 @@ func TestMoveSameFacility(t *testing.T) {
 //
 //	// one tag read by an EXIT will not make the tag go exiting.
 //	ds.readAll(frontExit, rssiMin, 1)
-//	if err := ds.verifyAll(Present, back.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure no events generated
@@ -258,7 +259,7 @@ func TestMoveSameFacility(t *testing.T) {
 //	// moving to an exit sensor will put tag in exiting
 //	// moving to an exit sensor in another facility will generate departure / arrival
 //	ds.readAll(frontExit, rssiWeak, 10)
-//	if err := ds.verifyAll(Exiting, frontExit.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Exiting, sensor.GetAntennaAlias(frontExit, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure departed/arrival events generated for new facility
@@ -273,7 +274,7 @@ func TestMoveSameFacility(t *testing.T) {
 //		ds.readAll(frontExit, rssiMin, 1)
 //		ds.readAll(front, rssiStrong, 1)
 //	}
-//	if err := ds.verifyAll(Present, front.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure moved events generated
@@ -283,7 +284,7 @@ func TestMoveSameFacility(t *testing.T) {
 //	ds.resetEvents()
 //
 //	ds.readAll(frontExit, rssiMax, 20)
-//	if err := ds.verifyAll(Exiting, frontExit.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Exiting, sensor.GetAntennaAlias(frontExit, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure moved events generated
@@ -297,27 +298,27 @@ func TestMoveSameFacility(t *testing.T) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 5)
 //
-//	back := generateTestSensor(backStock, sensor.NoPersonality)
-//	frontExit := generateTestSensor(salesFloor, sensor.Exit)
-//	front := generateTestSensor(salesFloor, sensor.NoPersonality)
+//	back := generateTestSensor()
+//	frontExit := generateTestSensor()
+//	front := generateTestSensor()
 //
 //	ds.readAll(back, rssiMin, 4)
 //	ds.resetEvents()
 //
 //	ds.updateTagRefs()
-//	if err := ds.verifyAll(Present, back.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //
 //	// one tag read by an EXIT will not make the tag go exiting.
 //	ds.readAll(frontExit, rssiWeak, 1)
-//	if err := ds.verifyAll(Present, back.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //
 //	// go to exiting state in another facility
 //	ds.readAll(frontExit, rssiWeak, 10)
-//	if err := ds.verifyAll(Exiting, frontExit.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Exiting, sensor.GetAntennaAlias(frontExit, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure moved facilities departed/arrival sequence
@@ -329,7 +330,7 @@ func TestMoveSameFacility(t *testing.T) {
 //	// clear exiting by moving to another sensor
 //	ds.readAll(frontExit, rssiMin, 20)
 //	ds.readAll(front, rssiStrong, 20)
-//	if err := ds.verifyAll(Present, front.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure all moved events were generated
@@ -340,7 +341,7 @@ func TestMoveSameFacility(t *testing.T) {
 //
 //	// go exiting again
 //	ds.readAll(frontExit, rssiMax, 20)
-//	if err := ds.verifyAll(Exiting, frontExit.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Exiting, sensor.GetAntennaAlias(frontExit, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure all moved events were generated
@@ -353,9 +354,9 @@ func TestMoveSameFacility(t *testing.T) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 4)
 //
-//	back := generateTestSensor(backStock, sensor.NoPersonality)
-//	frontExit := generateTestSensor(salesFloor, sensor.Exit)
-//	front1 := generateTestSensor(salesFloor, sensor.NoPersonality)
+//	back := generateTestSensor()
+//	frontExit := generateTestSensor()
+//	front1 := generateTestSensor()
 //
 //	ds.readAll(back, rssiMin, 1)
 //	ds.updateTagRefs()
@@ -363,7 +364,7 @@ func TestMoveSameFacility(t *testing.T) {
 //
 //	// move to new facility and dampen the rssi from the current sensor
 //	ds.readAll(front1, rssiWeak, 20)
-//	if err := ds.verifyAll(Present, front1.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front1, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure no events were generated
@@ -374,7 +375,7 @@ func TestMoveSameFacility(t *testing.T) {
 //
 //	// move to the exit sensor
 //	ds.readAll(frontExit, rssiMax, 20)
-//	if err := ds.verifyAll(Exiting, frontExit.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Exiting, sensor.GetAntennaAlias(frontExit, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// ensure all moved events were generated
@@ -392,11 +393,11 @@ func TestMoveSameFacility(t *testing.T) {
 //	tp := NewTagProcessor(lc)
 //	ds := newTestDataset(tp, 5)
 //
-//	back := generateTestSensor(backStock, sensor.NoPersonality)
-//	frontPos := generateTestSensor(salesFloor, sensor.POS)
-//	front1 := generateTestSensor(salesFloor, sensor.NoPersonality)
-//	front2 := generateTestSensor(salesFloor, sensor.NoPersonality)
-//	front3 := generateTestSensor(salesFloor, sensor.NoPersonality)
+//	back := generateTestSensor()
+//	frontPos := generateTestSensor()
+//	front1 := generateTestSensor()
+//	front2 := generateTestSensor()
+//	front3 := generateTestSensor()
 //
 //	// start the tags in the back
 //	ds.readAll(back, rssiMin, 1)
@@ -406,7 +407,7 @@ func TestMoveSameFacility(t *testing.T) {
 //	// read by the front POS. should still be Present in the back stock
 //	ds.setLastReadOnAll(ds.readTimeOrig + (int64(PosDepartedThresholdMillis) / 2))
 //	ds.readAll(frontPos, rssiWeak, 1)
-//	if err := ds.verifyAll(Present, back.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// check no new events
@@ -470,7 +471,7 @@ func TestMoveSameFacility(t *testing.T) {
 //	ds.setLastReadOnAll(lastDeparted + int64(PosReturnThresholdMillis) + 1500)
 //	ds.readAll(front3, rssiWeak, 20)
 //	// note that location is still front2 NOT front3 because it was read stronger by front2
-//	if err := ds.verifyAll(Present, front2.AntennaAlias(defaultAntenna)); err != nil {
+//	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front2, defaultAntenna)); err != nil {
 //		t.Error(err)
 //	}
 //	// check for arrival/returned events being generated

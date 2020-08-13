@@ -10,14 +10,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"math"
 	"sync/atomic"
-)
-
-const (
-	backStock  = "BackStock"
-	salesFloor = "SalesFloor"
 )
 
 var (
@@ -30,39 +24,28 @@ var (
 	sensorIdCounter  uint32 = 0
 )
 
-func generateTestSensor(facilityID string, personality sensor.Personality) *sensor.Sensor {
+func generateTestSensor() string {
 	sensorID := atomic.AddUint32(&sensorIdCounter, 1)
-
-	s := sensor.NewSensor(fmt.Sprintf("Sensor-%02X", sensorID))
-	s.FacilityID = facilityID
-
-	// todo: set personalities per antenna
-	for i := 0; i <= 4; i++ {
-		a := s.GetAntenna(i)
-		a.Personality = personality
-		a.FacilityID = facilityID
-	}
-	return s
+	return fmt.Sprintf("Sensor-%02X", sensorID)
 }
 
-func generateReadData(lastRead int64, antennaID int) *TagReport {
+func generateReadData(lastRead int64) *TagReport {
 	serial := atomic.AddUint32(&tagSerialCounter, 1)
 
-	// todo: ensure even string length
+	// note: ensure even string length
 	epcBytes, err := hex.DecodeString(fmt.Sprintf("%024X", serial))
 	if err != nil {
 		panic(err)
 	}
 
-	ant := llrp.AntennaID(antennaID)
 	rssi := llrp.PeakRSSI(rssiMin)
 	seen := llrp.LastSeenUTC(lastRead)
 
-	return NewTagReport(&llrp.TagReportData{
+	// note: the antenna and device name are always overridden when readTag is called
+	return NewTagReport("test-device", &llrp.TagReportData{
 		EPC96: llrp.EPC96{
 			EPC: epcBytes,
 		},
-		AntennaID:   &ant,
 		PeakRSSI:    &rssi,
 		LastSeenUTC: &seen,
 	})

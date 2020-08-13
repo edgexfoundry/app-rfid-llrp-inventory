@@ -35,8 +35,7 @@ func TestSensorAntennaAlias(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
-			s := NewSensor(test.deviceID)
-			alias := s.AntennaAlias(test.antennaID)
+			alias := GetAntennaAlias(test.deviceID, test.antennaID)
 			if alias != test.expected {
 				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
 			}

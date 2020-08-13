@@ -12,7 +12,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"strings"
 )
 
@@ -25,11 +24,11 @@ type testDataset struct {
 	inventoryEvent *jsonrpc.InventoryEvent
 }
 
-func newTestDataset(tp *TagProcessor, tagCount int, initialAntenna int) testDataset {
+func newTestDataset(tp *TagProcessor, tagCount int) testDataset {
 	ds := testDataset{
 		tp: tp,
 	}
-	ds.initialize(tagCount, initialAntenna)
+	ds.initialize(tagCount)
 	return ds
 }
 
@@ -39,13 +38,13 @@ func (ds *testDataset) resetEvents() {
 }
 
 // will generate tagread objects but NOT ingest them yet
-func (ds *testDataset) initialize(tagCount int, initialAntenna int) {
+func (ds *testDataset) initialize(tagCount int) {
 	ds.tagReads = make([]*TagReport, tagCount)
 	ds.tags = make([]*Tag, tagCount)
 	ds.readTimeOrig = helper.UnixMilliNow()
 
 	for i := 0; i < tagCount; i++ {
-		ds.tagReads[i] = generateReadData(ds.readTimeOrig, initialAntenna)
+		ds.tagReads[i] = generateReadData(ds.readTimeOrig)
 	}
 
 	ds.resetEvents()
@@ -58,44 +57,26 @@ func (ds *testDataset) updateTagRefs() {
 	}
 }
 
-func (ds *testDataset) setRssi(tagIndex int, rssi float64) {
-	ds.tagReads[tagIndex].RSSI = rssi
-}
-
-func (ds *testDataset) setRssiAll(rssi float64) {
-	for _, tagRead := range ds.tagReads {
-		tagRead.RSSI = rssi
-	}
-}
-
-func (ds *testDataset) setAntenna(tagIndex int, antenna int) {
-	ds.tagReads[tagIndex].Antenna = antenna
-}
-
-func (ds *testDataset) setAntennaAll(antenna int) {
-	for _, tagRead := range ds.tagReads {
-		tagRead.Antenna = antenna
-	}
-}
-
 func (ds *testDataset) setLastReadOnAll(timestamp int64) {
 	for _, tagRead := range ds.tagReads {
 		tagRead.LastRead = timestamp
 	}
 }
 
-func (ds *testDataset) readTag(tagIndex int, s *sensor.Sensor, rssi float64, times int) {
-	ds.setRssi(tagIndex, rssi)
+func (ds *testDataset) readTag(tagIndex int, deviceName string, antenna int, rssi float64, times int) {
+	ds.tagReads[tagIndex].RSSI = rssi
+	ds.tagReads[tagIndex].DeviceName = deviceName
+	ds.tagReads[tagIndex].Antenna = antenna
 
 	now := helper.UnixMilliNow()
 	for i := 0; i < times; i++ {
-		ds.tp.process(now, ds.inventoryEvent, ds.tagReads[tagIndex], s)
+		ds.tp.process(now, ds.inventoryEvent, ds.tagReads[tagIndex])
 	}
 }
 
-func (ds *testDataset) readAll(s *sensor.Sensor, rssi float64, times int) {
+func (ds *testDataset) readAll(deviceName string, antenna int, rssi float64, times int) {
 	for tagIndex := range ds.tagReads {
-		ds.readTag(tagIndex, s, rssi, times)
+		ds.readTag(tagIndex, deviceName, antenna, rssi, times)
 	}
 }
 
