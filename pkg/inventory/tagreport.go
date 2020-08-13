@@ -8,8 +8,8 @@ package inventory
 
 import (
 	"encoding/hex"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"math"
 	"time"
 )

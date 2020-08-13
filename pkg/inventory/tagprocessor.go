@@ -9,13 +9,9 @@ package inventory
 import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/sirupsen/logrus"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"sync"
 	"time"
-)
-
-const (
-	UnknownLocation = "UNKNOWN"
 )
 
 type TagProcessor struct {

@@ -8,8 +8,7 @@ package inventory
 
 import (
 	"fmt"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"time"
 )
 
@@ -38,15 +37,13 @@ type Tag struct {
 type previousTag struct {
 	location     string
 	lastRead     int64
-	lastDeparted int64
-	lastArrived  int64
 	state        TagState
 }
 
 func NewTag(epc string) *Tag {
 	return &Tag{
 		EPC:            epc,
-		Location:       UnknownLocation,
+		Location:       "",
 		state:          Unknown,
 		deviceStatsMap: make(map[string]*TagStats),
 	}
@@ -56,8 +53,6 @@ func (tag *Tag) asPreviousTag() previousTag {
 	return previousTag{
 		location:     tag.Location,
 		lastRead:     tag.LastRead,
-		lastDeparted: tag.LastDeparted,
-		lastArrived:  tag.LastArrived,
 		state:        tag.state,
 	}
 }
@@ -67,7 +62,7 @@ func (tag *Tag) update(referenceTimestamp int64, report *TagReport, tp *TagProce
 		return
 	}
 
-	srcAlias := sensor.GetAntennaAlias(report.DeviceName, report.Antenna)
+	srcAlias := GetAntennaAlias(report.DeviceName, report.Antenna)
 
 	// update timestamp
 	tag.LastRead = report.LastRead

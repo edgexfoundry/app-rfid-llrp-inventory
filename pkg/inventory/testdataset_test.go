@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"strings"
 )

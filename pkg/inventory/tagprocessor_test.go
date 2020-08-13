@@ -9,7 +9,6 @@ package inventory
 import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
 	"os"
 	"testing"
 )
@@ -82,7 +81,7 @@ func TestBasicArrival(t *testing.T) {
 	ds.readAll(front, defaultAntenna, rssiWeak, 1)
 	ds.updateTagRefs()
 
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(front, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(front, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
@@ -103,7 +102,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	// start all tags in the back stock
 	ds.readAll(back1, defaultAntenna, rssiMin, 1)
 	ds.updateTagRefs()
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back1, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure arrival events generated
@@ -114,7 +113,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 
 	// move tags to same facility, different sensor
 	ds.readAll(back2, defaultAntenna, rssiStrong, 4)
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -126,7 +125,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	// test that tag stays at new location even with concurrent reads from weaker sensor
 	// MOVE back doesn't happen with weak RSSI
 	ds.readAll(back3, defaultAntenna, rssiWeak, 1)
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure no events generated
@@ -157,9 +156,9 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 			// move tag to a different antenna port on same sensor
 			ds.readTag(0, back01, antID, rssiStrong, 4)
-			if ds.tags[0].Location != sensor.GetAntennaAlias(back01, antID) {
+			if ds.tags[0].Location != GetAntennaAlias(back01, antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					ds.tags[0].Location, sensor.GetAntennaAlias(back01, antID), ds.tags[0])
+					ds.tags[0].Location, GetAntennaAlias(back01, antID), ds.tags[0])
 			}
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(1, MovedType); err != nil {
@@ -180,7 +179,7 @@ func TestMoveSameFacility(t *testing.T) {
 	// start all tags in the back stock
 	ds.readAll(back1, defaultAntenna, rssiMin, 1)
 	ds.updateTagRefs()
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back1, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -191,7 +190,7 @@ func TestMoveSameFacility(t *testing.T) {
 
 	// move tag to same facility, different sensor
 	ds.readAll(back2, defaultAntenna, rssiStrong, 4)
-	if err := ds.verifyAll(Present, sensor.GetAntennaAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAntennaAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
