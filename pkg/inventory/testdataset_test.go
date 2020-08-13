@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
@@ -55,50 +54,46 @@ func (ds *testDataset) initialize(tagCount int, initialAntenna int) {
 // update the tag pointers based on actual ingested data
 func (ds *testDataset) updateTagRefs() {
 	for i, tagRead := range ds.tagReads {
-		ds.tags[i] = ds.tp.inventory[tagRead.EPC()]
+		ds.tags[i] = ds.tp.inventory[tagRead.EPC]
 	}
 }
 
-func (ds *testDataset) setRssi(tagIndex int, rssi int) {
-	v := llrp.PeakRSSI(rssi)
-	ds.tagReads[tagIndex].PeakRSSI = &v
+func (ds *testDataset) setRssi(tagIndex int, rssi float64) {
+	ds.tagReads[tagIndex].RSSI = rssi
 }
 
-func (ds *testDataset) setRssiAll(rssi int) {
-	v := llrp.PeakRSSI(rssi)
+func (ds *testDataset) setRssiAll(rssi float64) {
 	for _, tagRead := range ds.tagReads {
-		tagRead.PeakRSSI = &v
+		tagRead.RSSI = rssi
 	}
 }
 
 func (ds *testDataset) setAntenna(tagIndex int, antenna int) {
-	aID := llrp.AntennaID(antenna)
-	ds.tagReads[tagIndex].AntennaID = &aID
+	ds.tagReads[tagIndex].Antenna = antenna
 }
 
 func (ds *testDataset) setAntennaAll(antenna int) {
-	aID := llrp.AntennaID(antenna)
 	for _, tagRead := range ds.tagReads {
-		tagRead.AntennaID = &aID
+		tagRead.Antenna = antenna
 	}
 }
 
 func (ds *testDataset) setLastReadOnAll(timestamp int64) {
-	ts := llrp.LastSeenUTC(timestamp)
 	for _, tagRead := range ds.tagReads {
-		tagRead.LastSeenUTC = &ts
+		tagRead.LastRead = timestamp
 	}
 }
 
-func (ds *testDataset) readTag(tagIndex int, s *sensor.Sensor, rssi int, times int) {
+func (ds *testDataset) readTag(tagIndex int, s *sensor.Sensor, rssi float64, times int) {
 	ds.setRssi(tagIndex, rssi)
 
+	now := helper.UnixMilliNow()
 	for i := 0; i < times; i++ {
-		ds.tp.process(ds.inventoryEvent, ds.tagReads[tagIndex], s)
+		ds.tp.process(now, ds.inventoryEvent, ds.tagReads[tagIndex], s)
 	}
 }
 
-func (ds *testDataset) readAll(s *sensor.Sensor, rssi int, times int) {
+func (ds *testDataset) readAll(s *sensor.Sensor, rssi float64, times int) {
 	for tagIndex := range ds.tagReads {
 		ds.readTag(tagIndex, s, rssi, times)
 	}

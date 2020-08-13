@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
+	"math"
 	"sync/atomic"
 )
 
@@ -20,10 +21,10 @@ const (
 )
 
 var (
-	rssiMin    = -95
-	rssiMax    = -55
-	rssiStrong = rssiMax - (rssiMax-rssiMin)/3
-	rssiWeak   = rssiMin + (rssiMax-rssiMin)/3
+	rssiMin    = float64(-95)
+	rssiMax    = float64(-55)
+	rssiStrong = rssiMax - math.Floor((rssiMax-rssiMin)/3)
+	rssiWeak   = rssiMin + math.Floor((rssiMax-rssiMin)/3)
 
 	tagSerialCounter uint32
 	sensorIdCounter  uint32 = 0
@@ -57,14 +58,12 @@ func generateReadData(lastRead int64, antennaID int) *TagReport {
 	rssi := llrp.PeakRSSI(rssiMin)
 	seen := llrp.LastSeenUTC(lastRead)
 
-	return &TagReport{
-		TagReportData: &llrp.TagReportData{
-			EPC96: llrp.EPC96{
-				EPC: epcBytes,
-			},
-			AntennaID:   &ant,
-			PeakRSSI:    &rssi,
-			LastSeenUTC: &seen,
+	return NewTagReport(&llrp.TagReportData{
+		EPC96: llrp.EPC96{
+			EPC: epcBytes,
 		},
-	}
+		AntennaID:   &ant,
+		PeakRSSI:    &rssi,
+		LastSeenUTC: &seen,
+	})
 }

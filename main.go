@@ -51,7 +51,7 @@ type inventoryApp struct {
 	edgexSdkContext *appcontext.Context
 
 	processor *inventory.TagProcessor
-	readCh    chan *inventory.TagReport
+	readCh    chan *inventory.AccessReport
 	eventCh   chan *jsonrpc.InventoryEvent
 
 	done chan struct{}
@@ -71,7 +71,7 @@ func main() {
 		os.Exit(-1)
 	}
 	app.done = make(chan struct{})
-	app.readCh = make(chan *inventory.TagReport, readChBuffSz)
+	app.readCh = make(chan *inventory.AccessReport, readChBuffSz)
 	app.eventCh = make(chan *jsonrpc.InventoryEvent, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
@@ -179,9 +179,7 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 			if err := decoder.Decode(&report); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
 			} else {
-				for _, r := range report.TagReportData {
-					app.readCh <- inventory.NewTagReport(reading.Device, &r)
-				}
+				app.readCh <- inventory.NewAccessReport(reading.Device, reading.Origin, &report)
 			}
 
 		}
@@ -198,9 +196,13 @@ func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
 		case <-app.done:
 			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
 			return
-		case r := <-app.readCh:
-			app.edgexSdk.LoggingClient.Debug("handleTagReportData", "deviceName", r.DeviceName, "epc", r.EPC())
-			e, err := app.processor.Process(r)
+		case r, ok := <-app.readCh:
+			if !ok {
+				return
+			}
+
+			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", r.DeviceName, "tagCount", len(r.TagReports))
+			e, err := app.processor.ProcessReports(r)
 			if err == nil && e != nil && len(e.Params.Data) > 0 {
 				app.eventCh <- e
 			}

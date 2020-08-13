@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/sensor"
+	"time"
 )
 
 type Tag struct {
@@ -45,18 +46,15 @@ func (tag *Tag) asPreviousTag() previousTag {
 	}
 }
 
-func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) {
-	if report.AntennaID == nil {
+func (tag *Tag) update(referenceTimestamp int64, sensor *sensor.Sensor, report *TagReport, tp *TagProcessor) {
+	if report.Antenna == UnknownAntenna {
 		return
 	}
 
-	srcAnt := sensor.GetAntenna(int(*report.AntennaID))
+	srcAnt := sensor.GetAntenna(report.Antenna)
 
 	// update timestamp
-	// todo: utc checking
-	if report.LastSeenUTC != nil {
-		tag.LastRead = int64(uint64(*report.LastSeenUTC) / uint64(1000))
-	}
+	tag.LastRead = report.LastRead
 
 	// incomingStats represents the statistics for the sensor alias that just read the tag (potential new location)
 	incomingStats, found := tag.deviceStatsMap[srcAnt.Alias]
@@ -85,20 +83,31 @@ func (tag *Tag) update(sensor *sensor.Sensor, report *TagReport, tp *TagProcesso
 
 	} else if incomingStats.getCount() > 2 {
 		now := helper.UnixMilliNow()
-		tp.lc.Debug(fmt.Sprintf("now: %v, lastRead: %v, diff: %v", now, locationStats.LastRead, now-locationStats.LastRead))
-		weight := tp.profile.ComputeWeight(now, locationStats.LastRead, sensor.IsInDeepScan)
+		tp.lc.Debug("read timing",
+			"now", now,
+			"referenceTimestamp", referenceTimestamp,
+			"nowMinusRef", fmt.Sprintf("%v", time.Duration(now-referenceTimestamp)*time.Millisecond),
+			"locationLastRead", locationStats.LastRead,
+			"lastRead", tag.LastRead,
+			"diff", fmt.Sprintf("%v", time.Duration(tag.LastRead-locationStats.LastRead)*time.Millisecond))
+
+		weight := tp.profile.ComputeWeight(referenceTimestamp, locationStats.LastRead, sensor.IsInDeepScan)
 		locationMean := locationStats.rssiDbm.GetMean()
 		incomingMean := incomingStats.rssiDbm.GetMean()
 
+		tp.lc.Debug("tag stats",
+			"epc", tag.EPC,
+			"incomingLoc", srcAnt.Alias,
+			"existingLoc", tag.Location,
+			"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
+			"existingAvg", fmt.Sprintf("%.2f", locationMean),
+			"weight", fmt.Sprintf("%.2f", weight),
+			"existingAdjusted", fmt.Sprintf("%.2f", locationMean+weight),
+			// if stayFactor is positive, tag will stay, if negative, generates a moved event
+			"stayFactor", fmt.Sprintf("%.2f", (locationMean+weight)-incomingMean))
+
 		// if the new sensor's average is greater than the weighted existing location, generate a moved event
 		if incomingMean > (locationMean + weight) {
-			tp.lc.Debug("tag stats",
-				"incoming avg", incomingMean,
-				"existing avg", locationMean,
-				"weight", weight,
-				"existing adjusted", locationMean+weight,
-				"diff", (locationMean+weight)-incomingMean)
-
 			tag.Location = srcAnt.Alias
 		}
 	}

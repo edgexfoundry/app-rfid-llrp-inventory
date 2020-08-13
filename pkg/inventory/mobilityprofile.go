@@ -9,7 +9,6 @@ package inventory
 import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -33,8 +32,6 @@ var (
 		"asset_tracking": assetTracking,
 		"retail_garment": retailGarment,
 	}
-
-	ErrMissingProfile = errors.New("unable to find mobility profile, using defaults")
 )
 
 // MobilityProfile defines the parameters of the weighted slope formula used in calculating a tag's location.
