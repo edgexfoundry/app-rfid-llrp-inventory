@@ -26,20 +26,23 @@ import (
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 const (
 	serviceKey    = "rfid-inventory"
 	eventChBuffSz = 10
 
-	ResourceROAccessReport = "ROAccessReport"
-	ResourceInventoryEvent = "inventory_event"
+	ResourceROAccessReport         = "ROAccessReport"
+	ResourceInventoryEventArrived  = "InventoryEventArrived"
+	ResourceInventoryEventMoved    = "InventoryEventMoved"
+	ResourceInventoryEventDeparted = "InventoryEventDeparted"
 )
 
 type inventoryApp struct {
@@ -47,7 +50,7 @@ type inventoryApp struct {
 	edgexSdkContext *appcontext.Context
 
 	processor *inventory.TagProcessor
-	eventCh   chan *jsonrpc.InventoryEvent
+	eventCh   chan inventory.Event
 
 	done chan struct{}
 }
@@ -66,7 +69,7 @@ func main() {
 		os.Exit(-1)
 	}
 	app.done = make(chan struct{})
-	app.eventCh = make(chan *jsonrpc.InventoryEvent, eventChBuffSz)
+	app.eventCh = make(chan inventory.Event, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
@@ -86,7 +89,10 @@ func main() {
 	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.Ping), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsHandlerVar, routes.RawInventory), http.MethodGet)
+	err = app.edgexSdk.AddRoute("/inventory/raw",
+		func(writer http.ResponseWriter, request *http.Request) {
+			routes.RawInventory(app.edgexSdkContext.LoggingClient, writer, request, app.processor)
+		}, http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
 	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevices), http.MethodGet)
@@ -108,6 +114,20 @@ func main() {
 		app.edgexSdk.LoggingClient.Error("Error in the pipeline: ", err.Error())
 	}
 
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.processEventChannel()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.processScheduledTasks()
+	}()
+
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
 	if err != nil {
@@ -117,6 +137,7 @@ func main() {
 
 	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
 	close(app.done)
+	wg.Wait()
 
 	// Do any required cleanup here
 	os.Exit(0)
@@ -169,19 +190,64 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 
 			r := inventory.NewAccessReport(reading.Device, reading.Origin, &report)
 			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", r.DeviceName, "tagCount", len(r.TagReports))
-
-			invEvent, err := app.processor.ProcessReport(r)
-			if err == nil && invEvent != nil && len(invEvent.Params.Data) > 0 {
-				app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing event: %+v", invEvent))
-				app.pushEventToCoreData(invEvent)
-			}
+			app.processor.ProcessReport(r, app.eventCh)
 		}
 	}
 
 	return false, nil
 }
 
-func (app *inventoryApp) pushEventToCoreData(event *jsonrpc.InventoryEvent) {
+// processScheduledTasks is an infinite loop that processes timer tickers which are basically
+// a way to run code on a scheduled interval in golang
+func (app *inventoryApp) processScheduledTasks() {
+	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.AggregateDepartedThresholdMillis/5) * time.Millisecond)
+	defer aggregateDepartedTicker.Stop()
+
+	ageoutTicker := time.NewTicker(1 * time.Hour)
+	defer ageoutTicker.Stop()
+
+	for {
+		select {
+		case <-app.done:
+			app.edgexSdk.LoggingClient.Info("done called. stopping scheduled tasks")
+			return
+
+		case t, ok := <-aggregateDepartedTicker.C:
+			if !ok {
+				return
+			}
+			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("DoAggregateDepartedTask: %v", t))
+			app.processor.DoAggregateDepartedTask(app.eventCh)
+
+		case t, ok := <-ageoutTicker.C:
+			if !ok {
+				return
+			}
+			app.edgexSdkContext.LoggingClient.Debug(fmt.Sprintf("DoAgeoutTask: %v", t))
+			app.processor.DoAgeoutTask()
+		}
+	}
+}
+
+func (app *inventoryApp) processEventChannel() {
+	app.edgexSdk.LoggingClient.Info("starting event channel processing")
+	for {
+		select {
+		case <-app.done:
+			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
+			return
+		case e, ok := <-app.eventCh:
+			if !ok {
+				return
+			}
+
+			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
+			app.pushEventToCoreData(e)
+		}
+	}
+}
+
+func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
 	payload, err := json.Marshal(event)
 	if err != nil {
 		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
@@ -193,8 +259,21 @@ func (app *inventoryApp) pushEventToCoreData(event *jsonrpc.InventoryEvent) {
 		return
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, ResourceInventoryEvent, string(payload)); err != nil {
-		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
+	var resource string
+	switch event.OfType() {
+	case inventory.ArrivedType:
+		resource = ResourceInventoryEventArrived
+	case inventory.MovedType:
+		resource = ResourceInventoryEventMoved
+	case inventory.DepartedType:
+		resource = ResourceInventoryEventDeparted
+	default:
+		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("Unknown event type: %v.", event.OfType()))
+		return
+	}
+
+	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, resource, string(payload)); err != nil {
+		app.edgexSdk.LoggingClient.Error("Unable to push inventory event to core-data: " + err.Error())
 	}
 }
 

@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/gorilla/mux"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
 	"io/ioutil"
@@ -42,26 +43,19 @@ func Index(writer http.ResponseWriter, req *http.Request) {
 }
 
 // RawInventory returns the raw inventory algorithm data
-func RawInventory(writer http.ResponseWriter, req *http.Request) {
-	logger, _, err := GetSettingsHandler(req)
-	if err != nil {
-		writer.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
+func RawInventory(lc logger.LoggingClient, writer http.ResponseWriter, req *http.Request, tagPro *inventory.TagProcessor) {
 	writer.Header().Set("Content-Type", "application/json")
 
-	// todo
-	tags := inventory.GetRawInventory()
+	tags := tagPro.GetRawInventory()
 	bytes, err := json.Marshal(tags)
 	if err != nil {
-		logger.Error(err.Error())
+		lc.Error(err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	if _, err = writer.Write(bytes); err != nil {
-		logger.Error(err.Error())
+		lc.Error(err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
 	}
 }

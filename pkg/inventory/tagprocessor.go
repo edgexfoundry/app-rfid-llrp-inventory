@@ -10,18 +10,12 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/helper"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
 	"sync"
 	"time"
 )
 
 const (
-	unknown = "UNKNOWN"
-)
-
-var (
-	once   sync.Once
-	tagPro *TagProcessor
+	UnknownLocation = "UNKNOWN"
 )
 
 type TagProcessor struct {
@@ -32,24 +26,21 @@ type TagProcessor struct {
 }
 
 func NewTagProcessor(lc logger.LoggingClient) *TagProcessor {
-	once.Do(func() {
-		profile := loadMobilityProfile(lc)
-		tagPro = &TagProcessor{
-			lc:        lc,
-			inventory: make(map[string]*Tag),
-			profile:   &profile,
-		}
-	})
-	return tagPro
+	profile := loadMobilityProfile(lc)
+	return &TagProcessor{
+		lc:        lc,
+		inventory: make(map[string]*Tag),
+		profile:   &profile,
+	}
 }
 
-func GetRawInventory() []StaticTag {
-	tagPro.inventoryMu.Lock()
-	defer tagPro.inventoryMu.Unlock()
+func (tp *TagProcessor) GetRawInventory() []StaticTag {
+	tp.inventoryMu.Lock()
+	defer tp.inventoryMu.Unlock()
 
 	// convert tag map of pointers into a flat array of non-pointers
-	res := make([]StaticTag, 0, len(tagPro.inventory))
-	for _, tag := range tagPro.inventory {
+	res := make([]StaticTag, 0, len(tp.inventory))
+	for _, tag := range tp.inventory {
 		res = append(res, newStaticTag(tag))
 	}
 	return res
@@ -57,9 +48,7 @@ func GetRawInventory() []StaticTag {
 
 // ProcessReport
 // todo: desc
-func (tp *TagProcessor) ProcessReport(r *AccessReport) (*jsonrpc.InventoryEvent, error) {
-	invEvent := jsonrpc.NewInventoryEvent()
-
+func (tp *TagProcessor) ProcessReport(r *AccessReport, eventCh chan<- Event) {
 	var offset int64
 	if AdjustLastReadOnByOrigin {
 		// offset is an adjustment of timestamps based on when the mqtt-device-service first saw the message compared
@@ -82,12 +71,11 @@ func (tp *TagProcessor) ProcessReport(r *AccessReport) (*jsonrpc.InventoryEvent,
 		// offset each read (if offset is disabled, this will do nothing)
 		rt.LastRead += offset
 		// compare reads based on the time it was received
-		tp.process(r.OriginMillis, invEvent, rt)
+		tp.process(r.OriginMillis, rt, eventCh)
 	}
-	return invEvent, nil
 }
 
-func (tp *TagProcessor) process(referenceTimestamp int64, invEvent *jsonrpc.InventoryEvent, report *TagReport) {
+func (tp *TagProcessor) process(referenceTimestamp int64, report *TagReport, eventCh chan<- Event) {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
@@ -104,11 +92,20 @@ func (tp *TagProcessor) process(referenceTimestamp int64, invEvent *jsonrpc.Inve
 
 	case Unknown, Departed:
 		tag.setState(Present)
-		tp.addEvent(invEvent, tag, ArrivalEvent)
+		eventCh <- ArrivedEvent{
+			EPC:       tag.EPC,
+			Timestamp: tag.LastRead,
+			Location:  tag.Location,
+		}
 
 	case Present:
 		if prev.location != "" && prev.location != tag.Location {
-			tp.addEvent(invEvent, tag, MovedEvent)
+			eventCh <- MovedEvent{
+				EPC:          tag.EPC,
+				Timestamp:    tag.LastRead,
+				PrevLocation: prev.location,
+				Location:     tag.Location,
+			}
 		}
 	}
 }
@@ -124,6 +121,7 @@ func (tp *TagProcessor) DoAgeoutTask() int {
 	var numRemoved int
 	for epc, tag := range tp.inventory {
 		if tag.LastRead < expiration {
+			// todo: does this need to check departed state?
 			numRemoved++
 			delete(tp.inventory, epc)
 		}
@@ -133,7 +131,7 @@ func (tp *TagProcessor) DoAgeoutTask() int {
 	return numRemoved
 }
 
-func (tp *TagProcessor) DoAggregateDepartedTask() *jsonrpc.InventoryEvent {
+func (tp *TagProcessor) DoAggregateDepartedTask(eventCh chan<- Event) {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
@@ -141,31 +139,19 @@ func (tp *TagProcessor) DoAggregateDepartedTask() *jsonrpc.InventoryEvent {
 	now := helper.UnixMilliNow()
 	expiration := now - int64(AggregateDepartedThresholdMillis)
 
-	invEvent := jsonrpc.NewInventoryEvent()
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {
 			tag.setStateAt(Departed, now)
-			tp.addEvent(invEvent, tag, DepartedEvent)
-			logrus.Debugf("Departed %v", tag)
+			e := DepartedEvent{
+				EPC:          tag.EPC,
+				Timestamp:    now,
+				LastRead:     tag.LastRead,
+				LastLocation: tag.Location,
+			}
+			// reset the read stats so if it arrives again it will start with fresh data
+			tag.resetStats()
+			logrus.Debugf("Departed %+v", e)
+			eventCh <- e
 		}
 	}
-
-	return invEvent
-}
-
-func (tp *TagProcessor) addEvent(invEvent *jsonrpc.InventoryEvent, tag *Tag, eventType EventType) {
-	tp.addEventDetails(invEvent, tag.EPC, tag.TID, tag.Location, eventType, tag.LastRead)
-}
-
-func (tp *TagProcessor) addEventDetails(invEvent *jsonrpc.InventoryEvent, epc string, tid string, location string, eventType EventType, timestamp int64) {
-	tp.lc.Info("Sending event",
-		"epc", epc, "tid", tid, "eventType", eventType, "location", location, "timestamp", timestamp)
-
-	invEvent.AddTagEvent(jsonrpc.TagEvent{
-		Timestamp: timestamp,
-		Location:  location,
-		Tid:       tid,
-		EpcCode:   epc,
-		EventType: string(eventType),
-	})
 }

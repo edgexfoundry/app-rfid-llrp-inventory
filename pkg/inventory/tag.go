@@ -13,6 +13,14 @@ import (
 	"time"
 )
 
+type TagState string
+
+const (
+	Unknown  TagState = "Unknown"
+	Present  TagState = "Present"
+	Departed TagState = "Departed"
+)
+
 type Tag struct {
 	EPC string
 	TID string
@@ -27,10 +35,18 @@ type Tag struct {
 	deviceStatsMap map[string]*TagStats
 }
 
+type previousTag struct {
+	location     string
+	lastRead     int64
+	lastDeparted int64
+	lastArrived  int64
+	state        TagState
+}
+
 func NewTag(epc string) *Tag {
 	return &Tag{
 		EPC:            epc,
-		Location:       unknown,
+		Location:       UnknownLocation,
 		state:          Unknown,
 		deviceStatsMap: make(map[string]*TagStats),
 	}
@@ -127,6 +143,10 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 	}
 
 	tag.state = newState
+}
+
+func (tag *Tag) resetStats() {
+	tag.deviceStatsMap = make(map[string]*TagStats)
 }
 
 // StaticTag represents a Tag object stuck in time for use with APIs

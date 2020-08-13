@@ -6,8 +6,6 @@
 
 package inventory
 
-import "time"
-
 var (
 	// todo: these are supposed to be configurable
 
@@ -22,8 +20,8 @@ var (
 	MobilityProfileThresholdOverridden     = false // todo
 	MobilityProfileHoldoffMillisOverridden = false // todo
 
-	AggregateDepartedThresholdMillis = int64((1 * time.Hour) / time.Millisecond) // todo
-	AgeOutHours                      = 24 * 14                                   // todo
+	AggregateDepartedThresholdMillis = 30000
+	AgeOutHours                      = 336
 
 	TagStatsWindowSize = 20
 )

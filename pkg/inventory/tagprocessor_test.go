@@ -87,7 +87,7 @@ func TestBasicArrival(t *testing.T) {
 	}
 
 	// ensure ALL arrivals WERE generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivalEvent); err != nil {
+	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 }
@@ -107,7 +107,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure arrival events generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivalEvent); err != nil {
+	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 	ds.resetEvents()
@@ -118,7 +118,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), MovedEvent); err != nil {
+	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
 		t.Error(err)
 	}
 	ds.resetEvents()
@@ -150,7 +150,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds.readAll(back01, initialAntenna, rssiMin, 1)
 			ds.updateTagRefs()
 			// ensure arrival events generated
-			if err := ds.verifyEventPattern(1, ArrivalEvent); err != nil {
+			if err := ds.verifyEventPattern(1, ArrivedType); err != nil {
 				t.Error(err)
 			}
 			ds.resetEvents()
@@ -162,7 +162,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 					ds.tags[0].Location, sensor.GetAntennaAlias(back01, antID), ds.tags[0])
 			}
 			// ensure moved events generated
-			if err := ds.verifyEventPattern(1, MovedEvent); err != nil {
+			if err := ds.verifyEventPattern(1, MovedType); err != nil {
 				t.Error(err)
 			}
 			ds.resetEvents()
@@ -184,7 +184,7 @@ func TestMoveSameFacility(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivalEvent); err != nil {
+	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 	ds.resetEvents()
@@ -195,7 +195,7 @@ func TestMoveSameFacility(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), MovedEvent); err != nil {
+	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
 		t.Error(err)
 	}
 	ds.resetEvents()
