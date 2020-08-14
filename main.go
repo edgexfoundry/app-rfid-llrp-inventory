@@ -25,7 +25,7 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"

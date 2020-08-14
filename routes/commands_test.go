@@ -8,7 +8,7 @@ package routes
 
 import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"golang.org/x/net/context"
 	"net/http"
 	"net/http/httptest"
@@ -67,6 +67,7 @@ func TestRawInventory(t *testing.T) {
 		t.Errorf("Unable to create new HTTP request %s", err.Error())
 	}
 	recorder := httptest.NewRecorder()
+	// todo: fix
 	handler := http.HandlerFunc(RawInventory)
 	handler.ServeHTTP(recorder, request)
 

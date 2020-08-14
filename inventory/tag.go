@@ -35,9 +35,9 @@ type Tag struct {
 }
 
 type previousTag struct {
-	location     string
-	lastRead     int64
-	state        TagState
+	location string
+	lastRead int64
+	state    TagState
 }
 
 func NewTag(epc string) *Tag {
@@ -51,9 +51,9 @@ func NewTag(epc string) *Tag {
 
 func (tag *Tag) asPreviousTag() previousTag {
 	return previousTag{
-		location:     tag.Location,
-		lastRead:     tag.LastRead,
-		state:        tag.state,
+		location: tag.Location,
+		lastRead: tag.LastRead,
+		state:    tag.state,
 	}
 }
 

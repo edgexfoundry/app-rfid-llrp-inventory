@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/gorilla/mux"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"io/ioutil"
 	"net/http"
 	"sync"
