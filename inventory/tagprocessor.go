@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
-	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"sync"
@@ -41,11 +40,11 @@ func NewTagProcessor(lc logger.LoggingClient, eventCh chan<- Event) *TagProcesso
 
 // ReportInfo holds both pre-existing as well as computed metadata about an incoming ROAccessReport
 type ReportInfo struct {
-	DeviceName string
-	Origin     int64
+	DeviceName  string
+	OriginNanos int64
 
-	offset llrp.LastSeenUTC
-	// referenceTimestamp is the same as Origin, but converted to milliseconds
+	offsetMicros int64
+	// referenceTimestamp is the same as OriginNanos, but converted to milliseconds
 	referenceTimestamp int64
 }
 
@@ -53,7 +52,7 @@ type ReportInfo struct {
 func NewReportInfo(reading contract.Reading) ReportInfo {
 	return ReportInfo{
 		DeviceName:         reading.Device,
-		Origin:             reading.Origin,
+		OriginNanos:        reading.Origin,
 		referenceTimestamp: reading.Origin / int64(time.Millisecond),
 	}
 }
@@ -81,19 +80,19 @@ func (tp *TagProcessor) Snapshot() []StaticTag {
 // Thread-safe implementation
 func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) {
 	if AdjustLastReadOnByOrigin {
-		// offset is an adjustment of timestamps based on when the mqtt-device-service first saw the message compared
+		// offsetMicros is an adjustment of timestamps based on when the mqtt-device-service first saw the message compared
 		// 		  to when the sensor said it sent it. This can be affected by the latency of the mqtt broker, but hopefully
 		//		  that value has relatively low jitter between each packet.
 		//		  One thing this will also do is if a sensor thinks it timestamp is in the future, this will
 		//		  adjust the times to be standardized against all other sensors in the system.
-		var lastSeen llrp.LastSeenUTC
+		var lastSeen int64
 		for _, rt := range r.TagReportData {
-			if rt.LastSeenUTC != nil && *rt.LastSeenUTC > lastSeen {
-				lastSeen = *rt.LastSeenUTC
+			if rt.LastSeenUTC != nil && int64(*rt.LastSeenUTC) > lastSeen {
+				lastSeen = int64(*rt.LastSeenUTC)
 			}
 		}
 		if lastSeen > 0 {
-			info.offset = llrp.LastSeenUTC(info.Origin) - lastSeen
+			info.offsetMicros = info.OriginNanos - lastSeen
 		}
 	}
 
@@ -148,8 +147,8 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 	var lastReadPtr *int64
 	// if LastSeenUTC is not present, we will simply not update the LastRead field
 	if rt.LastSeenUTC != nil {
-		// offset each read, divide by 1000 to get from microseconds to milliseconds
-		lastRead := int64(*rt.LastSeenUTC+info.offset) / 1000
+		// offset each read, divide by 1000 to go from microseconds to milliseconds
+		lastRead := (int64(*rt.LastSeenUTC) + info.offsetMicros) / 1000
 		lastReadPtr = &lastRead
 
 		// only update last read if it is newer
@@ -308,7 +307,7 @@ func (tp *TagProcessor) DoAggregateDepartedTask() {
 			}
 			// reset the read stats so if it arrives again it will start with fresh data
 			tag.resetStats()
-			logrus.Debugf("Departed %+v", e)
+			tp.lc.Debug(fmt.Sprintf("Departed %+v", e))
 			tp.eventCh <- e
 		}
 	}

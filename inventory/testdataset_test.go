@@ -7,91 +7,133 @@
 package inventory
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"math"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
+var (
+	rssiMin    = float64(-95)
+	rssiMax    = float64(-55)
+	rssiStrong = rssiMax - math.Floor((rssiMax-rssiMin)/3)
+	rssiWeak   = rssiMin + math.Floor((rssiMax-rssiMin)/3)
+
+	tagSerialCounter uint32
+	sensorIdCounter  uint32 = 0
+)
+
+func nextSensor() string {
+	sensorID := atomic.AddUint32(&sensorIdCounter, 1)
+	return fmt.Sprintf("Sensor-%02X", sensorID)
+}
+
+func nextEPC() string {
+	serial := atomic.AddUint32(&tagSerialCounter, 1)
+	return fmt.Sprintf("%06x", serial)
+}
+
 type testDataset struct {
-	tp      *TagProcessor
-	lc      logger.LoggingClient
-	eventCh chan<- Event
+	tp   *TagProcessor
+	lc   logger.LoggingClient
+	epcs []string
 
-	tagReads     []*llrp.TagReportData
-	tags         []*Tag
-	readTimeOrig int64
+	eventCh chan Event
+	events  []Event
+	eventMu sync.RWMutex
 }
 
-func newTestDataset(tp *TagProcessor, eventCh chan<- Event, tagCount int) testDataset {
+func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
+	// buffer the channel enough that we wont ever get blocked
+	eventCh := make(chan Event, tagCount)
+
 	ds := testDataset{
-		tp:      tp,
-		lc:      tp.lc,
+		tp:      NewTagProcessor(lc, eventCh),
+		lc:      lc,
+		epcs:    make([]string, tagCount),
 		eventCh: eventCh,
+		events:  make([]Event, 0),
 	}
-	ds.initialize(tagCount)
-	return ds
-}
-
-func (ds *testDataset) resetEvents() {
-	ds.tp.lc.Info("resetEvents() called")
-}
-
-// will generate tagread objects but NOT ingest them yet
-func (ds *testDataset) initialize(tagCount int) {
-	ds.tagReads = make([]*llrp.TagReportData, tagCount)
-	ds.tags = make([]*Tag, tagCount)
-	ds.readTimeOrig = helper.UnixMilliNow()
 
 	for i := 0; i < tagCount; i++ {
-		ds.tagReads[i] = generateReadData(ds.readTimeOrig)
+		ds.epcs[i] = nextEPC()
 	}
 
-	ds.resetEvents()
+	return &ds
 }
 
-// update the tag pointers based on actual ingested data
-func (ds *testDataset) updateTagRefs() {
-	for i, tagRead := range ds.tagReads {
-		ds.tags[i] = ds.tp.inventory[tagRead.EPC]
+func (ds *testDataset) readTag(epc string, deviceName string, antenna int, rssi float64, tm time.Time, count int) {
+	rss := llrp.PeakRSSI(rssi)
+	ant := llrp.AntennaID(antenna)
+	seen := llrp.LastSeenUTC(tm.UnixNano() / int64(time.Microsecond))
+
+	epcBytes, err := hex.DecodeString(epc)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < count; i++ {
+		r := &llrp.ROAccessReport{
+			TagReportData: []llrp.TagReportData{
+				{
+					EPC96: llrp.EPC96{
+						EPC: epcBytes,
+					},
+					PeakRSSI:    &rss,
+					LastSeenUTC: &seen,
+					AntennaID:   &ant,
+				},
+			},
+		}
+
+		ds.tp.ProcessReport(r, ReportInfo{
+			DeviceName:         deviceName,
+			OriginNanos:        tm.UnixNano(),
+			offsetMicros:       0,
+			referenceTimestamp: tm.UnixNano() / int64(time.Millisecond),
+		})
 	}
 }
 
-func (ds *testDataset) setLastReadOnAll(timestamp int64) {
-	for _, tagRead := range ds.tagReads {
-		tagRead.LastRead = timestamp
+func (ds *testDataset) readAll(deviceName string, antenna int, rssi float64, tm time.Time, count int) {
+	for _, epc := range ds.epcs {
+		ds.readTag(epc, deviceName, antenna, rssi, tm, count)
 	}
 }
 
-func (ds *testDataset) readTag(tagIndex int, deviceName string, antenna int, rssi float64, times int) {
-	ds.tagReads[tagIndex].RSSI = rssi
-	ds.tagReads[tagIndex].DeviceName = deviceName
-	ds.tagReads[tagIndex].Antenna = antenna
+func (ds *testDataset) sniffEvents() {
+	ds.eventMu.Lock()
+	defer ds.eventMu.Unlock()
 
-	now := helper.UnixMilliNow()
-	for i := 0; i < times; i++ {
-		ds.tp.process(now, ds.tagReads[tagIndex], ds.eventCh)
-	}
-}
+	ds.events = make([]Event, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for e := range ds.eventCh {
+			ds.events = append(ds.events, e)
+		}
+	}()
 
-func (ds *testDataset) readAll(deviceName string, antenna int, rssi float64, times int) {
-	for tagIndex := range ds.tagReads {
-		ds.readTag(tagIndex, deviceName, antenna, rssi, times)
-	}
+	close(ds.tp.eventCh)
+	wg.Wait()
+	ds.eventCh = make(chan Event, ds.size())
+	ds.tp.eventCh = ds.eventCh
 }
 
 func (ds *testDataset) size() int {
-	return len(ds.tagReads)
+	return len(ds.epcs)
 }
 
 func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
-	ds.updateTagRefs()
-
 	var errs []string
-	for i := range ds.tags {
-		if err := ds.verifyTag(i, expectedState, expectedLocation); err != nil {
+	for _, epc := range ds.epcs {
+		if err := ds.verifyTag(epc, expectedState, expectedLocation); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -102,32 +144,34 @@ func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string
 	return nil
 }
 
-func (ds *testDataset) verifyTag(tagIndex int, expectedState TagState, expectedLocation string) error {
-	tag := ds.tags[tagIndex]
+func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLocation string) error {
+	ds.tp.inventoryMu.RLock()
+	defer ds.tp.inventoryMu.RUnlock()
+
+	tag := ds.tp.inventory[epc]
 
 	if tag == nil {
-		read := ds.tagReads[tagIndex]
-		return fmt.Errorf("Expected tag index %d to not be nil! read object: %v\n\tinventory: %#v", tagIndex, read, ds.tp.inventory)
+		return fmt.Errorf("expected tag %s to not be nil!\n\tinventory: %#v", epc, ds.tp.inventory)
 	}
 
 	if tag.state != expectedState {
-		return fmt.Errorf("tag index %d (%s): state %v does not match expected state %v\n\t%#v", tagIndex, tag.EPC, tag.state, expectedState, tag)
+		return fmt.Errorf("tag %s: state %v does not match expected state %v\n\t%#v", epc, tag.state, expectedState, tag)
 	}
 
 	// if expectedLocation is empty string, we do not care to validate that field
 	if expectedLocation != "" && tag.Location != expectedLocation {
-		return fmt.Errorf("tag index %d (%s): location %v does not match expected location %v\n\t%#v", tagIndex, tag.EPC, tag.Location, expectedLocation, tag)
+		return fmt.Errorf("tag %s: location %v does not match expected location %v\n\t%#v", epc, tag.Location, expectedLocation, tag)
 	}
 
 	return nil
 }
 
-func (ds *testDataset) verifyStateOf(expectedState TagState, tagIndex int) error {
-	return ds.verifyTag(tagIndex, expectedState, "")
+func (ds *testDataset) verifyStateOf(epc string, expectedState TagState) error {
+	return ds.verifyTag(epc, expectedState, "")
 }
 
-func (ds *testDataset) verifyState(tagIndex int, expectedState TagState) error {
-	return ds.verifyTag(tagIndex, expectedState, "")
+func (ds *testDataset) verifyState(epc string, expectedState TagState) error {
+	return ds.verifyTag(epc, expectedState, "")
 }
 
 func (ds *testDataset) verifyStateAll(expectedState TagState) error {
@@ -139,15 +183,20 @@ func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...E
 		return fmt.Errorf("invalid event pattern specified. pattern length of %d is not evenly divisible by expected event count of %d", len(expectedEvents), expectedCount)
 	}
 
-	dataLen := len(ds.inventoryEvent.Params.Data)
+	ds.eventMu.RLock()
+	defer ds.eventMu.RUnlock()
+
+	dataLen := len(ds.events)
 	if dataLen != expectedCount {
-		return fmt.Errorf("excpected %d %v event pattern to be generated, but %d were generated. events:\n%#v", expectedCount, expectedEvents, dataLen, ds.inventoryEvent.Params.Data)
+		return fmt.Errorf("excpected %d %v event pattern to be generated, but %d were generated. events:\n%#v",
+			expectedCount, expectedEvents, dataLen, ds.events)
 	}
 
-	for i, item := range ds.inventoryEvent.Params.Data {
+	for i, evt := range ds.events {
 		expected := expectedEvents[i%len(expectedEvents)]
-		if item.EventType != string(expected) {
-			return fmt.Errorf("excpected %s event but was %s. events:\n%#v", expected, item.EventType, ds.inventoryEvent.Params.Data)
+		if evt.OfType() != expected {
+			return fmt.Errorf("excpected %s event but was %s. events:\n%#v",
+				expected, evt.OfType(), ds.events)
 		}
 	}
 
@@ -155,8 +204,12 @@ func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...E
 }
 
 func (ds *testDataset) verifyNoEvents() error {
-	if !ds.inventoryEvent.IsEmpty() {
-		return fmt.Errorf("excpected no events to be generated, but %d were generated. events:\n%#v", len(ds.inventoryEvent.Params.Data), ds.inventoryEvent.Params.Data)
+	ds.eventMu.RLock()
+	defer ds.eventMu.RUnlock()
+
+	if len(ds.events) != 0 {
+		return fmt.Errorf("excpected no events to be generated, but %d were generated. events:\n%#v",
+			len(ds.events), ds.events)
 	}
 
 	return nil
