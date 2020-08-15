@@ -7,34 +7,66 @@
 package inventory
 
 import (
+	"encoding/hex"
+	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/sirupsen/logrus"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"sync"
 	"time"
 )
 
 type TagProcessor struct {
-	lc          logger.LoggingClient
+	lc      logger.LoggingClient
+	eventCh chan<- Event
+
 	inventory   map[string]*Tag
-	profile     *MobilityProfile
-	inventoryMu sync.Mutex
+	inventoryMu sync.RWMutex
+
+	mobilityProfile *MobilityProfile
 }
 
-func NewTagProcessor(lc logger.LoggingClient) *TagProcessor {
+// NewTagProcessor creates a tag processor and pre-loads its mobility profile
+func NewTagProcessor(lc logger.LoggingClient, eventCh chan<- Event) *TagProcessor {
 	profile := loadMobilityProfile(lc)
 	return &TagProcessor{
-		lc:        lc,
-		inventory: make(map[string]*Tag),
-		profile:   &profile,
+		lc:              lc,
+		eventCh:         eventCh,
+		inventory:       make(map[string]*Tag),
+		mobilityProfile: &profile,
 	}
 }
 
-func (tp *TagProcessor) GetRawInventory() []StaticTag {
-	tp.inventoryMu.Lock()
-	defer tp.inventoryMu.Unlock()
+// ReportInfo holds both pre-existing as well as computed metadata about an incoming ROAccessReport
+type ReportInfo struct {
+	DeviceName string
+	Origin     int64
 
-	// convert tag map of pointers into a flat array of non-pointers
+	offset llrp.LastSeenUTC
+	// referenceTimestamp is the same as Origin, but converted to milliseconds
+	referenceTimestamp int64
+}
+
+// NewReportInfo creates a new ReportInfo based on an EdgeX Reading value
+func NewReportInfo(reading contract.Reading) ReportInfo {
+	return ReportInfo{
+		DeviceName:         reading.Device,
+		Origin:             reading.Origin,
+		referenceTimestamp: reading.Origin / int64(time.Millisecond),
+	}
+}
+
+// Snapshot takes a snapshot of the entire tag inventory as a slice of StaticTag objects.
+// It does this by converting the inventory map of Tag pointers into a flat slice
+// of non-pointer StaticTags.
+//
+// Thread-safe implementation
+func (tp *TagProcessor) Snapshot() []StaticTag {
+	tp.inventoryMu.RLock()
+	defer tp.inventoryMu.RUnlock()
+
 	res := make([]StaticTag, 0, len(tp.inventory))
 	for _, tag := range tp.inventory {
 		res = append(res, newStaticTag(tag))
@@ -42,53 +74,175 @@ func (tp *TagProcessor) GetRawInventory() []StaticTag {
 	return res
 }
 
-// ProcessReport
-// todo: desc
-func (tp *TagProcessor) ProcessReport(r *AccessReport, eventCh chan<- Event) {
-	var offset int64
+// ProcessReport takes an incoming ROAccessReport and processes each TagReportData.
+// For every TagReportData it will update the corresponding tag our in-memory tag database
+// based on the latest information.
+//
+// Thread-safe implementation
+func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) {
 	if AdjustLastReadOnByOrigin {
 		// offset is an adjustment of timestamps based on when the mqtt-device-service first saw the message compared
 		// 		  to when the sensor said it sent it. This can be affected by the latency of the mqtt broker, but hopefully
 		//		  that value has relatively low jitter between each packet.
 		//		  One thing this will also do is if a sensor thinks it timestamp is in the future, this will
 		//		  adjust the times to be standardized against all other sensors in the system.
-
-		var lastRead int64
-		for _, rt := range r.TagReports {
-			if rt.LastRead > lastRead {
-				lastRead = rt.LastRead
+		var lastSeen llrp.LastSeenUTC
+		for _, rt := range r.TagReportData {
+			if rt.LastSeenUTC != nil && *rt.LastSeenUTC > lastSeen {
+				lastSeen = *rt.LastSeenUTC
 			}
 		}
-
-		offset = r.OriginMillis - lastRead
+		if lastSeen > 0 {
+			info.offset = llrp.LastSeenUTC(info.Origin) - lastSeen
+		}
 	}
 
-	for _, rt := range r.TagReports {
-		// offset each read (if offset is disabled, this will do nothing)
-		rt.LastRead += offset
-		// compare reads based on the time it was received
-		tp.process(r.OriginMillis, rt, eventCh)
-	}
-}
-
-func (tp *TagProcessor) process(referenceTimestamp int64, report *TagReport, eventCh chan<- Event) {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
-	tag, exists := tp.inventory[report.EPC]
-	if !exists {
-		tag = NewTag(report.EPC)
-		tp.inventory[report.EPC] = tag
+	for _, rt := range r.TagReportData {
+		prev, tag := tp.processData(&rt, info)
+		// after processing the incoming report, we always need to apply the state machine
+		tp.applyStateMachine(prev, tag)
+	}
+}
+
+// processData processes an incoming TagReportData packet and updates the tag information and
+// device stats data structures.
+//
+// NOTE: Not thread-safe; assumed to only be called while a lock is held on inventoryMu!
+func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (prev previousTag, tag *Tag) {
+	var epc string
+	if rt.EPC96.EPC != nil && len(rt.EPC96.EPC) > 0 {
+		epc = hex.EncodeToString(rt.EPC96.EPC)
+	} else {
+		epc = hex.EncodeToString(rt.EPCData.EPC)
 	}
 
-	prev := tag.asPreviousTag()
-	tag.update(referenceTimestamp, report, tp)
+	tag = tp.getTag(epc)
+	prev = tag.asPreviousTag()
 
+	var rssi *float64
+	if rt.PeakRSSI != nil {
+		peak := float64(*rt.PeakRSSI)
+		rssi = &peak
+	}
+
+	for _, c := range rt.Custom {
+		if VendorIDType(c.VendorID) == Impinj {
+			switch ImpinjParamSubtype(c.Subtype) {
+			case ImpinjPeakRSSI:
+				// todo: peak := float64(c.Data)
+				// 		 rssi = &peak
+			}
+		}
+	}
+
+	// todo: parse TID from incoming message
+	// only set TID if it is present
+	//if read.TID != "" {
+	//	tag.TID = read.TID
+	//}
+
+	// lastReadPtr will only get set if the last seen timestamp is provided in the report
+	var lastReadPtr *int64
+	// if LastSeenUTC is not present, we will simply not update the LastRead field
+	if rt.LastSeenUTC != nil {
+		// offset each read, divide by 1000 to get from microseconds to milliseconds
+		lastRead := int64(*rt.LastSeenUTC+info.offset) / 1000
+		lastReadPtr = &lastRead
+
+		// only update last read if it is newer
+		if lastRead > tag.LastRead {
+			tag.LastRead = lastRead
+		}
+	}
+
+	if rt.AntennaID == nil {
+		// if we do not know the antenna id, we cannot compute the location
+		return
+	}
+	srcAlias := GetAntennaAlias(info.DeviceName, int(*rt.AntennaID))
+
+	incomingStats := tag.getStats(srcAlias)
+	incomingStats.update(rssi, lastReadPtr)
+
+	if tag.Location == "" {
+		// we have not read this tag before, so lets set the initial location; nothing else to do
+		tag.Location = srcAlias
+		return
+	}
+
+	if tag.Location == srcAlias {
+		// current location matches incoming read; nothing more to do
+		return
+	}
+
+	// if the incoming read's location has at least 2 data points, lets see if the tag should move
+	if incomingStats.rssiCount() >= 2 {
+		// locationStats represents the statistics for the tag's current/existing location
+		locationStats := tag.getStats(tag.Location)
+
+		now := helper.UnixMilliNow()
+		// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+		tp.lc.Debug("read timing",
+			"now", now,
+			"referenceTimestamp", info.referenceTimestamp,
+			"nowMinusRef", fmt.Sprintf("%v", time.Duration(now-info.referenceTimestamp)*time.Millisecond),
+			"locationLastRead", locationStats.LastRead,
+			"lastRead", tag.LastRead,
+			"diff", fmt.Sprintf("%v", time.Duration(tag.LastRead-locationStats.LastRead)*time.Millisecond))
+
+		locationMean := locationStats.rssiDbm.GetMean()
+		incomingMean := incomingStats.rssiDbm.GetMean()
+		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, locationStats.LastRead)
+
+		// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+		tp.lc.Debug("tag stats",
+			"epc", tag.EPC,
+			"incomingLoc", srcAlias,
+			"existingLoc", tag.Location,
+			"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
+			"existingAvg", fmt.Sprintf("%.2f", locationMean),
+			"weight", fmt.Sprintf("%.2f", weight),
+			"existingAdjusted", fmt.Sprintf("%.2f", locationMean+weight),
+			// if stayFactor is positive, tag will stay, if negative, generates a moved event
+			"stayFactor", fmt.Sprintf("%.2f", (locationMean+weight)-incomingMean))
+
+		// if the incoming read location's average RSSI is greater than the weighted average
+		// RSSI of the existing location, update the location. This will generate a moved event
+		// via the state machine
+		if incomingMean > (locationMean + weight) {
+			tag.Location = srcAlias
+		}
+	}
+
+	return
+}
+
+// getTag will return a pointer to existing tag in the inventory
+// or create a new one
+//
+// NOTE: Not thread-safe; assumed to only be called while a lock is held on inventoryMu!
+func (tp *TagProcessor) getTag(epc string) *Tag {
+	tag, exists := tp.inventory[epc]
+	if !exists {
+		tag = NewTag(epc)
+		tp.inventory[epc] = tag
+	}
+	return tag
+}
+
+// applyStateMachine will compare the previous tag information with the new information
+// and update its state and generate events accordingly.
+//
+// NOTE: Not thread-safe; assumed to only be called while a lock is held on inventoryMu!
+func (tp *TagProcessor) applyStateMachine(prev previousTag, tag *Tag) {
 	switch prev.state {
 
 	case Unknown, Departed:
 		tag.setState(Present)
-		eventCh <- ArrivedEvent{
+		tp.eventCh <- ArrivedEvent{
 			EPC:       tag.EPC,
 			Timestamp: tag.LastRead,
 			Location:  tag.Location,
@@ -96,7 +250,7 @@ func (tp *TagProcessor) process(referenceTimestamp int64, report *TagReport, eve
 
 	case Present:
 		if prev.location != "" && prev.location != tag.Location {
-			eventCh <- MovedEvent{
+			tp.eventCh <- MovedEvent{
 				EPC:          tag.EPC,
 				Timestamp:    tag.LastRead,
 				PrevLocation: prev.location,
@@ -106,6 +260,11 @@ func (tp *TagProcessor) process(referenceTimestamp int64, report *TagReport, eve
 	}
 }
 
+// DoAgeoutTask is a cleanup method that will remove tag information from our in-memory
+// structures if it has not been seen in a long enough time. Only applies to
+// tags which are already Departed.
+//
+// Thread-safe implementation
 func (tp *TagProcessor) DoAgeoutTask() int {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
@@ -113,21 +272,24 @@ func (tp *TagProcessor) DoAgeoutTask() int {
 	expiration := helper.UnixMilli(time.Now().Add(
 		time.Hour * time.Duration(-AgeOutHours)))
 
-	// it is safe to remove from map while iterating in golang
+	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
 	for epc, tag := range tp.inventory {
-		if tag.LastRead < expiration {
-			// todo: does this need to check departed state?
+		if tag.state == Departed && tag.LastRead < expiration {
 			numRemoved++
 			delete(tp.inventory, epc)
 		}
 	}
 
-	logrus.Infof("inventory ageout removed %d tags", numRemoved)
+	tp.lc.Info(fmt.Sprintf("Inventory ageout removed %d tag(s).", numRemoved))
 	return numRemoved
 }
 
-func (tp *TagProcessor) DoAggregateDepartedTask(eventCh chan<- Event) {
+// DoAggregateDepartedTask loops through all tags and sees if any of them should be Departed
+// due to not being read in a long enough time.
+//
+// Thread-safe implementation
+func (tp *TagProcessor) DoAggregateDepartedTask() {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
@@ -147,7 +309,7 @@ func (tp *TagProcessor) DoAggregateDepartedTask(eventCh chan<- Event) {
 			// reset the read stats so if it arrives again it will start with fresh data
 			tag.resetStats()
 			logrus.Debugf("Departed %+v", e)
-			eventCh <- e
+			tp.eventCh <- e
 		}
 	}
 }

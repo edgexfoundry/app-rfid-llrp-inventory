@@ -12,14 +12,27 @@ import (
 	"golang.org/x/net/context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
+
+var (
+	lc     logger.LoggingClient
+	tagPro *inventory.TagProcessor
+)
+
+func TestMain(m *testing.M) {
+	lc = logger.NewClient("test", false, "", "DEBUG")
+	tagPro = inventory.NewTagProcessor(lc)
+
+	os.Exit(m.Run())
+}
 
 func TestIndex(t *testing.T) {
 
 	request, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
-		t.Errorf("Unable to create new HTTP request %s", err.Error())
+		t.Fatalf("Unable to create new HTTP request %v", err)
 	}
 	recorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(Index)
@@ -34,7 +47,7 @@ func TestPing(t *testing.T) {
 
 	request, err := http.NewRequest("GET", "/ping", nil)
 	if err != nil {
-		t.Errorf("Unable to create new HTTP request %s", err.Error())
+		t.Fatalf("Unable to create new HTTP request %v", err)
 	}
 	recorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(Ping)
@@ -61,31 +74,15 @@ func TestPing(t *testing.T) {
 }
 
 func TestRawInventory(t *testing.T) {
-
-	request, err := http.NewRequest("GET", "/inventory/raw", nil)
+	request, err := http.NewRequest("GET", "/inventory/snapshot", nil)
 	if err != nil {
-		t.Errorf("Unable to create new HTTP request %s", err.Error())
+		t.Fatalf("Unable to create new HTTP request %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	// todo: fix
-	handler := http.HandlerFunc(RawInventory)
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		RawInventory(lc, writer, request, tagPro)
+	})
 	handler.ServeHTTP(recorder, request)
-
-	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("Expected error as the request has no context set")
-	}
-
-	// Valid request
-	testAppSettings := make(map[string]string)
-	testAppSettings["test"] = "testConfigValue"
-	testLogger := logger.NewClient("test", false, "", "DEBUG")
-	settings := SettingsHandler{Logger: testLogger, AppSettings: testAppSettings}
-	inventory.NewTagProcessor(testLogger)
-
-	recorder = httptest.NewRecorder()
-	ctx := context.WithValue(request.Context(), SettingsKey, settings)
-	handler.ServeHTTP(recorder, request.WithContext(ctx))
-
 	if recorder.Code != http.StatusOK {
 		t.Errorf("Expected no error")
 	}

@@ -9,37 +9,39 @@ package inventory
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/pkg/jsonrpc"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"strings"
 )
 
 type testDataset struct {
-	tp *TagProcessor
+	tp      *TagProcessor
+	lc      logger.LoggingClient
+	eventCh chan<- Event
 
-	tagReads       []*TagReport
-	tags           []*Tag
-	readTimeOrig   int64
-	inventoryEvent *jsonrpc.InventoryEvent
+	tagReads     []*llrp.TagReportData
+	tags         []*Tag
+	readTimeOrig int64
 }
 
-func newTestDataset(tp *TagProcessor, tagCount int) testDataset {
+func newTestDataset(tp *TagProcessor, eventCh chan<- Event, tagCount int) testDataset {
 	ds := testDataset{
-		tp: tp,
+		tp:      tp,
+		lc:      tp.lc,
+		eventCh: eventCh,
 	}
 	ds.initialize(tagCount)
 	return ds
 }
 
 func (ds *testDataset) resetEvents() {
-	ds.inventoryEvent = jsonrpc.NewInventoryEvent()
-	logrus.Info("resetEvents() called")
+	ds.tp.lc.Info("resetEvents() called")
 }
 
 // will generate tagread objects but NOT ingest them yet
 func (ds *testDataset) initialize(tagCount int) {
-	ds.tagReads = make([]*TagReport, tagCount)
+	ds.tagReads = make([]*llrp.TagReportData, tagCount)
 	ds.tags = make([]*Tag, tagCount)
 	ds.readTimeOrig = helper.UnixMilliNow()
 
@@ -70,7 +72,7 @@ func (ds *testDataset) readTag(tagIndex int, deviceName string, antenna int, rss
 
 	now := helper.UnixMilliNow()
 	for i := 0; i < times; i++ {
-		ds.tp.process(now, ds.inventoryEvent, ds.tagReads[tagIndex])
+		ds.tp.process(now, ds.tagReads[tagIndex], ds.eventCh)
 	}
 }
 

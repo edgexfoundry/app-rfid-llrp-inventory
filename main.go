@@ -70,7 +70,7 @@ func main() {
 	}
 	app.done = make(chan struct{})
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
-	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
+	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
 	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
 
 	// Retrieve the application settings from configuration.toml
@@ -89,7 +89,7 @@ func main() {
 	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.Ping), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/inventory/raw",
+	err = app.edgexSdk.AddRoute("/inventory/snapshot",
 		func(writer http.ResponseWriter, request *http.Request) {
 			routes.RawInventory(app.edgexSdkContext.LoggingClient, writer, request, app.processor)
 		}, http.MethodGet)
@@ -188,9 +188,8 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 				continue
 			}
 
-			r := inventory.NewAccessReport(reading.Device, reading.Origin, &report)
-			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", r.DeviceName, "tagCount", len(r.TagReports))
-			app.processor.ProcessReport(r, app.eventCh)
+			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", reading.Device, "tagCount", len(report.TagReportData))
+			app.processor.ProcessReport(&report, inventory.NewReportInfo(reading))
 		}
 	}
 
@@ -217,7 +216,7 @@ func (app *inventoryApp) processScheduledTasks() {
 				return
 			}
 			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("DoAggregateDepartedTask: %v", t))
-			app.processor.DoAggregateDepartedTask(app.eventCh)
+			app.processor.DoAggregateDepartedTask()
 
 		case t, ok := <-ageoutTicker.C:
 			if !ok {

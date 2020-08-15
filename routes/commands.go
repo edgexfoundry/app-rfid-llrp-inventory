@@ -46,7 +46,7 @@ func Index(writer http.ResponseWriter, req *http.Request) {
 func RawInventory(lc logger.LoggingClient, writer http.ResponseWriter, req *http.Request, tagPro *inventory.TagProcessor) {
 	writer.Header().Set("Content-Type", "application/json")
 
-	tags := tagPro.GetRawInventory()
+	tags := tagPro.Snapshot()
 	bytes, err := json.Marshal(tags)
 	if err != nil {
 		lc.Error(err.Error())

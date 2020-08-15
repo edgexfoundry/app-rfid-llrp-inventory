@@ -21,16 +21,21 @@ func NewTagStats() *TagStats {
 	}
 }
 
-func (stats *TagStats) update(report *TagReport, lastRead int64) {
-	if stats.LastRead != 0 {
-		stats.readInterval.AddValue(float64(lastRead - stats.LastRead))
+func (stats *TagStats) update(rssi *float64, lastRead *int64) {
+	if rssi != nil {
+		stats.rssiDbm.AddValue(*rssi)
 	}
-	stats.LastRead = lastRead
 
-	dbm := report.RSSI
-	stats.rssiDbm.AddValue(dbm)
+	// skip times that are either unknown or at or before the current last read timestamp
+	if lastRead == nil || *lastRead <= stats.LastRead {
+		return
+	}
+	if stats.LastRead != 0 {
+		stats.readInterval.AddValue(float64(*lastRead - stats.LastRead))
+	}
+	stats.LastRead = *lastRead
 }
 
-func (stats *TagStats) getCount() int {
+func (stats *TagStats) rssiCount() int {
 	return stats.rssiDbm.GetCount()
 }

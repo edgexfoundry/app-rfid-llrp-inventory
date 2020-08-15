@@ -20,5 +20,5 @@ func UnixMilli(mytime time.Time) int64 {
 
 // UnixMilli returns current time as milliseconds since epoch
 func UnixMilliNow() int64 {
-	return UnixMilli(time.Now())
+	return time.Now().UnixNano() / int64(time.Millisecond)
 }
