@@ -85,14 +85,15 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) {
 		//		  that value has relatively low jitter between each packet.
 		//		  One thing this will also do is if a sensor thinks it timestamp is in the future, this will
 		//		  adjust the times to be standardized against all other sensors in the system.
-		var lastSeen int64
+		var lastSeenMicros int64
 		for _, rt := range r.TagReportData {
-			if rt.LastSeenUTC != nil && int64(*rt.LastSeenUTC) > lastSeen {
-				lastSeen = int64(*rt.LastSeenUTC)
+			if rt.LastSeenUTC != nil && int64(*rt.LastSeenUTC) > lastSeenMicros {
+				lastSeenMicros = int64(*rt.LastSeenUTC)
 			}
 		}
-		if lastSeen > 0 {
-			info.offsetMicros = info.OriginNanos - lastSeen
+		if lastSeenMicros > 0 {
+			// divide originNanos by 1000 to get to micros
+			info.offsetMicros = (info.OriginNanos / 1000) - lastSeenMicros
 		}
 	}
 

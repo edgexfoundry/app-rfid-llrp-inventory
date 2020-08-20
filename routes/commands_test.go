@@ -17,13 +17,11 @@ import (
 )
 
 var (
-	lc     logger.LoggingClient
-	tagPro *inventory.TagProcessor
+	lc logger.LoggingClient
 )
 
 func TestMain(m *testing.M) {
 	lc = logger.NewClient("test", false, "", "DEBUG")
-	tagPro = inventory.NewTagProcessor(lc)
 
 	os.Exit(m.Run())
 }
@@ -74,6 +72,9 @@ func TestPing(t *testing.T) {
 }
 
 func TestRawInventory(t *testing.T) {
+	eventCh := make(chan inventory.Event, 1)
+	tagPro := inventory.NewTagProcessor(lc, eventCh)
+
 	request, err := http.NewRequest("GET", "/inventory/snapshot", nil)
 	if err != nil {
 		t.Fatalf("Unable to create new HTTP request %v", err)

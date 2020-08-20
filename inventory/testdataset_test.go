@@ -68,16 +68,42 @@ func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
 	return &ds
 }
 
-func (ds *testDataset) readTag(epc string, deviceName string, antenna int, rssi float64, tm time.Time, count int) {
-	rss := llrp.PeakRSSI(rssi)
-	ant := llrp.AntennaID(antenna)
-	seen := llrp.LastSeenUTC(tm.UnixNano() / int64(time.Microsecond))
+type readParams struct {
+	deviceName string
+	antenna    int
+	rssi       float64
+	lastSeen   time.Time
+	count      int
+	origin     time.Time
+}
+
+func (params *readParams) sanitize() {
+	if params.lastSeen.Equal(time.Time{}) {
+		params.lastSeen = time.Now()
+	}
+	if params.origin.Equal(time.Time{}) {
+		params.origin = params.lastSeen
+	}
+	if params.count <= 0 {
+		params.count = 1
+	}
+	if params.rssi >= 0 {
+		params.rssi = rssiMin
+	}
+}
+
+func (ds *testDataset) readTag(epc string, params readParams) {
+	params.sanitize()
+
+	rss := llrp.PeakRSSI(params.rssi)
+	ant := llrp.AntennaID(params.antenna)
+	seen := llrp.LastSeenUTC(params.lastSeen.UnixNano() / int64(time.Microsecond))
 
 	epcBytes, err := hex.DecodeString(epc)
 	if err != nil {
 		panic(err)
 	}
-	for i := 0; i < count; i++ {
+	for i := 0; i < params.count; i++ {
 		r := &llrp.ROAccessReport{
 			TagReportData: []llrp.TagReportData{
 				{
@@ -92,17 +118,17 @@ func (ds *testDataset) readTag(epc string, deviceName string, antenna int, rssi 
 		}
 
 		ds.tp.ProcessReport(r, ReportInfo{
-			DeviceName:         deviceName,
-			OriginNanos:        tm.UnixNano(),
+			DeviceName:         params.deviceName,
+			OriginNanos:        params.origin.UnixNano(),
 			offsetMicros:       0,
-			referenceTimestamp: tm.UnixNano() / int64(time.Millisecond),
+			referenceTimestamp: params.origin.UnixNano() / int64(time.Millisecond),
 		})
 	}
 }
 
-func (ds *testDataset) readAll(deviceName string, antenna int, rssi float64, tm time.Time, count int) {
+func (ds *testDataset) readAll(params readParams) {
 	for _, epc := range ds.epcs {
-		ds.readTag(epc, deviceName, antenna, rssi, tm, count)
+		ds.readTag(epc, params)
 	}
 }
 
@@ -131,6 +157,9 @@ func (ds *testDataset) size() int {
 }
 
 func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
+	ds.tp.inventoryMu.RLock()
+	defer ds.tp.inventoryMu.RUnlock()
+
 	var errs []string
 	for _, epc := range ds.epcs {
 		if err := ds.verifyTag(epc, expectedState, expectedLocation); err != nil {
@@ -212,5 +241,39 @@ func (ds *testDataset) verifyNoEvents() error {
 			len(ds.events), ds.events)
 	}
 
+	return nil
+}
+
+func (ds *testDataset) verifyLastReadOf(epc string, lastRead int64) error {
+	ds.tp.inventoryMu.RLock()
+	defer ds.tp.inventoryMu.RUnlock()
+
+	tag := ds.tp.inventory[epc]
+
+	if tag == nil {
+		return fmt.Errorf("expected tag %s to not be nil!\n\tinventory: %#v", epc, ds.tp.inventory)
+	}
+
+	if tag.LastRead != lastRead {
+		return fmt.Errorf("expected tag %s lastRead to be %d, but was %d", epc, lastRead, tag.LastRead)
+	}
+
+	return nil
+}
+
+func (ds *testDataset) verifyLastReadAll(lastRead int64) error {
+	ds.tp.inventoryMu.RLock()
+	defer ds.tp.inventoryMu.RUnlock()
+
+	var errs []string
+	for _, epc := range ds.epcs {
+		if err := ds.verifyLastReadOf(epc, lastRead); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
+	}
 	return nil
 }
