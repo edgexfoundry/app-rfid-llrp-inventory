@@ -277,3 +277,14 @@ func (ds *testDataset) verifyLastReadAll(lastRead int64) error {
 	}
 	return nil
 }
+
+func (ds *testDataset) verifyInventoryCount(count int) error {
+	ds.tp.inventoryMu.RLock()
+	defer ds.tp.inventoryMu.RUnlock()
+
+	if len(ds.tp.inventory) != count {
+		return fmt.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
+			count, len(ds.tp.inventory), ds.tp.inventory)
+	}
+	return nil
+}

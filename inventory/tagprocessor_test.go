@@ -177,7 +177,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 		t.Error(err)
 	}
 
-	// move tag to same facility, different sensor
+	// move tag to different sensor
 	ds.readAll(readParams{
 		deviceName: back2,
 		antenna:    defaultAntenna,
@@ -194,11 +194,108 @@ func TestMoveBetweenSensors(t *testing.T) {
 	}
 }
 
-func TestTagProcessor_DoAgeoutTask(t *testing.T) {
+func TestAgeOutTask_RequireDepartedState(t *testing.T) {
+	ds := newTestDataset(lc, 10)
+	sensor := nextSensor()
 
+	// read past ageout threshold
+	ds.readAll(readParams{
+		deviceName: sensor,
+		antenna:    defaultAntenna,
+		lastSeen:   time.Now().Add(time.Duration(-3*AgeOutHours) * time.Hour),
+	})
+	ds.sniffEvents()
+
+	// make sure all tags are marked as Present and are NOT aged out, because the algorithm
+	// should only age out tags that are Departed
+	if err := ds.verifyStateAll(Present); err != nil {
+		t.Error(err)
+	}
+	// should not remove any tags
+	ds.tp.RunAgeOutTask()
+	if len(ds.tp.inventory) != ds.size() {
+		t.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
+			ds.size(), len(ds.tp.inventory), ds.tp.inventory)
+	}
+
+	// now we will flag the items as departed and run the ageout task again
+	ds.tp.RunAggregateDepartedTask()
+	ds.sniffEvents()
+	if err := ds.verifyStateAll(Departed); err != nil {
+		t.Error(err)
+	}
+	// this time they should be removed from the inventory
+	ds.tp.RunAgeOutTask()
+	if len(ds.tp.inventory) != 0 {
+		t.Errorf("expected there to be 0 items in the inventory, but there were %d.\ninventory: %#v",
+			len(ds.tp.inventory), ds.tp.inventory)
+	}
 }
 
-func TestTagProcessor_DoAggregateDepartedTask(t *testing.T) {
+func TestAgeOutThreshold(t *testing.T) {
+	tests := []struct {
+		name         string
+		lastSeen     time.Time
+		state        TagState
+		shouldAgeOut bool
+	}{
+		{
+			name:         "Basic age out",
+			lastSeen:     time.Now().Add(-1 * time.Duration(2*AgeOutHours) * time.Hour),
+			state:        Departed,
+			shouldAgeOut: true,
+		},
+		{
+			name:         "Do not age out",
+			lastSeen:     time.Now(),
+			state:        Present,
+			shouldAgeOut: false,
+		},
+		{
+			name: "Departed but not aged out",
+			// 1 hour less than the ageout timeout
+			lastSeen:     time.Now().Add(-1 * time.Duration(AgeOutHours-1) * time.Hour),
+			state:        Departed,
+			shouldAgeOut: false,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			ds := newTestDataset(lc, 5)
+			sensor := nextSensor()
+
+			ds.readAll(readParams{
+				deviceName: sensor,
+				antenna:    defaultAntenna,
+				lastSeen:   test.lastSeen,
+			})
+			ds.sniffEvents()
+			if err := ds.verifyInventoryCount(ds.size()); err != nil {
+				t.Error(err)
+			}
+
+			// mark any potential tags as Departed
+			ds.tp.RunAggregateDepartedTask()
+			ds.sniffEvents()
+			if err := ds.verifyStateAll(test.state); err != nil {
+				t.Error(err)
+			}
+
+			expectedCount := ds.size()
+			if test.shouldAgeOut {
+				expectedCount = 0
+			}
+			// run ageout and check how many tags remain
+			ds.tp.RunAgeOutTask()
+			if err := ds.verifyInventoryCount(expectedCount); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+}
+
+func TestAggregateDepartedTask(t *testing.T) {
 	ds := newTestDataset(lc, 10)
 	sensor := nextSensor()
 
@@ -206,19 +303,18 @@ func TestTagProcessor_DoAggregateDepartedTask(t *testing.T) {
 	ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		rssi:       rssiMin,
 		count:      10,
 		lastSeen:   time.Now().Add(-2 * (time.Duration(AggregateDepartedThresholdMillis) * time.Millisecond)),
 	})
 	ds.sniffEvents()
 
 	// expect all tags to depart, and their stats to be set to Departed
-	ds.tp.DoAggregateDepartedTask()
+	ds.tp.RunAggregateDepartedTask()
 	ds.sniffEvents()
 	if err := ds.verifyEventPattern(ds.size(), DepartedType); err != nil {
 		t.Error(err)
 	}
-	if err := ds.verifyAll(Departed, ""); err != nil {
+	if err := ds.verifyStateAll(Departed); err != nil {
 		t.Error(err)
 	}
 
@@ -227,7 +323,6 @@ func TestTagProcessor_DoAggregateDepartedTask(t *testing.T) {
 	ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		rssi:       rssiMin,
 		count:      10,
 		lastSeen:   time.Now().Add(-(time.Duration(AggregateDepartedThresholdMillis) * time.Millisecond) / 2),
 	})
@@ -241,7 +336,7 @@ func TestTagProcessor_DoAggregateDepartedTask(t *testing.T) {
 
 	// run departed check again, however nothing should depart now because we are
 	// within the departed time limit
-	ds.tp.DoAggregateDepartedTask()
+	ds.tp.RunAggregateDepartedTask()
 	ds.sniffEvents()
 	if err := ds.verifyNoEvents(); err != nil {
 		t.Error(err)
@@ -256,7 +351,6 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		rssi:       rssiMin,
 		count:      10,
 		lastSeen:   current,
 	})
@@ -271,7 +365,6 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		rssi:       rssiMin,
 		count:      10,
 		lastSeen:   outdated,
 	})
@@ -286,7 +379,6 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		rssi:       rssiMin,
 		count:      10,
 		lastSeen:   next,
 	})

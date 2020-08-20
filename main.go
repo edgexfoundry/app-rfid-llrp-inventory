@@ -215,15 +215,15 @@ func (app *inventoryApp) processScheduledTasks() {
 			if !ok {
 				return
 			}
-			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("DoAggregateDepartedTask: %v", t))
-			app.processor.DoAggregateDepartedTask()
+			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("RunAggregateDepartedTask: %v", t))
+			app.processor.RunAggregateDepartedTask()
 
 		case t, ok := <-ageoutTicker.C:
 			if !ok {
 				return
 			}
-			app.edgexSdkContext.LoggingClient.Debug(fmt.Sprintf("DoAgeoutTask: %v", t))
-			app.processor.DoAgeoutTask()
+			app.edgexSdkContext.LoggingClient.Debug(fmt.Sprintf("RunAgeOutTask: %v", t))
+			app.processor.RunAgeOutTask()
 		}
 	}
 }

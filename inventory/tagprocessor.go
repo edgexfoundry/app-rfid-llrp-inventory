@@ -260,12 +260,12 @@ func (tp *TagProcessor) applyStateMachine(prev previousTag, tag *Tag) {
 	}
 }
 
-// DoAgeoutTask is a cleanup method that will remove tag information from our in-memory
+// RunAgeOutTask is a cleanup method that will remove tag information from our in-memory
 // structures if it has not been seen in a long enough time. Only applies to
 // tags which are already Departed.
 //
 // Thread-safe implementation
-func (tp *TagProcessor) DoAgeoutTask() int {
+func (tp *TagProcessor) RunAgeOutTask() int {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
@@ -285,11 +285,11 @@ func (tp *TagProcessor) DoAgeoutTask() int {
 	return numRemoved
 }
 
-// DoAggregateDepartedTask loops through all tags and sees if any of them should be Departed
+// RunAggregateDepartedTask loops through all tags and sees if any of them should be Departed
 // due to not being read in a long enough time.
 //
 // Thread-safe implementation
-func (tp *TagProcessor) DoAggregateDepartedTask() {
+func (tp *TagProcessor) RunAggregateDepartedTask() {
 	tp.inventoryMu.Lock()
 	defer tp.inventoryMu.Unlock()
 
