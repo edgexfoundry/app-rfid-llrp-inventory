@@ -20,8 +20,10 @@ var (
 	MobilityProfileThresholdOverridden     = false // todo
 	MobilityProfileHoldoffMillisOverridden = false // todo
 
-	AggregateDepartedThresholdMillis = 30000
-	AgeOutHours                      = 336
+	// NOTE: If you change the default values, please update the README.md
+	DepartedThresholdSeconds     = 30
+	DepartedCheckIntervalSeconds = 10
+	AgeOutHours                  = 336
 
 	TagStatsWindowSize = 20
 )

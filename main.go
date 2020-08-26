@@ -1,18 +1,8 @@
-//
-// Copyright (c) 2020 Intel Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+/* Apache v2 license
+*  Copyright (C) <2020> Intel Corporation
+*
+*  SPDX-License-Identifier: Apache-2.0
+ */
 
 package main
 
@@ -39,10 +29,8 @@ const (
 	serviceKey    = "rfid-inventory"
 	eventChBuffSz = 10
 
-	ResourceROAccessReport         = "ROAccessReport"
-	ResourceInventoryEventArrived  = "InventoryEventArrived"
-	ResourceInventoryEventMoved    = "InventoryEventMoved"
-	ResourceInventoryEventDeparted = "InventoryEventDeparted"
+	ResourceROAccessReport = "ROAccessReport"
+	ResourceInventoryEvent = "InventoryEvent"
 )
 
 type inventoryApp struct {
@@ -199,7 +187,7 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 // processScheduledTasks is an infinite loop that processes timer tickers which are basically
 // a way to run code on a scheduled interval in golang
 func (app *inventoryApp) processScheduledTasks() {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.AggregateDepartedThresholdMillis/5) * time.Millisecond)
+	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
 	defer aggregateDepartedTicker.Stop()
 
 	ageoutTicker := time.NewTicker(1 * time.Hour)
@@ -258,20 +246,7 @@ func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
 		return
 	}
 
-	var resource string
-	switch event.OfType() {
-	case inventory.ArrivedType:
-		resource = ResourceInventoryEventArrived
-	case inventory.MovedType:
-		resource = ResourceInventoryEventMoved
-	case inventory.DepartedType:
-		resource = ResourceInventoryEventDeparted
-	default:
-		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("Unknown event type: %v.", event.OfType()))
-		return
-	}
-
-	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, resource, string(payload)); err != nil {
+	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, ResourceInventoryEvent+string(event.OfType()), string(payload)); err != nil {
 		app.edgexSdk.LoggingClient.Error("Unable to push inventory event to core-data: " + err.Error())
 	}
 }
