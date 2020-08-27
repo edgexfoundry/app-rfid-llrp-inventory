@@ -24,6 +24,8 @@ type TagProcessor struct {
 	inventory   map[string]*Tag
 	inventoryMu sync.RWMutex
 
+	cacheMu sync.Mutex
+
 	mobilityProfile *MobilityProfile
 }
 

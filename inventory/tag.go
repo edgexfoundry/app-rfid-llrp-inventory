@@ -24,8 +24,8 @@ type Tag struct {
 	LastDeparted int64
 	LastArrived  int64
 
-	state          TagState
-	deviceStatsMap map[string]*TagStats
+	state            TagState
+	locationStatsMap map[string]*TagStats
 }
 
 type previousTag struct {
@@ -36,10 +36,10 @@ type previousTag struct {
 
 func NewTag(epc string) *Tag {
 	return &Tag{
-		EPC:            epc,
-		Location:       "",
-		state:          Unknown,
-		deviceStatsMap: make(map[string]*TagStats),
+		EPC:              epc,
+		Location:         "",
+		state:            Unknown,
+		locationStatsMap: make(map[string]*TagStats),
 	}
 }
 
@@ -68,14 +68,14 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 }
 
 func (tag *Tag) resetStats() {
-	tag.deviceStatsMap = make(map[string]*TagStats)
+	tag.locationStatsMap = make(map[string]*TagStats)
 }
 
 func (tag *Tag) getStats(location string) *TagStats {
-	stats, found := tag.deviceStatsMap[location]
+	stats, found := tag.locationStatsMap[location]
 	if !found {
 		stats = NewTagStats()
-		tag.deviceStatsMap[location] = stats
+		tag.locationStatsMap[location] = stats
 	}
 	return stats
 }

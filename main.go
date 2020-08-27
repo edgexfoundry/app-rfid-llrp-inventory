@@ -20,8 +20,10 @@ import (
 	"golang.org/x/net/context"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -59,7 +61,11 @@ func main() {
 	app.done = make(chan struct{})
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
+	if err := app.processor.Restore(inventory.TagCacheFile); err != nil {
+		app.edgexSdk.LoggingClient.Warn("An issue occurred restoring tag inventory from cache.",
+			"error", err)
+	}
+	app.edgexSdk.LoggingClient.Info("Running")
 
 	// Retrieve the application settings from configuration.toml
 	appSettings := app.edgexSdk.ApplicationSettings()
@@ -116,6 +122,23 @@ func main() {
 		app.processScheduledTasks()
 	}()
 
+	// HACK: We are doing this because of an issue with running app-fn-sdk inside
+	// of docker-compose where something is hanging and not relinquishing control
+	// back to our code.
+	go func() {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		<-signals
+
+		if err := app.processor.Persist(inventory.TagCacheFile); err != nil {
+			app.edgexSdk.LoggingClient.Error("An error occurred persisting tag inventory to cache.",
+				"error", err)
+		}
+
+		app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
+		close(app.done)
+	}()
+
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
 	if err != nil {
@@ -123,8 +146,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
-	close(app.done)
 	wg.Wait()
 
 	// Do any required cleanup here
@@ -230,6 +251,7 @@ func (app *inventoryApp) processEventChannel() {
 
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
 			app.pushEventToCoreData(e)
+			_ = app.processor.Persist(inventory.TagCacheFile)
 		}
 	}
 }
