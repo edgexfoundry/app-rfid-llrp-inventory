@@ -15,6 +15,7 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/commands/routes"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/behavior"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"net/http"
@@ -118,7 +119,8 @@ func main() {
 		{"/api/v1/inventory/raw", http.MethodGet, routes.RawInventory(lgr, tagProc)},
 		{"/api/v1/command/reading/start", http.MethodPut, startAllProxy.HandleRequest},
 		{"/api/v1/command/reading/stop", http.MethodPut, stopAllProxy.HandleRequest},
-		{"/api/v1/command/behaviors/{behaviorCommand}", http.MethodPut, routes.SetBehaviors()},
+		{"/api/v1/command/behaviors/{behavior}", http.MethodPut,
+			routes.SetBehaviors()},
 	} {
 		lgr.exitIfErr(edgexSdk.AddRoute(rte.path, rte.f, rte.method),
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
@@ -189,31 +191,22 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 }
 
 type eventProc struct {
-	lgr         logWrap
-	tagProc     *inventory.TagProcessor
-	deviceMu    sync.RWMutex
-	reportSpecs map[string]*device
+	lgr      logWrap
+	tagProc  *inventory.TagProcessor
+	deviceMu sync.RWMutex
+	readers  map[string]*behavior.BasicDevice
 }
 
-type device struct {
-	connected   time.Time
-	generalCap  llrp.GeneralDeviceCapabilities
-	powerLevels []llrp.TransmitPowerLevelTableEntry
-	channels    []llrp.FrequencyInformation
-	report      llrp.TagReportContentSelector
-	last        llrp.TagReportData
-}
-
-func (ep *eventProc) getReportSpec(deviceName string) (s *device) {
+func (ep *eventProc) getReportSpec(deviceName string) (d *behavior.BasicDevice) {
 	ep.deviceMu.RLock()
-	s = ep.reportSpecs[deviceName]
+	d = ep.readers[deviceName]
 	ep.deviceMu.RUnlock()
 	return
 }
 
-func (ep *eventProc) setReportSpec(deviceName string, s *device) {
+func (ep *eventProc) setReportSpec(deviceName string, d *behavior.BasicDevice) {
 	ep.deviceMu.Lock()
-	ep.reportSpecs[deviceName] = s
+	ep.readers[deviceName] = d
 	ep.deviceMu.Unlock()
 	return
 }
@@ -227,14 +220,6 @@ func (ep *eventProc) handleROAccessReport(edgeXCtx *appcontext.Context, device s
 		return nil
 	}
 
-	// LLRP has a data compression "feature" that allows Readers to omit some parameters
-	// if the value hasn't changed "since the last time it was sent".
-	// This has several unfortunate consequences when it comes to proper processing.
-	// For now, we'll assume that we use a single, consistent report spec (per Reader)
-	// and that we receive & process reports in the order the Reader sent them.
-	// Although they don't document it, Impinj told us they always send all parameters,
-	// so we won't even bother with this for Impinj Readers.
-	// For others, it only matters for the parameters we care about/enable.
 	s := ep.getReportSpec(device)
 	if s == nil {
 		return ErrUnknownReportSpec
@@ -242,8 +227,6 @@ func (ep *eventProc) handleROAccessReport(edgeXCtx *appcontext.Context, device s
 
 	for i := range report.TagReportData {
 		tagData := &report.TagReportData[i]
-		s.last
-
 	}
 
 	gen2Read := inventory.Gen2Read{
@@ -278,16 +261,39 @@ func (ep *eventProc) handleROAccessReport(edgeXCtx *appcontext.Context, device s
 }
 
 func (ep *eventProc) handleReaderEvent(device string, notification *llrp.ReaderEventNotification) {
-	if notification.ReaderEventNotificationData.ConnectionAttemptEvent != nil {
-		cae := llrp.ConnectionAttemptEventType(*notification.ReaderEventNotificationData.ConnectionAttemptEvent)
-		if cae == llrp.ConnSuccess {
-			ep.configureReader(device)
-		}
-	} else if notification.ReaderEventNotificationData.ConnectionCloseEvent != nil {
-
+	const connSuccess = llrp.ConnectionAttemptEvent(llrp.ConnSuccess)
+	if notification.ReaderEventNotificationData.ConnectionAttemptEvent == nil ||
+		*notification.ReaderEventNotificationData.ConnectionAttemptEvent != connSuccess {
+		return
 	}
+
+	ep.deviceMu.RLock()
+	r, ok := ep.readers[device]
+	ep.deviceMu.RUnlock()
+	if !ok {
+		devCap, err := ep.getDeviceCap(device)
+		if err != nil {
+			ep.lgr.Error("unable to get device capabilities for %q", device, "error", err.Error())
+			return
+		}
+
+		r, err = behavior.NewBasicDevice(devCap)
+		if err != nil {
+			ep.lgr.Error("bad capabilities for %q", device, "error", err.Error())
+			return
+		}
+
+		ep.deviceMu.Lock()
+		if updated, ok := ep.readers[device]; ok {
+			r = updated
+		} else {
+			ep.readers[device] = r
+		}
+		ep.deviceMu.Unlock()
+	}
+
 }
 
-func (ep *eventProc) configureReader(device string) {
+func (ep *eventProc) getDeviceCap(device string) (*llrp.GetReaderCapabilitiesResponse, error) {
 
 }

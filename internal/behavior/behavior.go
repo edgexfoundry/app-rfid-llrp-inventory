@@ -21,16 +21,16 @@ import (
 
 // Behavior is a high-level description of desired Reader operation.
 //
-// The original API comes from the RSP Controller.
 // LLRP Readers vary wildly in their capabilities;
 // some Behavior characteristics cannot be well-mapped to all Readers.
 type Behavior struct {
 	ID string
 
-	GPITrigger *GPITrigger `json:",omitempty"` // nil == Immediate; otherwise requires Port
-	ScanType   ScanType
-	Power      PowerTarget
-	Duration   llrp.Millisecs32
+	GPITrigger  *GPITrigger `json:",omitempty"` // nil == Immediate; otherwise requires Port
+	ScanType    ScanType
+	Duration    llrp.Millisecs32 // 0 == repeat forever
+	Power       PowerTarget
+	Frequencies []llrp.Kilohertz `json:",omitempty"`
 }
 
 type GPITrigger struct {
@@ -40,8 +40,7 @@ type GPITrigger struct {
 }
 
 type PowerTarget struct {
-	Min, Max *uint16
-	Target   uint16
+	Target uint16
 }
 
 type (
@@ -82,17 +81,299 @@ func errMissingCapInfo(name string, path ...string) error {
 	return errors.Wrapf(ErrMissingCapInfo, "missing LLRP %s", name)
 }
 
-type DeviceInfo struct {
+type BasicDevice struct {
+	// connected   time.Time
 	modes       []llrp.UHFC1G2RFModeTableEntry
 	pwrMinToMax []llrp.TransmitPowerLevelTableEntry
-	nGPIs       uint16
-	nFreqs      uint16
-	freqIdx     uint16
-	allowsHop   bool
-	stateAware  bool
+	freqInfo    llrp.FrequencyInformation
+
+	// report is the collection of information we want expect a Reader to report.
+	// LLRP has a data compression "feature" that allows Readers to omit some parameters
+	// if the value hasn't changed "since the last time it was sent".
+	report llrp.TagReportContentSelector
+	// lastData is the value of tag parameter the last time it was reported.
+	lastData llrp.TagReportData
+
+	nGPIs, nFreqs uint16
+	allowsHop     bool
+	stateAware    bool
 }
 
-func NewDeviceInfo(c *llrp.GetReaderCapabilitiesResponse) (*DeviceInfo, error) {
+func (d BasicDevice) NewReaderConfig() *llrp.SetReaderConfig {
+	conf := &llrp.SetReaderConfig{
+		ResetToFactoryDefaults: true,
+
+		// ReaderEventNotificationSpec which ReaderEventNotifications we get.
+		// BufferOverflows and ConnectionEvents cannot be disabled.
+		// Some events require specific capabilities.
+		ReaderEventNotificationSpec: &llrp.ReaderEventNotificationSpec{
+			EventNotificationStates: []llrp.EventNotificationState{
+				{ReaderEventType: llrp.NotifyReaderException, NotificationEnabled: true}, // notifies of unexpected Reader events
+				{ReaderEventType: llrp.NotifyAntenna, NotificationEnabled: true},         // (dis)connect may require the Reader tries to use antenna
+				// {ReaderEventType: llrp.NotifyROSpec, NotificationEnabled: false},                // ROSpec start/end/preempt
+				// {ReaderEventType: llrp.NotifyAISpec, NotificationEnabled: false},                // AISpec end
+				// {ReaderEventType: llrp.NotifyAISpecWithSingulation, NotificationEnabled: false}, // AISpec end & has singulation details
+				// {ReaderEventType: llrp.NotifyReportBuffFillWarn, NotificationEnabled: true},    // requires LLRPCapabilities.CanReportBufferFillWarning
+				// {ReaderEventType: llrp.NotifyRFSurvey, NotificationEnabled: false},             // requires LLRPCapabilities.CanDoRFSurvey
+				// {ReaderEventType: llrp.NotifyChannelHop, NotificationEnabled: false},           // only relevant if RegulatoryCapabilities.UHFBandCapabilities.FrequencyInformation.Hopping
+				// {ReaderEventType: llrp.NotifyGPI, NotificationEnabled: true},                   // only relevant if GeneralDeviceCapabilities.GPIOCapabilities has >0 NumGPIs or NumGPOs
+			},
+		},
+
+		// Setting this requires GeneralDeviceCapabilities.CanSetAntennaProperties,
+		// but it's not really that useful anyway.
+		AntennaProperties: nil,
+
+		// AntennaConfigurations control the RF settings during a Reader Operation.
+		// The valid values are heavily limited by capabilities and manufacturer.
+		// We can nil here and in ROSpecs to "let the Reader decide".
+		//
+		// Most of the inventory operation control comes via the RFControl.
+		// RFControl is where you can choose a Mode from the
+		// RegulatoryCapabilities.UHFBandCapabilities.C1G2RFModes table.
+		// You match one of the RFModeIDs (which are not sequential, in general)
+		// and give an in-range Tari value or 0 for "let the Reader choose".
+		//
+		// Using an AntennaID of 0 means the config applies to all antennas.
+		// Antennas IDs need not be consecutive, but in practice, they probably are.
+		// The max is limited by GeneralDeviceCapabilities.MaxSupportedAntennas.
+		// Although we can query the Reader Config for Antenna Properties,
+		// it can take much longer than typical LLRP requests
+		// (e.g., Impinj quotes that it can take up to 10s to probe the ports).
+		// Instead, we can determine the IDs from the GeneralDeviceCapabilities
+		// within its PerAntennaAirProtocols parameter.
+		//
+		// If set, the RFReceiver must match one of the Index values
+		// of one of the entries of the GeneralDeviceCapabilities.ReceiveSensitivityTable.
+		// Those ReceiveSensitivity values are relative the Reader's max,
+		// which cannot be determined from standard messages in LLRP 1.0.1.
+		// Note that the Index values are not sequential, in general.
+		//
+		// If you're setting the RFTransmitter values, you must use
+		// the RegulatoryCapabilities.UHFBandCapabilities
+		// to determine a valid Index into the TransmitPowerLevels table
+		// and whether or not the Reader is in a Frequency Hopping regulatory region.
+		// If so, then HopTableID must match an entry in the FrequencyHopTables.
+		// If not, ChannelIndex must be set based on a desired value
+		// from the FixedFrequencyTable, which unlike most LLRP tables,
+		// is a regular array, so the value is the 1-indexed offset.
+		//
+		// If LLRPCapabilities.CanDoTagInventoryStateAwareSingulation,
+		// you can't use InventoryStateAwareActions in Filters or SingulationControl.
+		//
+		// The number of filters is limited by C1G2LLRPCapabilities.MaxSelectFilterPerQuery.
+		// Which filter actions are available depends on
+		// LLRPCapabilities.CanDoTagInventoryStateAwareSingulation.
+		//
+		// Note that even though LLRP requires compliant Readers implement the TruncateAction,
+		// Impinj isn't compliant and their documentation says "Truncate must be 0".
+		// LLRP allows per-antenna configurations,
+		// but at least some Readers will reject variant per-antenna configs.
+		// For example, the Impinj Speedway requires all antenna
+		// in an enabled AISpec have the same RFControl.ModeIndex,
+		// RFTransmitter.HopTableID and ChannelIndex, and C1G2Filters.
+		// There's no way to know this via standard LLRP messages.
+		//
+		// Note that the Speedway has only a single HopTable,
+		// and it doesn't support state aware filtering,
+		// nor does it support setting the Tari value (as modes' range min == max),
+		// nor is it compliant with LLRP w.r.t. TruncateActions.
+		//
+		// So here's what can be controlled per-antenna on a Speedway:
+		// - The transmit power
+		// - The receive sensitivity
+		//
+		// Here's what can be configured, if they match for all antennas:
+		// - Up to 2-5 C1G2 filters, depending on the firmware,
+		//   but only the mask & state-unaware filter action, but not truncation.
+		// - The Singulation control's session flag;
+		//   other Singulation controls have little effect or are ignored.
+		// - 1 of 5 C1G2 RFMode (of the 540,000,000,000,000 possible)
+		//   or you can use 1 of 5 Impinj-specific modes masquerading as LLRP RFModes.
+		//   They call them "Autoset modes", and Impinj says of them,
+		//   "Link Parameters reported for Autoset modes [...] should be ignored",
+		//   so there's no way to use LLRP to determine their effect
+		//   nor to disambiguate them from actual LLRP modes, for that matter.
+		//   This is not to say that they aren't potentially useful,
+		//   but it is to say they don't fit well with a general-purpose LLRP Device Service.
+		AntennaConfigurations: nil,
+
+		// The ROReportSpec controls default reporting parameters.
+		// If an ROSpec has a non-nil ReportSpec, none of these apply.
+		// The report settings (here or in the ROSpec if it overrides it)
+		// must be known to in order to disambiguate nil data in a TagDataReport.
+		ROReportSpec: &llrp.ROReportSpec{
+			Trigger: llrp.NSecondsOrAIEnd,
+			N:       reportInterval,
+
+			// The ContentSelector controls what's eligible to come in a TagDataReport.
+			//
+			// If a report bundles multiple tag singulations together,
+			// the report can include when it was first and/or last seen,
+			// the total number of times the Reader saw it,
+			// and its peak RSSI of all times it saw it.
+			// Which values to enable in the report depends on the Trigger type,
+			// since that determines whether it's even possible
+			// that a single tag is seen multiple times.
+			TagReportContentSelector: llrp.TagReportContentSelector{
+				EnableROSpecID:             false, // should set true if have >1 ROSpec
+				EnableSpecIndex:            false, // should set true if >1 Spec in ROSpec
+				EnableInventoryParamSpecID: false, // should set true if have >1 within any AISpec
+				EnableAccessSpecID:         false, // should set true if >1 AccessSpec
+				EnableTagSeenCount:         false, // maybe want this to be true if bundling is possible
+				EnableFirstSeenTimestamp:   false,
+				EnableLastSeenTimestamp:    true,
+				EnableChannelIndex:         true, // channel index depends on the frequency table in use
+				EnableAntennaID:            true,
+				EnablePeakRSSI:             true,
+				C1G2EPCMemorySelector: &llrp.C1G2EPCMemorySelector{
+					CRCEnabled:     false,
+					PCBitsEnabled:  false, // PCBits can help distinguish actual EPCs from custom tags
+					XPCBitsEnabled: false, // requires C1G2LLRPCapabilities.SupportsXPC
+				},
+			},
+		},
+	}
+
+	return conf
+}
+
+// FillAmbiguousNil handles the worst feature of LLRP: ambiguous nil parameters.
+//
+// Specifically, it fills in tag data parameters that weren't reported
+// because they match the last reported value of the same type.
+// This can only be done correctly if you know enough context,
+// so this method is assuming we're using a consistent set of reporting parameters,
+// and tag reports are processed in full, in order.
+// It also skips Uptimes and AccessSpecID parameters.
+//
+// LLRP allows Readers to use `nil` to mean both "not enabled" and "hasn't changed".
+// The Client "knows" which it is because they know if the value were enabled,
+// and they know the most recent value of each optional parameter ever received.
+//
+// You can't disable this behavior.
+// You can't even query a Reader to know if it's something the Reader supports.
+//
+// As a result, the Clients must track:
+// - the most-recently-received value of every optional parameter
+// - the reporting parameters of any ROSpec
+//   for which it might still receive tag reports;
+//   note that it's legal to delete an ROSpec before requesting its data
+// - the default reporting parameters at any point they were changed,
+//   if there was defined at that time an enabled ROSpec that used the defaults
+// - the ROSpecIDs and start/stop timestamps of any ROSpec
+//   for which it might still receive tag reports;
+//   since this is itself an optional parameter,
+//   there are several ways to configure an LLRP Reader
+//   such that it is impossible to disambiguate nil parameters.
+//
+// Here's a direct quote from the LLRP Spec explaining how it works:
+//		This report parameter is generated per tag per accumulation scope[*].
+//		The only mandatory portion of this parameter is the EPCData parameter.
+//		If there was an access operation performed on the tag,
+//		the results of the OpSpecs are mandatory in the report.
+//		The other sub-parameters in this report are optional.
+//		LLRP provides three ways to make the tag reporting efficient:
+//
+//		(i) Allow parameters to be enabled or disabled via TagReportContentSelector in TagReportSpec.
+//		(ii) If an optional parameter is enabled, and is absent in the report,
+//		the Client SHALL assume that the value is identical
+//		to the last parameter of the same type received.
+//		For example, this allows the Readers to not send a parameter in the report
+//		whose value has not changed since the last time it was sent by the Reader.
+//
+// [*] This is just saying you get a TagReportData parameter
+//     for each EPC and unique combination of OpSpec result or matched IDs.
+//     Report accumulation also affects the reporting of
+//     timestamps, RSSI, the channel index, and number of observations.
+//
+func (d BasicDevice) FillAmbiguousNil(tags []llrp.TagReportData) {
+	for i := range tags {
+		tag := &tags[i]
+		if d.report.EnableROSpecID {
+			if tag.ROSpecID == nil {
+				tag.ROSpecID = new(llrp.ROSpecID)
+				*tag.ROSpecID = *d.lastData.ROSpecID
+			} else {
+				*d.lastData.ROSpecID = *tag.ROSpecID
+			}
+		}
+
+		if d.report.EnableSpecIndex {
+			if tag.SpecIndex == nil {
+				tag.SpecIndex = new(llrp.SpecIndex)
+				*tag.SpecIndex = *d.lastData.SpecIndex
+			} else {
+				*d.lastData.SpecIndex = *tag.SpecIndex
+			}
+		}
+
+		if d.report.EnableInventoryParamSpecID {
+			if tag.InventoryParameterSpecID == nil {
+				tag.InventoryParameterSpecID = new(llrp.InventoryParameterSpecID)
+				*tag.InventoryParameterSpecID = *d.lastData.InventoryParameterSpecID
+			} else {
+				*d.lastData.InventoryParameterSpecID = *tag.InventoryParameterSpecID
+			}
+		}
+
+		if d.report.EnableAntennaID {
+			if tag.AntennaID == nil {
+				tag.AntennaID = new(llrp.AntennaID)
+				*tag.AntennaID = *d.lastData.AntennaID
+			} else {
+				*d.lastData.AntennaID = *tag.AntennaID
+			}
+		}
+
+		if d.report.EnablePeakRSSI {
+			if tag.PeakRSSI == nil {
+				tag.PeakRSSI = new(llrp.PeakRSSI)
+				*tag.PeakRSSI = *d.lastData.PeakRSSI
+			} else {
+				*d.lastData.PeakRSSI = *tag.PeakRSSI
+			}
+		}
+
+		if d.report.EnableChannelIndex {
+			if tag.ChannelIndex == nil {
+				tag.ChannelIndex = new(llrp.ChannelIndex)
+				*tag.ChannelIndex = *d.lastData.ChannelIndex
+			} else {
+				*d.lastData.ChannelIndex = *tag.ChannelIndex
+			}
+		}
+
+		if d.report.EnableFirstSeenTimestamp {
+			if tag.FirstSeenUTC == nil {
+				tag.FirstSeenUTC = new(llrp.FirstSeenUTC)
+				*tag.FirstSeenUTC = *d.lastData.FirstSeenUTC
+			} else {
+				*d.lastData.FirstSeenUTC = *tag.FirstSeenUTC
+			}
+		}
+
+		if d.report.EnableLastSeenTimestamp {
+			if tag.LastSeenUTC == nil {
+				tag.LastSeenUTC = new(llrp.LastSeenUTC)
+				*tag.LastSeenUTC = *d.lastData.LastSeenUTC
+			} else {
+				*d.lastData.LastSeenUTC = *tag.LastSeenUTC
+			}
+		}
+
+		if d.report.EnableTagSeenCount {
+			if tag.TagSeenCount == nil {
+				tag.TagSeenCount = new(llrp.TagSeenCount)
+				*tag.TagSeenCount = *d.lastData.TagSeenCount
+			} else {
+				*d.lastData.TagSeenCount = *tag.TagSeenCount
+			}
+		}
+	}
+}
+
+func NewBasicDevice(c *llrp.GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 	if c == nil || c.LLRPCapabilities == nil || c.GeneralDeviceCapabilities == nil ||
 		c.RegulatoryCapabilities == nil || c.C1G2LLRPCapabilities == nil {
 		return nil, errMissingCapInfo("capabilities")
@@ -112,7 +393,7 @@ func NewDeviceInfo(c *llrp.GetReaderCapabilitiesResponse) (*DeviceInfo, error) {
 			"C1G2RFModes", "UHFC1G2RFModeTableEntries")
 	}
 
-	var freqIdx, nFreqs uint16
+	var nFreqs uint16
 	freqInfo := regCap.UHFBandCapabilities.FrequencyInformation
 	if freqInfo.Hopping {
 		if len(freqInfo.FrequencyHopTables) == 0 {
@@ -121,15 +402,10 @@ func NewDeviceInfo(c *llrp.GetReaderCapabilitiesResponse) (*DeviceInfo, error) {
 				"FrequencyInformation", "FrequencyHopTables")
 		}
 
-		// LLRP's "abstract" definition of FrequencyHopTable says
-		// "HopTableID: Integer; Possible Values: 0-255"
-		// and the binary encoding allocates it 8-bits,
-		// yet in the RFTransmitter parameter, it's defined as a uint16.
-		freqIdx = uint16(freqInfo.FrequencyHopTables[0].HopTableID)
-		// Array fields in LLRP are limited to at most a length of uint16
-		// due to the way the binary values are encoded,
-		// so if it's greater than a uint16,
-		// the value didn't actually come from an LLRP message.
+		// Array fields in binary LLRP messages can't be longer than a uint16,
+		// so this can only trigger if it didn't come from an LLRP message;
+		// since we can't use the value, at least let the programmer know
+		// they've created an illegal situation somehow.
 		if len(freqInfo.FrequencyHopTables[0].Frequencies) > (1 << 16) {
 			panic("impossible frequency table length")
 		}
@@ -142,10 +418,9 @@ func NewDeviceInfo(c *llrp.GetReaderCapabilitiesResponse) (*DeviceInfo, error) {
 		}
 
 		// See notes above about why this precaution is very unlikely to trigger.
-		if len(freqInfo.FrequencyHopTables[0].Frequencies) > (1 << 16) {
+		if len(freqInfo.FixedFrequencyTable.Frequencies) > (1 << 16) {
 			panic("impossible frequency table length")
 		}
-		freqIdx = 1
 		nFreqs = uint16(len(freqInfo.FixedFrequencyTable.Frequencies))
 	}
 
@@ -185,22 +460,55 @@ func NewDeviceInfo(c *llrp.GetReaderCapabilitiesResponse) (*DeviceInfo, error) {
 		})
 	}
 
-	return &DeviceInfo{
+	return &BasicDevice{
 		modes:       modes,
 		pwrMinToMax: pwrLvls,
 		nGPIs:       genCap.GPIOCapabilities.NumGPIs,
+		freqInfo:    freqInfo,
 		nFreqs:      nFreqs,
-		freqIdx:     freqIdx,
 		allowsHop:   freqInfo.Hopping,
 		stateAware:  llrpCap.CanDoTagInventoryStateAwareSingulation,
+		lastData: llrp.TagReportData{
+			ROSpecID:                 new(llrp.ROSpecID),
+			SpecIndex:                new(llrp.SpecIndex),
+			InventoryParameterSpecID: new(llrp.InventoryParameterSpecID),
+			AntennaID:                new(llrp.AntennaID),
+			PeakRSSI:                 new(llrp.PeakRSSI),
+			ChannelIndex:             new(llrp.ChannelIndex),
+			FirstSeenUTC:             new(llrp.FirstSeenUTC),
+			LastSeenUTC:              new(llrp.LastSeenUTC),
+			TagSeenCount:             new(llrp.TagSeenCount),
+		},
 	}, nil
 }
 
-func (d DeviceInfo) freqIndices() (hopIdx, fixedIdx uint16) {
-	if d.allowsHop {
-		return d.freqIdx, 0
+// transmit returns a legal llrp.RFTransmitter value.
+func (d BasicDevice) transmit(b Behavior) (*llrp.RFTransmitter, error) {
+	pwrIdx, pwr := d.findPower(b.Power.Target)
+	if pwr > b.Power.Target {
+		return nil, errors.Wrapf(ErrUnsatisfiable,
+			"target power (%fdBm) exceeds lowest supported (%fdBm)",
+			float32(b.Power.Target)/10.0, float32(pwr)/10.0)
 	}
-	return 0, d.freqIdx
+
+	if d.allowsHop {
+		return &llrp.RFTransmitter{
+			HopTableID:         uint16(d.freqInfo.FrequencyHopTables[0].HopTableID),
+			TransmitPowerIndex: pwrIdx,
+		}, nil
+	}
+
+	for _, wanted := range b.Frequencies {
+		for i, f := range d.freqInfo.FixedFrequencyTable.Frequencies {
+			if wanted == f {
+				return &llrp.RFTransmitter{
+					ChannelIndex: uint16(i),
+				}, nil
+			}
+		}
+	}
+
+	return nil, errors.Wrapf(ErrUnsatisfiable, "no matching frequency available")
 }
 
 type dBmX10 = llrp.MillibelMilliwatt
@@ -215,7 +523,7 @@ type dBmX10 = llrp.MillibelMilliwatt
 // so you should check the value upon return if a higher level is never suitable.
 //
 // This panics if there is not at least one power value.
-func (d DeviceInfo) findPower(target dBmX10) (tableIdx uint16, value dBmX10) {
+func (d BasicDevice) findPower(target dBmX10) (tableIdx uint16, value dBmX10) {
 	// sort.Search returns the smallest index i at which f(i) is true,
 	// or the list len if the result is always false.
 	// This requires the list is sorted (in our case, in ascending order).
@@ -233,7 +541,7 @@ func (d DeviceInfo) findPower(target dBmX10) (tableIdx uint16, value dBmX10) {
 	return t.Index, t.TransmitPowerValue
 }
 
-func (d DeviceInfo) Fast(nReaders uint) (bestIdx int, mode llrp.UHFC1G2RFModeTableEntry) {
+func (d BasicDevice) Fast(nReaders uint) (bestIdx int, mode llrp.UHFC1G2RFModeTableEntry) {
 	const dense = 0.5 // EPC spec implies >50% is about where "multi" becomes "dense"
 	var maskTarget llrp.SpectralMaskType
 	switch nReaders {
@@ -283,12 +591,12 @@ func (d DeviceInfo) Fast(nReaders uint) (bestIdx int, mode llrp.UHFC1G2RFModeTab
 // The returned bestIdx is the 0-indexed Go slice index,
 // not the LLRP-defined ModeID of the relevant mode.
 // There must be at least one mode in the mode table,
-// which is validated when the DeviceInfo is created.
+// which is validated when the BasicDevice is created.
 //
 // LLRP (and this code) abstracts reader density via the mode's "SpectralMask"
 // (the name relates to how Readers make use of the available channel spectrum).
 // A higher mask level implies a more dense Reader environment:
-// one in which most or all available frequency channels are occupied.
+// one in which most or all available frequency freqInfo are occupied.
 // Minimizing collisions requires frequency-division multiplexing,
 // preferably by choosing backscattered link frequencies and modulations
 // that permit guardbands between the carrier waves and backscattered sidebands.
@@ -304,7 +612,7 @@ func (d DeviceInfo) Fast(nReaders uint) (bestIdx int, mode llrp.UHFC1G2RFModeTab
 // - lower PIERatio * MinTariTime
 // - EPC HAG conformant over not conformant (unlikely in practice)
 // - DR 8:1 over 64:3, since at the same BLF, it implies a smaller TRcal.
-func (d DeviceInfo) fastestAt(mask llrp.SpectralMaskType) (bestIdx int, ok bool) {
+func (d BasicDevice) fastestAt(mask llrp.SpectralMaskType) (bestIdx int, ok bool) {
 	// BDR = BLF at FM0, or BLF over 2, 4, or 8 for Miller modes,
 	// so it already incorporates TRcal (Tpri = 1/BLF = TRcal / DR)
 	// and subcarrier cycles per symbols (FM0 or Miller mode).
@@ -320,10 +628,11 @@ func (d DeviceInfo) fastestAt(mask llrp.SpectralMaskType) (bestIdx int, ok bool)
 	// the exact value of "enough" is left as an exercise for the open-source enthusiast.
 	//
 	// If you're particularly motivated and have a Reader that allows it,
-	// it's perhaps possible to optimize Tari over time
-	// by sampling the 0:1 ratio of tags in the antenna's FoV;
+	// it's perhaps possible to optimize Tari
+	// by approximating the 0:1 ratio of messages the Reader will send;
 	// however, many manufacturers set Min Tari == Max Tari,
-	// effectively forcing only a single value anyway.
+	// effectively forcing only a single value anyway,
+	// making such an optimization pretty pointless.
 
 	var maxBwdRate llrp.BitsPerSec // higher is better
 	var minFwdTime float64         // lower is better
@@ -403,7 +712,7 @@ func (d DeviceInfo) fastestAt(mask llrp.SpectralMaskType) (bestIdx int, ok bool)
 // "Only give me tags that start with these EPC bits",
 // and the Reader handles all that session flag stuff.
 //
-func (d DeviceInfo) InventoryControl(b Behavior) ([]llrp.C1G2Filter, *llrp.C1G2SingulationControl) {
+func (d BasicDevice) InventoryControl(b Behavior) ([]llrp.C1G2Filter, *llrp.C1G2SingulationControl) {
 	// Flip session state for matching tags: A->B, B->A; do nothing non-matching tags
 	const flipMatched = llrp.C1G2TagInventoryStateAwareFilterActionType(3)
 
@@ -486,14 +795,17 @@ func (d DeviceInfo) InventoryControl(b Behavior) ([]llrp.C1G2Filter, *llrp.C1G2S
 	}
 
 	return []llrp.C1G2Filter{{
-		TruncateAction:      llrp.FilterActionDoNotTruncate,
-		TagInventoryMask:    llrp.C1G2TagInventoryMask{},
+		TruncateAction: llrp.FilterActionDoNotTruncate,
+		TagInventoryMask: llrp.C1G2TagInventoryMask{
+			MemoryBank: 1,
+		},
 		AwareFilterAction:   selectAction,
 		UnawareFilterAction: nil,
 	}}, queryAction
 }
 
-func (b Behavior) NewROSpec(d DeviceInfo) (*llrp.ROSpec, error) {
+// NewROSpec returns a new llrp.ROSpec that implements the Behavior.
+func (d BasicDevice) NewROSpec(b Behavior) (*llrp.ROSpec, error) {
 	if b.GPITrigger != nil && (b.GPITrigger.Port == 0 ||
 		d.nGPIs == 0 || b.GPITrigger.Port > d.nGPIs) {
 		return nil, errors.Wrapf(ErrUnsatisfiable,
@@ -501,14 +813,10 @@ func (b Behavior) NewROSpec(d DeviceInfo) (*llrp.ROSpec, error) {
 				"(%d not in [1, %d])", b.GPITrigger.Port, d.nGPIs)
 	}
 
-	pwrIdx, pwr := d.findPower(b.Power.Target)
-	if pwr > b.Power.Target {
-		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"target power (%fdBm) exceeds lowest supported (%fdBm)",
-			float32(b.Power.Target)/10.0, float32(pwr)/10.0)
+	transmit, err := d.transmit(b)
+	if err != nil {
+		return nil, err
 	}
-
-	hopIdx, fixedIdx := d.freqIndices()
 
 	mIdx, best := d.Fast(1)
 	tari := d.modes[mIdx].MinTariTime
@@ -522,12 +830,8 @@ func (b Behavior) NewROSpec(d DeviceInfo) (*llrp.ROSpec, error) {
 				InventoryParameterSpecID: 1,
 				AirProtocolID:            llrp.AirProtoEPCGlobalClass1Gen2,
 				AntennaConfigurations: []llrp.AntennaConfiguration{{
-					AntennaID: 0,
-					RFTransmitter: &llrp.RFTransmitter{
-						TransmitPowerIndex: pwrIdx,
-						HopTableID:         hopIdx,
-						ChannelIndex:       fixedIdx,
-					},
+					AntennaID:     0,
+					RFTransmitter: transmit,
 					C1G2InventoryCommand: &llrp.C1G2InventoryCommand{
 						TagInventoryStateAware: false,
 						RFControl: &llrp.C1G2RFControl{
@@ -543,49 +847,6 @@ func (b Behavior) NewROSpec(d DeviceInfo) (*llrp.ROSpec, error) {
 		}},
 	}
 	return spec, nil
-}
-
-type Metric func(i int, v uint16) (matches bool, dist float64)
-
-func FindExact(target uint16, listLen int, m Metric) (int, bool) {
-	for i := 0; i < listLen; i++ {
-		if match, _ := m(i, target); match {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
-func FindClose(target uint16, tolerance float64, listLen int, m Metric) (bestIdx int, found bool) {
-	for i := 0; i < listLen; i++ {
-		match, d := m(i, target)
-		if match {
-			return i, true
-		}
-
-		if d < tolerance {
-			found = true
-			bestIdx = i
-			tolerance = d
-		}
-	}
-
-	return
-}
-
-func L1Distance(p []llrp.TransmitPowerLevelTableEntry) Metric {
-	return func(i int, v uint16) (matches bool, dist float64) {
-		if i < len(p) {
-			pwr := p[i].TransmitPowerValue
-			matches = pwr == v
-			if pwr > v {
-				dist = float64(pwr - v)
-			} else {
-				dist = float64(v - pwr)
-			}
-		}
-		return
-	}
 }
 
 func (b Behavior) boundary() llrp.ROBoundarySpec {

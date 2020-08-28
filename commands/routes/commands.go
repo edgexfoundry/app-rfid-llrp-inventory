@@ -113,6 +113,5 @@ func (p Proxy) HandleRequest(w http.ResponseWriter, _ *http.Request) {
 // SetBehaviors sends command to set/apply behavior command
 func SetBehaviors() http.HandlerFunc {
 	return func(writer http.ResponseWriter, req *http.Request) {
-		// TODO
 	}
 }
