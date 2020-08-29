@@ -22,6 +22,9 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
+	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
+	"github.com/edgexfoundry/go-mod-configuration/configuration"
+	"github.com/edgexfoundry/go-mod-configuration/pkg/types"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
@@ -29,7 +32,9 @@ import (
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +48,8 @@ const (
 	ResourceInventoryEventArrived  = "InventoryEventArrived"
 	ResourceInventoryEventMoved    = "InventoryEventMoved"
 	ResourceInventoryEventDeparted = "InventoryEventDeparted"
+
+	BaseConsulPath = "edgex/appservices/1.0/"
 )
 
 type inventoryApp struct {
@@ -52,7 +59,14 @@ type inventoryApp struct {
 	processor *inventory.TagProcessor
 	eventCh   chan inventory.Event
 
+	config   *consulConfig
+	configMu sync.RWMutex
+
 	done chan struct{}
+}
+
+type consulConfig struct {
+	Aliases map[string]string
 }
 
 func main() {
@@ -127,6 +141,10 @@ func main() {
 		defer wg.Done()
 		app.processScheduledTasks()
 	}()
+
+	if err := app.watchForConfigChanges(); err != nil {
+		app.edgexSdk.LoggingClient.Warn("Unable to watch for consul configuration changes:", "error", err)
+	}
 
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
@@ -289,4 +307,75 @@ func addRouteErrorHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
 		edgexSdk.LoggingClient.Error("Error adding route: %v", err.Error())
 		os.Exit(-1)
 	}
+}
+
+func (app *inventoryApp) watchForConfigChanges() error {
+	sdkFlags := flags.New()
+	sdkFlags.Parse(os.Args[1:])
+	cpUrl, err := url.Parse(sdkFlags.ConfigProviderUrl())
+	if err != nil {
+		return err
+	}
+
+	cpPort := 8500
+	port := cpUrl.Port()
+	if port != "" {
+		cpPort, err = strconv.Atoi(port)
+		if err != nil {
+			cpPort = 8500
+		}
+	}
+
+	configClient, err := configuration.NewConfigurationClient(types.ServiceConfig{
+		Host:     cpUrl.Hostname(),
+		Port:     cpPort,
+		BasePath: BaseConsulPath,
+		Type:     cpUrl.Scheme,
+	})
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		errorStream := make(chan error)
+		defer close(errorStream)
+
+		updateStream := make(chan interface{})
+		defer close(updateStream)
+
+		cfg := consulConfig{}
+		configClient.WatchForChanges(updateStream, errorStream, &cfg, "/"+serviceKey)
+		app.edgexSdk.LoggingClient.Info("Watching for consul configuration changes...")
+
+		for {
+			select {
+			case <-app.done:
+				return
+
+			case ex := <-errorStream:
+				app.edgexSdk.LoggingClient.Error(ex.Error())
+
+			case rawConfig, ok := <-updateStream:
+				if !ok {
+					return
+				}
+
+				app.edgexSdk.LoggingClient.Info("Configuration has been updated in Consul")
+				app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("Raw configuration from Consul: %+v", rawConfig))
+
+				newConfig, ok := rawConfig.(*consulConfig)
+				if ok {
+					app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Configuration from Consul: %#v", newConfig))
+					app.processor.SetAliases(newConfig.Aliases)
+
+					app.configMu.Lock()
+					app.config = newConfig
+					app.configMu.Unlock()
+				} else {
+					app.edgexSdk.LoggingClient.Warn("Unable to decode configuration from Consul")
+				}
+			}
+		}
+	}()
+	return nil
 }

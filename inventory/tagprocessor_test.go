@@ -45,7 +45,7 @@ func TestBasicArrival(t *testing.T) {
 	})
 	ds.sniffEvents()
 
-	if err := ds.verifyAll(Present, GetAntennaAlias(front, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAlias(front, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure ALL arrivals WERE generated
