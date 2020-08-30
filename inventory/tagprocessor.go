@@ -35,12 +35,10 @@ func makeDefaultAlias(deviceID string, antID int) string {
 	return deviceID + "_" + strconv.Itoa(antID)
 }
 
-// GetAlias gets the string alias of an Sensor based on the antenna port
-// format is DeviceID-AntennaID,  ie. Sensor-150009-0
+// GetAlias gets the string alias of a reader based on the antenna port
+// Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
 // If there is an alias defined for that antenna port, use that instead
-// Note that each antenna port is supposed to refer to that index in the
-// aliases slice
-func (tp *TagProcessor) getAlias(deviceID string, antennaID int) string {
+func (tp *TagProcessor) GetAlias(deviceID string, antennaID int) string {
 	defaultAlias := makeDefaultAlias(deviceID, antennaID)
 
 	tp.aliasMu.Lock()
@@ -201,21 +199,14 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 		// if we do not know the antenna id, we cannot compute the location
 		return
 	}
-	tp.lc.Info("Tag location before setting alias",
-		"location", tag.Location)
-	srcAlias := tp.getAlias(info.DeviceName, int(*rt.AntennaID))
+	srcAlias := tp.GetAlias(info.DeviceName, int(*rt.AntennaID))
 
 	incomingStats := tag.getStats(srcAlias)
 	incomingStats.update(rssi, lastReadPtr)
 
-	tp.lc.Info("Tag location after setting alias",
-		"location", tag.Location)
-
 	if tag.Location == "" {
 		// we have not read this tag before, so lets set the initial location; nothing else to do
 		tag.Location = srcAlias
-		tp.lc.Info("Tag location after setting alias",
-			"location", tag.Location)
 		return
 	}
 

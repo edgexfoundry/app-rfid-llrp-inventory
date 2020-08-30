@@ -169,7 +169,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 		count:      1,
 	})
 	ds.sniffEvents()
-	if err := ds.verifyAll(Present, GetAntennaAlias(back1, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, GetAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
