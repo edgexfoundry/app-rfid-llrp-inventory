@@ -38,7 +38,7 @@ func makeDefaultAlias(deviceID string, antID int) string {
 // GetAlias gets the string alias of a reader based on the antenna port
 // Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
 // If there is an alias defined for that antenna port, use that instead
-func (tp *TagProcessor) GetAlias(deviceID string, antennaID int) string {
+func (tp *TagProcessor) getAlias(deviceID string, antennaID int) string {
 	defaultAlias := makeDefaultAlias(deviceID, antennaID)
 
 	tp.aliasMu.Lock()
@@ -199,7 +199,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 		// if we do not know the antenna id, we cannot compute the location
 		return
 	}
-	srcAlias := tp.GetAlias(info.DeviceName, int(*rt.AntennaID))
+	srcAlias := tp.getAlias(info.DeviceName, int(*rt.AntennaID))
 
 	incomingStats := tag.getStats(srcAlias)
 	incomingStats.update(rssi, lastReadPtr)
