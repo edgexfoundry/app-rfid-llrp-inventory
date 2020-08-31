@@ -58,16 +58,6 @@ const (
 	TriggerGPI       = Trigger(1)
 )
 
-type SpecOption interface {
-	ModifyROSpec(spec *llrp.ROSpec)
-}
-
-type SpecOptFunc func(spec *llrp.ROSpec)
-
-func (sof SpecOptFunc) ModifyROSpec(spec *llrp.ROSpec) {
-	sof(spec)
-}
-
 var (
 	ErrMissingCapInfo = fmt.Errorf("missing capability information")
 	ErrUnsatisfiable  = fmt.Errorf("behavior cannot be satisfied")
