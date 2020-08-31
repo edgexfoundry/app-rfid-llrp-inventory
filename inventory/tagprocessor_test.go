@@ -304,7 +304,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-2 * (time.Duration(AggregateDepartedThresholdMillis) * time.Millisecond)),
+		lastSeen:   time.Now().Add(-2 * (time.Duration(DepartedThresholdSeconds) * time.Second)),
 	})
 	ds.sniffEvents()
 
@@ -324,7 +324,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-(time.Duration(AggregateDepartedThresholdMillis) * time.Millisecond) / 2),
+		lastSeen:   time.Now().Add(-(time.Duration(DepartedThresholdSeconds) * time.Second) / 2),
 	})
 	ds.sniffEvents()
 	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {

@@ -38,6 +38,7 @@ func (buff *CircularBuffer) GetCount() int {
 	if buff.counter >= uint64(buff.windowSize) {
 		return buff.windowSize
 	}
+	// overflow not possible because counter is less than windowSize, which is an int
 	return int(buff.counter)
 }
 

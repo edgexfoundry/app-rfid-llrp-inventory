@@ -1,18 +1,8 @@
-//
-// Copyright (c) 2020 Intel Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+/* Apache v2 license
+*  Copyright (C) <2020> Intel Corporation
+*
+*  SPDX-License-Identifier: Apache-2.0
+ */
 
 package main
 
@@ -34,9 +24,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -44,12 +36,10 @@ const (
 	serviceKey    = "rfid-inventory"
 	eventChBuffSz = 10
 
-	ResourceROAccessReport         = "ROAccessReport"
-	ResourceInventoryEventArrived  = "InventoryEventArrived"
-	ResourceInventoryEventMoved    = "InventoryEventMoved"
-	ResourceInventoryEventDeparted = "InventoryEventDeparted"
-
 	BaseConsulPath = "edgex/appservices/1.0/"
+
+	ResourceROAccessReport = "ROAccessReport"
+	ResourceInventoryEvent = "InventoryEvent"
 )
 
 type inventoryApp struct {
@@ -85,7 +75,11 @@ func main() {
 	app.done = make(chan struct{})
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
+	if err := app.processor.Restore(inventory.TagCacheFile); err != nil {
+		app.edgexSdk.LoggingClient.Warn("An issue occurred restoring tag inventory from cache.",
+			"error", err)
+	}
+	app.edgexSdk.LoggingClient.Info("Running")
 
 	// Retrieve the application settings from configuration.toml
 	appSettings := app.edgexSdk.ApplicationSettings()
@@ -146,6 +140,23 @@ func main() {
 		app.edgexSdk.LoggingClient.Warn("Unable to watch for consul configuration changes:", "error", err)
 	}
 
+	// HACK: We are doing this because of an issue with running app-fn-sdk inside
+	// of docker-compose where something is hanging and not relinquishing control
+	// back to our code.
+	go func() {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		<-signals
+
+		if err := app.processor.Persist(inventory.TagCacheFile); err != nil {
+			app.edgexSdk.LoggingClient.Error("An error occurred persisting tag inventory to cache.",
+				"error", err)
+		}
+
+		app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
+		close(app.done)
+	}()
+
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
 	if err != nil {
@@ -153,8 +164,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
-	close(app.done)
 	wg.Wait()
 
 	// Do any required cleanup here
@@ -217,7 +226,7 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 // processScheduledTasks is an infinite loop that processes timer tickers which are basically
 // a way to run code on a scheduled interval in golang
 func (app *inventoryApp) processScheduledTasks() {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.AggregateDepartedThresholdMillis/5) * time.Millisecond)
+	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
 	defer aggregateDepartedTicker.Stop()
 
 	ageoutTicker := time.NewTicker(1 * time.Hour)
@@ -260,6 +269,7 @@ func (app *inventoryApp) processEventChannel() {
 
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
 			app.pushEventToCoreData(e)
+			_ = app.processor.Persist(inventory.TagCacheFile)
 		}
 	}
 }
@@ -276,20 +286,7 @@ func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
 		return
 	}
 
-	var resource string
-	switch event.OfType() {
-	case inventory.ArrivedType:
-		resource = ResourceInventoryEventArrived
-	case inventory.MovedType:
-		resource = ResourceInventoryEventMoved
-	case inventory.DepartedType:
-		resource = ResourceInventoryEventDeparted
-	default:
-		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("Unknown event type: %v.", event.OfType()))
-		return
-	}
-
-	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, resource, string(payload)); err != nil {
+	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, ResourceInventoryEvent+string(event.OfType()), string(payload)); err != nil {
 		app.edgexSdk.LoggingClient.Error("Unable to push inventory event to core-data: " + err.Error())
 	}
 }

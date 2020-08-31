@@ -25,6 +25,8 @@ type TagProcessor struct {
 	inventory   map[string]*Tag
 	inventoryMu sync.RWMutex
 
+	cacheMu sync.Mutex
+
 	mobilityProfile *MobilityProfile
 
 	aliases map[string]string
@@ -332,7 +334,7 @@ func (tp *TagProcessor) RunAggregateDepartedTask() {
 
 	// acquire LOCK BEFORE getting the timestamps, otherwise they can be invalid if we have to wait for the lock
 	now := helper.UnixMilliNow()
-	expiration := now - int64(AggregateDepartedThresholdMillis)
+	expiration := now - int64(DepartedThresholdSeconds*1000)
 
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {
@@ -345,7 +347,8 @@ func (tp *TagProcessor) RunAggregateDepartedTask() {
 			}
 			// reset the read stats so if it arrives again it will start with fresh data
 			tag.resetStats()
-			tp.lc.Debug(fmt.Sprintf("Departed %+v", e))
+			tp.lc.Debug(fmt.Sprintf("Departed %+v (Last seen %v ago)",
+				e, time.Duration(now-tag.LastRead)*time.Millisecond))
 			tp.eventCh <- e
 		}
 	}
