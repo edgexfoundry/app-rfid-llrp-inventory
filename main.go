@@ -306,6 +306,8 @@ func addRouteErrorHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
 	}
 }
 
+// watchForConfigChanges watches for some configuration changes in EdgeX Consul and dynamically updates the application with
+// the new changes and also if the application restarts loads the existing config values from Consul
 func (app *inventoryApp) watchForConfigChanges() error {
 	sdkFlags := flags.New()
 	sdkFlags.Parse(os.Args[1:])
@@ -357,12 +359,12 @@ func (app *inventoryApp) watchForConfigChanges() error {
 					return
 				}
 
-				app.edgexSdk.LoggingClient.Info("Configuration has been updated in Consul")
 				app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("Raw configuration from Consul: %+v", rawConfig))
 
 				newConfig, ok := rawConfig.(*consulConfig)
 				if ok {
-					app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Configuration from Consul: %#v", newConfig))
+					app.edgexSdk.LoggingClient.Info("Configuration from Consul received")
+					app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("Configuration from Consul: %#v", newConfig))
 					app.processor.SetAliases(newConfig.Aliases)
 
 					app.configMu.Lock()

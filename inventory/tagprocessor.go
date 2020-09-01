@@ -37,7 +37,7 @@ func makeDefaultAlias(deviceID string, antID int) string {
 	return deviceID + "_" + strconv.Itoa(antID)
 }
 
-// GetAlias gets the string alias of a reader based on the antenna port
+// getAlias gets the string alias of a reader based on the antenna port
 // Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
 // If there is an alias defined for that antenna port, use that instead
 func (tp *TagProcessor) getAlias(deviceID string, antennaID int) string {
@@ -46,7 +46,7 @@ func (tp *TagProcessor) getAlias(deviceID string, antennaID int) string {
 	tp.aliasMu.Lock()
 	defer tp.aliasMu.Unlock()
 
-	if alias, exists := (tp.aliases)[defaultAlias]; exists {
+	if alias, exists := tp.aliases[defaultAlias]; exists {
 		return alias
 	}
 
@@ -58,9 +58,7 @@ func (tp *TagProcessor) SetAliases(aliases map[string]string) {
 	defer tp.aliasMu.Unlock()
 
 	// aliases configuration map from Consul includes an empty key too for some reason, so is deleted if it exists
-	if _, ok := aliases[""]; ok {
-		delete(aliases,"")
-	}
+	delete(aliases, "")
 
 	tp.aliases = aliases
 }

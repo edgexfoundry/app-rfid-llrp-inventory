@@ -472,11 +472,12 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 
 func TestReaderAntennaAliasExisting(t *testing.T) {
 	ds := newTestDataset(lc, 0)
-	ds.tp.aliases = map[string]string{
+	aliasesMap := map[string]string{
 		"Reader-3F7DAC_0":  "Freezer",
 		"Reader-150000_10": "BackRoom",
-		"Reader-999999_3":    "Front",
+		"Reader-999999_3":  "Front",
 	}
+	ds.tp.SetAliases(aliasesMap)
 
 	tests := []struct {
 		deviceID  string
