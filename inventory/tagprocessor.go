@@ -115,7 +115,7 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) {
 // NOTE: Not thread-safe; assumed to only be called while a lock is held on inventoryMu!
 func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (prev previousTag, tag *Tag) {
 	var epc string
-	if rt.EPC96.EPC != nil && len(rt.EPC96.EPC) > 0 {
+	if len(rt.EPC96.EPC) > 0 {
 		epc = hex.EncodeToString(rt.EPC96.EPC)
 	} else {
 		epc = hex.EncodeToString(rt.EPCData.EPC)

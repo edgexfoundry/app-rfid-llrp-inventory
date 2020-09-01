@@ -28,11 +28,15 @@ import (
 )
 
 const (
-	serviceKey    = "rfid-inventory"
-	eventChBuffSz = 10
+	serviceKey      = "rfid-inventory"
+	eventChBuffSz   = 10
+	eventDeviceName = "rfid-inventory"
 
 	ResourceROAccessReport = "ROAccessReport"
-	ResourceInventoryEvent = "InventoryEvent"
+
+	ResourceInventoryEventArrived  = "InventoryEventArrived"
+	ResourceInventoryEventMoved    = "InventoryEventMoved"
+	ResourceInventoryEventDeparted = "InventoryEventDeparted"
 )
 
 type inventoryApp struct {
@@ -250,27 +254,43 @@ func (app *inventoryApp) processEventChannel() {
 			}
 
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-			app.pushEventToCoreData(e)
-			_ = app.processor.Persist(inventory.TagCacheFile)
+			if err := app.pushEventToCoreData(e); err != nil {
+				app.edgexSdk.LoggingClient.Error(err.Error())
+			}
+			if err := app.processor.Persist(inventory.TagCacheFile); err != nil {
+				app.edgexSdk.LoggingClient.Warn("There was an issue persisting the data", "error", err.Error())
+			}
 		}
 	}
 }
 
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
+func (app *inventoryApp) pushEventToCoreData(event inventory.Event) error {
 	payload, err := json.Marshal(event)
 	if err != nil {
-		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
-		return
+		return errors.Wrap(err, "error marshalling event")
 	}
 
 	if app.edgexSdkContext == nil {
-		app.edgexSdk.LoggingClient.Error("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
-		return
+		return errors.New("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(serviceKey, ResourceInventoryEvent+string(event.OfType()), string(payload)); err != nil {
-		app.edgexSdk.LoggingClient.Error("Unable to push inventory event to core-data: " + err.Error())
+	var resource string
+	switch event.OfType() {
+	case inventory.ArrivedType:
+		resource = ResourceInventoryEventArrived
+	case inventory.MovedType:
+		resource = ResourceInventoryEventMoved
+	case inventory.DepartedType:
+		resource = ResourceInventoryEventDeparted
+	default:
+		return errors.New("unknown event type!")
 	}
+
+	if _, err = app.edgexSdkContext.PushToCoreData(eventDeviceName, resource, string(payload)); err != nil {
+		return errors.Wrap(err, "unable to push inventory event to core-data")
+	}
+
+	return err
 }
 
 func passSettings(settings routes.SettingsHandler, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {

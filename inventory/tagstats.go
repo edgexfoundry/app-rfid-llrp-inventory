@@ -37,5 +37,5 @@ func (stats *TagStats) update(rssi *float64, lastRead *int64) {
 }
 
 func (stats *TagStats) rssiCount() int {
-	return stats.rssiDbm.GetCount()
+	return stats.rssiDbm.Len()
 }

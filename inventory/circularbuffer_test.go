@@ -18,8 +18,8 @@ var (
 )
 
 func assertBufferSize(t *testing.T, buff *CircularBuffer, expectedSize int) {
-	if buff.GetCount() != expectedSize {
-		t.Errorf("expected buffer size of %d, but was %d", buff.GetCount(), expectedSize)
+	if buff.Len() != expectedSize {
+		t.Errorf("expected buffer size of %d, but was %d", buff.Len(), expectedSize)
 	}
 }
 
@@ -132,10 +132,27 @@ func TestCircularBuffer_GetCount(t *testing.T) {
 				buff.AddValue(1.0)
 			}
 
-			count := buff.GetCount()
+			count := buff.Len()
 			if count != test.expectedCount {
-				t.Errorf("buff.GetCount() returned %d, but we expected %d", count, test.expectedCount)
+				t.Errorf("buff.Len() returned %d, but we expected %d", count, test.expectedCount)
 			}
 		})
 	}
+}
+
+func TestCircularBuffer_Wrap(t *testing.T) {
+	windowSize := 10
+	buff := NewCircularBuffer(windowSize)
+
+	assertBufferSize(t, buff, 0)
+	// fill up the buffer
+	for i := 0; i < 10 * windowSize; i++ {
+		val := float64(i*2)
+		buff.AddValue(val)
+		assertBufferSize(t, buff, int(math.Min(float64(i+1), float64(windowSize))))
+		if buff.values[i%windowSize] != val {
+			t.Errorf("A value was added in the wrong location!")
+		}
+	}
+	assertBufferSize(t, buff, windowSize)
 }

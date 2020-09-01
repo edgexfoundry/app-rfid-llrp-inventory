@@ -15,46 +15,38 @@ import (
 // For performance reasons it is implemented as a fixed size slice with a pointer to where to insert the next value
 // such that no new memory allocations need to be made.
 type CircularBuffer struct {
-	windowSize int
-	values     []float64
-	counter    uint64
-	mutex      sync.RWMutex
+	values []float64
+	total  float64
+	index  int
+	mutex  sync.RWMutex
 }
 
 // NewCircularBuffer allocates memory for a new CircularBuffer with the given windowSize
 func NewCircularBuffer(windowSize int) *CircularBuffer {
+	if windowSize <= 0 {
+		panic("illegal window size")
+	}
+
 	return &CircularBuffer{
-		windowSize: windowSize,
-		values:     make([]float64, windowSize),
+		values: make([]float64, 0, windowSize),
 	}
 }
 
-// GetCount returns the number of actual values present in the buffer
-// count can be between 0 and windowSize
-func (buff *CircularBuffer) GetCount() int {
+// Len returns the number of actual values present in the buffer
+func (buff *CircularBuffer) Len() int {
 	buff.mutex.RLock()
 	defer buff.mutex.RUnlock()
 
-	if buff.counter >= uint64(buff.windowSize) {
-		return buff.windowSize
-	}
-	// overflow not possible because counter is less than windowSize, which is an int
-	return int(buff.counter)
+	return len(buff.values)
 }
 
 // GetMean returns the average value of all data points in the backing slice.
 // Because this is a circular buffer, this value can be considered as a moving average
 func (buff *CircularBuffer) GetMean() float64 {
-	count := buff.GetCount()
-	var total float64
-
 	buff.mutex.RLock()
-	for i := 0; i < count; i++ {
-		total += buff.values[i]
-	}
-	buff.mutex.RUnlock()
+	defer buff.mutex.RUnlock()
 
-	return total / float64(count)
+	return buff.total / float64(len(buff.values))
 }
 
 // AddValue appends a new value onto the backing slice,
@@ -63,6 +55,20 @@ func (buff *CircularBuffer) AddValue(value float64) {
 	buff.mutex.Lock()
 	defer buff.mutex.Unlock()
 
-	buff.values[buff.counter%uint64(buff.windowSize)] = value
-	buff.counter++
+	if len(buff.values) < cap(buff.values) {
+		buff.values = append(buff.values, value)
+		buff.total += value
+		return
+	}
+
+	// subtract old value and add new value
+	buff.total = buff.total - buff.values[buff.index] + value
+	// record new value where old was
+	buff.values[buff.index] = value
+
+	buff.index++
+	if buff.index >= cap(buff.values) {
+		// wrap if needed
+		buff.index = 0
+	}
 }
