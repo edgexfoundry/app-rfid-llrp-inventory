@@ -44,6 +44,9 @@ x-common-env-variables: &common-variables
   Logging_EnableRemote: "false"
   #  Clients_Logging_Host: edgex-support-logging # un-comment if re-enabling logging service for remote logging
 
+volumes:
+  inventory-cache:
+
 services:
   rfid-inventory:
     image: edgexfoundry/docker-rfid-inventory:0.0.0-dev
@@ -55,6 +58,8 @@ services:
       device-llrp-go_edgex-network:
         aliases:
           - edgex-app-service-rfid-inventory
+    volumes:
+    - "inventory-cache:/cache"
     environment:
       <<: *common-variables
       Service_Host: edgex-app-service-rfid-inventory

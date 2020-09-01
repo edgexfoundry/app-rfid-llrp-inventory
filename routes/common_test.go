@@ -21,7 +21,7 @@ func TestGetSettingsHandler(t *testing.T) {
 
 	request, err := http.NewRequest("GET", "/command/readers", nil)
 	if err != nil {
-		t.Errorf("Unable to create new HTTP request:%s", err.Error())
+		t.Fatalf("Unable to create new HTTP request %v", err)
 	}
 	// Invalid request
 	_, _, err = GetSettingsHandler(request)

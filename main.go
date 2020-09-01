@@ -1,18 +1,8 @@
-//
-// Copyright (c) 2020 Intel Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
+/* Apache v2 license
+*  Copyright (C) <2020> Intel Corporation
+*
+*  SPDX-License-Identifier: Apache-2.0
+ */
 
 package main
 
@@ -24,25 +14,29 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 )
 
 const (
-	serviceKey    = "rfid-inventory"
-	readChBuffSz  = 1000
-	eventChBuffSz = 10
+	serviceKey      = "rfid-inventory"
+	eventChBuffSz   = 10
+	eventDeviceName = "rfid-inventory"
 
-	ResourceGen2TagRead    = "Gen2TagRead"
-	ResourceInventoryEvent = "InventoryEvent"
+	ResourceROAccessReport = "ROAccessReport"
 
-	// todo: this should probably be configurable
-	LLRPDeviceService = "LLRPDeviceService"
+	ResourceInventoryEventArrived  = "InventoryEventArrived"
+	ResourceInventoryEventMoved    = "InventoryEventMoved"
+	ResourceInventoryEventDeparted = "InventoryEventDeparted"
 )
 
 type inventoryApp struct {
@@ -50,28 +44,32 @@ type inventoryApp struct {
 	edgexSdkContext *appcontext.Context
 
 	processor *inventory.TagProcessor
-	readCh    chan inventory.Gen2Read
 	eventCh   chan inventory.Event
 
 	done chan struct{}
 }
 
-var app inventoryApp
-
 func main() {
 
-	app = inventoryApp{}
+	app := inventoryApp{}
 	// initialize Edgex App functions SDK
 	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := app.edgexSdk.Initialize(); err != nil {
-		app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
+		if app.edgexSdk.LoggingClient == nil {
+			fmt.Printf("SDK initialization failed: %v\n", err)
+		} else {
+			app.edgexSdk.LoggingClient.Error(fmt.Sprintf("SDK initialization failed: %v\n", err))
+		}
 		os.Exit(-1)
 	}
 	app.done = make(chan struct{})
-	app.readCh = make(chan inventory.Gen2Read, readChBuffSz)
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
-	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient)
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("Running"))
+	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
+	if err := app.processor.Restore(inventory.TagCacheFile); err != nil {
+		app.edgexSdk.LoggingClient.Warn("An issue occurred restoring tag inventory from cache.",
+			"error", err)
+	}
+	app.edgexSdk.LoggingClient.Info("Running")
 
 	// Retrieve the application settings from configuration.toml
 	appSettings := app.edgexSdk.ApplicationSettings()
@@ -89,7 +87,10 @@ func main() {
 	err = app.edgexSdk.AddRoute("/ping", passSettings(settingsHandlerVar, routes.Ping), http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
-	err = app.edgexSdk.AddRoute("/inventory/raw", passSettings(settingsHandlerVar, routes.RawInventory), http.MethodGet)
+	err = app.edgexSdk.AddRoute("/inventory/snapshot",
+		func(writer http.ResponseWriter, request *http.Request) {
+			routes.RawInventory(app.edgexSdkContext.LoggingClient, writer, request, app.processor)
+		}, http.MethodGet)
 	addRouteErrorHandler(app.edgexSdk, err)
 
 	err = app.edgexSdk.AddRoute("/command/readers", passSettings(settingsHandlerVar, routes.GetDevices), http.MethodGet)
@@ -104,7 +105,7 @@ func main() {
 	// the collection of functions to execute every time an event is triggered.
 	err = app.edgexSdk.SetFunctionsPipeline(
 		app.contextGrabber,
-		transforms.NewFilter([]string{ResourceGen2TagRead}).FilterByValueDescriptor,
+		transforms.NewFilter([]string{ResourceROAccessReport}).FilterByValueDescriptor,
 		app.processEvents,
 	)
 	if err != nil {
@@ -112,10 +113,35 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+
 	wg.Add(1)
-	go app.processReadChannel(&wg)
+	go func() {
+		defer wg.Done()
+		app.processEventChannel()
+	}()
+
 	wg.Add(1)
-	go app.processEventChannel(&wg)
+	go func() {
+		defer wg.Done()
+		app.processScheduledTasks()
+	}()
+
+	// HACK: We are doing this because of an issue with running app-fn-sdk inside
+	// of docker-compose where something is hanging and not relinquishing control
+	// back to our code.
+	go func() {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		<-signals
+
+		if err := app.processor.Persist(inventory.TagCacheFile); err != nil {
+			app.edgexSdk.LoggingClient.Error("An error occurred persisting tag inventory to cache.",
+				"error", err)
+		}
+
+		app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
+		close(app.done)
+	}()
 
 	// tell SDK to "start" and begin listening for events to trigger the pipeline.
 	err = app.edgexSdk.MakeItRun()
@@ -124,8 +150,6 @@ func main() {
 		os.Exit(-1)
 	}
 
-	app.edgexSdk.LoggingClient.Info("waiting for channels to finish")
-	close(app.done)
 	wg.Wait()
 
 	// Do any required cleanup here
@@ -167,77 +191,106 @@ func (app *inventoryApp) processEvents(_ *appcontext.Context, params ...interfac
 
 	for _, reading := range event.Readings {
 		switch reading.Name {
-
-		case ResourceGen2TagRead:
-			gen2Read := inventory.Gen2Read{}
+		case ResourceROAccessReport:
+			report := llrp.ROAccessReport{}
 			decoder := json.NewDecoder(strings.NewReader(reading.Value))
 			decoder.UseNumber()
 
-			if err := decoder.Decode(&gen2Read); err != nil {
+			if err := decoder.Decode(&report); err != nil {
 				app.edgexSdk.LoggingClient.Error("error while decoding tag read data: " + err.Error())
-			} else {
-				app.readCh <- gen2Read
+				continue
 			}
 
+			app.edgexSdk.LoggingClient.Debug("handleRoAccessReport", "deviceName", reading.Device, "tagCount", len(report.TagReportData))
+			app.processor.ProcessReport(&report, inventory.NewReportInfo(reading))
 		}
 	}
 
 	return false, nil
 }
 
-func (app *inventoryApp) processReadChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
-	app.edgexSdk.LoggingClient.Info("starting read channel processing")
+// processScheduledTasks is an infinite loop that processes timer tickers which are basically
+// a way to run code on a scheduled interval in golang
+func (app *inventoryApp) processScheduledTasks() {
+	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
+	defer aggregateDepartedTicker.Stop()
+
+	ageoutTicker := time.NewTicker(1 * time.Hour)
+	defer ageoutTicker.Stop()
+
 	for {
 		select {
 		case <-app.done:
-			app.edgexSdk.LoggingClient.Info("exiting read channel processing")
+			app.edgexSdk.LoggingClient.Info("done called. stopping scheduled tasks")
 			return
-		case r := <-app.readCh:
-			app.handleGen2Read(&r)
+
+		case t, ok := <-aggregateDepartedTicker.C:
+			if !ok {
+				return
+			}
+			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("RunAggregateDepartedTask: %v", t))
+			app.processor.RunAggregateDepartedTask()
+
+		case t, ok := <-ageoutTicker.C:
+			if !ok {
+				return
+			}
+			app.edgexSdkContext.LoggingClient.Debug(fmt.Sprintf("RunAgeOutTask: %v", t))
+			app.processor.RunAgeOutTask()
 		}
 	}
 }
 
-func (app *inventoryApp) handleGen2Read(read *inventory.Gen2Read) {
-	app.edgexSdk.LoggingClient.Info(fmt.Sprintf("handleGen2Read: %+v", read))
-	e := app.processor.ProcessReadData(read)
-	if e != nil {
-		app.eventCh <- e
-	}
-}
-
-func (app *inventoryApp) processEventChannel(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (app *inventoryApp) processEventChannel() {
 	app.edgexSdk.LoggingClient.Info("starting event channel processing")
 	for {
 		select {
 		case <-app.done:
 			app.edgexSdk.LoggingClient.Info("exiting event channel processing")
 			return
-		// TODO: publish these events somewhere (MQTT, rest, database?)
-		case e := <-app.eventCh:
+		case e, ok := <-app.eventCh:
+			if !ok {
+				return
+			}
+
 			app.edgexSdk.LoggingClient.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-			app.pushEventToCoreData(e)
+			if err := app.pushEventToCoreData(e); err != nil {
+				app.edgexSdk.LoggingClient.Error(err.Error())
+			}
+			if err := app.processor.Persist(inventory.TagCacheFile); err != nil {
+				app.edgexSdk.LoggingClient.Warn("There was an issue persisting the data", "error", err.Error())
+			}
 		}
 	}
 }
 
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) {
+func (app *inventoryApp) pushEventToCoreData(event inventory.Event) error {
 	payload, err := json.Marshal(event)
 	if err != nil {
-		app.edgexSdk.LoggingClient.Error("error marshalling event: " + err.Error())
-		return
+		return errors.Wrap(err, "error marshalling event")
 	}
 
 	if app.edgexSdkContext == nil {
-		app.edgexSdk.LoggingClient.Error("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
-		return
+		return errors.New("unable to push event to core data due to app-functions-sdk context has not been grabbed yet")
 	}
 
-	if _, err = app.edgexSdkContext.PushToCoreData(LLRPDeviceService, ResourceInventoryEvent+event.OfType(), string(payload)); err != nil {
-		app.edgexSdk.LoggingClient.Error("unable to push inventory event to core-data: " + err.Error())
+	var resource string
+	switch event.OfType() {
+	case inventory.ArrivedType:
+		resource = ResourceInventoryEventArrived
+	case inventory.MovedType:
+		resource = ResourceInventoryEventMoved
+	case inventory.DepartedType:
+		resource = ResourceInventoryEventDeparted
+	default:
+		return errors.New("unknown event type!")
 	}
+
+	if _, err = app.edgexSdkContext.PushToCoreData(eventDeviceName, resource, string(payload)); err != nil {
+		return errors.Wrap(err, "unable to push inventory event to core-data")
+	}
+
+	return err
 }
 
 func passSettings(settings routes.SettingsHandler, handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
