@@ -143,7 +143,25 @@ _NOTE: Departed tags have their tag statistics cleared, essentially resetting an
        by the tag algorithm. So if this tag is seen again, the Location will be set to the
        first Antenna that reads the tag again._
 
-## Tag Algorithm
+### Tag State Machine
+Here is a diagram of the internal tag state machine. Every tag starts in the `Unknown` state (more precisely does not exist at all in memory). 
+Throughout the lifecycle of the tag, events will be generated that will cause it to move between
+`Present` and `Departed`. Eventually once a tag has been in the `Departed` state for long enough
+it will "Age Out" which removes it from memory, effectively putting it back into the `Unknown` state.
+
+![Tag State Diagram](docs/images/tag-state-diagram.png)
+
+## Tag Location Algorithm
+
+Every tag is associated with a single `Location` which is the best estimation of the Reader and Antenna
+that this tag is closest to. 
+
+**Note:** _Locations are actually based on `Aliases` and multiple antennas may be mapped to the 
+same `Alias`, which will cause them to be treated as the same within the tag algorithm. This can be
+especially useful when using a dual-linear antenna and mapping both polarities to the same `Alias`._
+
+
+### Configuration
 
 The following configuration options affect how the tag location algorithm works under the hood.
 
