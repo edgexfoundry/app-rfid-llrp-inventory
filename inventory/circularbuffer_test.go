@@ -146,8 +146,8 @@ func TestCircularBuffer_Wrap(t *testing.T) {
 
 	assertBufferSize(t, buff, 0)
 	// fill up the buffer
-	for i := 0; i < 10 * windowSize; i++ {
-		val := float64(i*2)
+	for i := 0; i < 10*windowSize; i++ {
+		val := float64(i * 2)
 		buff.AddValue(val)
 		assertBufferSize(t, buff, int(math.Min(float64(i+1), float64(windowSize))))
 		if buff.values[i%windowSize] != val {
