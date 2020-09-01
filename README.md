@@ -143,7 +143,36 @@ _NOTE: Departed tags have their tag statistics cleared, essentially resetting an
        by the tag algorithm. So if this tag is seen again, the Location will be set to the
        first Antenna that reads the tag again._
 
-## Tag Algorithm
+### Tag State Machine
+Here is a diagram of the internal tag state machine. Every tag starts in the `Unknown` state (more precisely does not exist at all in memory). 
+Throughout the lifecycle of the tag, events will be generated that will cause it to move between
+`Present` and `Departed`. Eventually once a tag has been in the `Departed` state for long enough
+it will "Age Out" which removes it from memory, effectively putting it back into the `Unknown` state.
+
+![Tag State Diagram](docs/images/tag-state-diagram.png)
+
+## Tag Location Algorithm
+
+Every tag is associated with a single `Location` which is the best estimation of the Reader and Antenna
+that this tag is closest to.
+
+The location algorithm is based upon comparing moving averages of various RSSI values from each RFID Antenna. Over time
+these values will be decayed based on the configurable [Mobility Profile](#Mobility-profile). Once the
+algorithm computes a higher weighted value for a new location, a Moved event is generated.
+
+> **RSSI** stands for Received Signal Strength Indicator. It is an estimated measure of power (in dBm) that the RFID reader
+> receives from the RFID tag's backscatter. 
+>
+> In a perfect world as a tag gets closer to an antenna the
+> RSSI would increase and vice-versa. In reality there are a lot of physics involved which make this
+> a less than accurate representation, which is why we apply algorithms to the raw RSSI values. 
+
+**Note:** _Locations are actually based on `Aliases` and multiple antennas may be mapped to the 
+same `Alias`, which will cause them to be treated as the same within the tag algorithm. This can be
+especially useful when using a dual-linear antenna and mapping both polarities to the same `Alias`._
+
+
+### Configuration
 
 The following configuration options affect how the tag location algorithm works under the hood.
 
@@ -182,6 +211,11 @@ The following configuration options define the `Mobility Profile` values.
 These values are used in the Location algorithm as a weighting function which
 will decay RSSI values over time. This weight is then applied to the existing Tag's Location
 and compared to the non-weighted average.
+
+The main goal of the Mobility Profile is to provide a way to customize the various tradeoffs when
+dealing with erratic data such as RSSI values. In general there is a tradeoff between responsiveness
+(how quickly tag movement is detected) and stability (preventing sporadic readings from generating erroneous events).
+By tweaking these values you will be able to find the balance that is right for your specific use-case.
 
 Suppose the following variables:
 - **`incomingRSSI`** Mean RSSI of last `windowSize` reads by incoming read's location 
