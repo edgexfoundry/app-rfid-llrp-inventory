@@ -33,14 +33,14 @@ type TagProcessor struct {
 	aliasMu sync.RWMutex
 }
 
-func makeDefaultAlias(deviceID string, antID int) string {
-	return deviceID + "_" + strconv.Itoa(antID)
+func makeDefaultAlias(deviceID string, antID uint16) string {
+	return deviceID + "_" + strconv.FormatUint(uint64(antID), 10)
 }
 
 // getAlias gets the string alias of a reader based on the antenna port
 // Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
 // If there is an alias defined for that antenna port, use that instead
-func (tp *TagProcessor) getAlias(deviceID string, antennaID int) string {
+func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
 	defaultAlias := makeDefaultAlias(deviceID, antennaID)
 
 	tp.aliasMu.Lock()
@@ -199,7 +199,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 		// if we do not know the antenna id, we cannot compute the location
 		return
 	}
-	srcAlias := tp.getAlias(info.DeviceName, int(*rt.AntennaID))
+	srcAlias := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
 
 	incomingStats := tag.getStats(srcAlias)
 	incomingStats.update(rssi, lastReadPtr)

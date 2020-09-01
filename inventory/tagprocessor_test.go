@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultAntenna = 1
+	defaultAntenna = uint16(1)
 )
 
 var (
@@ -113,7 +113,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 
 func TestMoveAntennaLocation(t *testing.T) {
 	initialAntenna := defaultAntenna
-	antennaIds := []int{2, 4, 33, 15, 99}
+	antennaIds := []uint16{2, 4, 33, 15, 99}
 	sensor := nextSensor()
 
 	for _, antID := range antennaIds {
@@ -440,7 +440,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 
 	tests := []struct {
 		deviceID  string
-		antennaID int
+		antennaID uint16
 		expected  string
 	}{
 		{
@@ -481,7 +481,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 
 	tests := []struct {
 		deviceID  string
-		antennaID int
+		antennaID uint16
 		expected  string
 	}{
 		{
