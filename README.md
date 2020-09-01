@@ -208,6 +208,21 @@ The location will change when the following equation is true:
 - **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the weight used is just the threshold, effectively the slope is not used
   - default: *(none, inherit from base profile)*
   - units: `milliseconds`
+  
+## Setting the Alias
+
+- Every reader+antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<readerName>_<antennaId>` 
+  e.g. `Reader-3F7DAC_0` where `Reader-357DAC` is the readerName and `0` is the antennaId
+
+- User needs to configure the actual alias using Consul
+    - Needs to create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-inventory/) and
+      needs to add KV pairs.
+    - Every key will represent an alias. The key always should have the default alias format (explained as above). 
+      The value should be the alias value.
+        - Examples of KV pairs
+            - Reader-357DAC_3: Freezer
+            - Reader-359JGD_1: Backroom
+    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location.
 
 ## License
 [Apache-2.0](LICENSE)
