@@ -246,17 +246,23 @@ The location will change when the following equation is true:
 ## Setting the Alias
 
 - Every reader+antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<readerName>_<antennaId>` 
-  e.g. `Reader-3F7DAC_0` where `Reader-357DAC` is the readerName and `0` is the antennaId
+  e.g. `LLRP-3F7DAC_1` where `LLRP-357DAC` is the readerName and `1` is the antennaId
 
 - User needs to configure the actual alias using Consul
+  - `Using Consul UI`
     - Needs to create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-inventory/) and
       needs to add KV pairs.
     - Every key will represent an alias. The key always should have the default alias format (explained as above). 
       The value should be the alias value.
         - Examples of KV pairs
-            - Reader-357DAC_3: Freezer
-            - Reader-359JGD_1: Backroom
+            - LLRP-357DAC_3: Freezer
+            - LLRP-359JGD_1: Backroom
     - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location.
-
+  - `Using CLI`
+    - Aliases can also be set via commands. E.g.
+      `curl \
+          --request PUT \
+          --data "Freezer" \
+          http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-inventory/Aliases/LLRP-10-EF-18_1`
 ## License
 [Apache-2.0](LICENSE)
