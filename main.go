@@ -78,6 +78,9 @@ func main() {
 	}
 	app.done = make(chan struct{})
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
+	app.config = &consulConfig{
+		Aliases: make(map[string]string),
+	}
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
 	if err := app.processor.Restore(inventory.TagCacheFile); err != nil {
 		app.edgexSdk.LoggingClient.Warn("An issue occurred restoring tag inventory from cache.",
@@ -362,8 +365,7 @@ func (app *inventoryApp) watchForConfigChanges() error {
 		updateStream := make(chan interface{})
 		defer close(updateStream)
 
-		cfg := consulConfig{}
-		configClient.WatchForChanges(updateStream, errorStream, &cfg, "/"+serviceKey)
+		configClient.WatchForChanges(updateStream, errorStream, app.config, "/"+serviceKey)
 		app.edgexSdk.LoggingClient.Info("Watching for consul configuration changes...")
 
 		for {
