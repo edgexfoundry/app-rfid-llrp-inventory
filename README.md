@@ -249,7 +249,7 @@ The location will change when the following equation is true:
   e.g. `LLRP-3F7DAC_1` where `LLRP-357DAC` is the readerName and `1` is the antennaId
 
 - User needs to configure the actual alias using Consul
-  - `Using Consul UI`
+  - **Using UI**
     - Needs to create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-inventory/) and
       needs to add KV pairs.
     - Every key will represent an alias. The key always should have the default alias format (explained as above). 
@@ -258,7 +258,7 @@ The location will change when the following equation is true:
             - LLRP-357DAC_3: Freezer
             - LLRP-359JGD_1: Backroom
     - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location.
-  - `Using CLI`
+  - **Using CLI**
     - Aliases can also be set via commands. E.g.
       `curl \
           --request PUT \
