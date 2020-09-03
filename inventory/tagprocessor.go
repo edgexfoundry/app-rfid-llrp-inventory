@@ -47,9 +47,12 @@ func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
 	defer tp.aliasMu.Unlock()
 
 	if alias, exists := tp.aliases[defaultAlias]; exists {
-		return alias
+		if alias != "" {
+			return alias
+		}
 	}
 
+	tp.lc.Warn(fmt.Sprintf("Alias not set for %s.", defaultAlias))
 	return defaultAlias
 }
 

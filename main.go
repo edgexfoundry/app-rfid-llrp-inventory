@@ -144,7 +144,7 @@ func main() {
 	}()
 
 	if err := app.watchForConfigChanges(); err != nil {
-		app.edgexSdk.LoggingClient.Warn("Unable to watch for consul configuration changes:", "error", err)
+		app.edgexSdk.LoggingClient.Warn("Unable to watch for consul configuration changes.", "error", err)
 	}
 
 	// HACK: We are doing this because of an issue with running app-fn-sdk inside
@@ -344,6 +344,7 @@ func (app *inventoryApp) watchForConfigChanges() error {
 	if port != "" {
 		cpPort, err = strconv.Atoi(port)
 		if err != nil {
+			app.edgexSdk.LoggingClient.Error("Error with edgex configuration provider url port: %v", err.Error())
 			cpPort = 8500
 		}
 	}

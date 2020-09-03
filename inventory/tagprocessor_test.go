@@ -445,8 +445,8 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 	}{
 		{
 			deviceID:  "Reader-3F7DAC",
-			antennaID: 0,
-			expected:  "Reader-3F7DAC_0",
+			antennaID: 1,
+			expected:  "Reader-3F7DAC_1",
 		},
 		{
 			deviceID:  "Reader-150000",
@@ -473,9 +473,9 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 func TestReaderAntennaAliasExisting(t *testing.T) {
 	ds := newTestDataset(lc, 0)
 	aliasesMap := map[string]string{
-		"Reader-3F7DAC_0":  "Freezer",
+		"Reader-3F7DAC_1":  "Freezer",
 		"Reader-150000_10": "BackRoom",
-		"Reader-999999_3":  "Front",
+		"Reader-999999_3":  "",
 	}
 	ds.tp.SetAliases(aliasesMap)
 
@@ -486,7 +486,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 	}{
 		{
 			deviceID:  "Reader-3F7DAC",
-			antennaID: 0,
+			antennaID: 1,
 			expected:  "Freezer",
 		},
 		{
@@ -497,7 +497,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 		{
 			deviceID:  "Reader-999999",
 			antennaID: 3,
-			expected:  "Front",
+			expected:  "Reader-999999_3",
 		},
 	}
 
