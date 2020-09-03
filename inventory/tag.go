@@ -6,6 +6,8 @@
 
 package inventory
 
+import "sync"
+
 type TagState string
 
 const (
@@ -26,6 +28,7 @@ type Tag struct {
 
 	state            TagState
 	locationStatsMap map[string]*TagStats
+	statsMu          sync.Mutex
 }
 
 type previousTag struct {
@@ -68,10 +71,16 @@ func (tag *Tag) setStateAt(newState TagState, timestamp int64) {
 }
 
 func (tag *Tag) resetStats() {
+	tag.statsMu.Lock()
+	defer tag.statsMu.Unlock()
+
 	tag.locationStatsMap = make(map[string]*TagStats)
 }
 
 func (tag *Tag) getStats(location string) *TagStats {
+	tag.statsMu.Lock()
+	defer tag.statsMu.Unlock()
+
 	stats, found := tag.locationStatsMap[location]
 	if !found {
 		stats = NewTagStats()
