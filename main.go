@@ -12,9 +12,6 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
-	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
-	"github.com/edgexfoundry/go-mod-configuration/configuration"
-	"github.com/edgexfoundry/go-mod-configuration/pkg/types"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
@@ -22,10 +19,8 @@ import (
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/routes"
 	"golang.org/x/net/context"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -36,8 +31,6 @@ const (
 	serviceKey      = "rfid-inventory"
 	eventChBuffSz   = 10
 	eventDeviceName = "rfid-inventory"
-
-	BaseConsulPath = "edgex/appservices/1.0/"
 
 	ResourceROAccessReport = "ROAccessReport"
 
@@ -53,14 +46,7 @@ type inventoryApp struct {
 	processor *inventory.TagProcessor
 	eventCh   chan inventory.Event
 
-	config   *consulConfig
-	configMu sync.RWMutex
-
 	done chan struct{}
-}
-
-type consulConfig struct {
-	Aliases map[string]string
 }
 
 func main() {
@@ -78,9 +64,6 @@ func main() {
 	}
 	app.done = make(chan struct{})
 	app.eventCh = make(chan inventory.Event, eventChBuffSz)
-	app.config = &consulConfig{
-		Aliases: make(map[string]string),
-	}
 	app.processor = inventory.NewTagProcessor(app.edgexSdk.LoggingClient, app.eventCh)
 	if err := app.processor.Restore(inventory.TagCacheFile); err != nil {
 		app.edgexSdk.LoggingClient.Warn("An issue occurred restoring tag inventory from cache.",
@@ -142,10 +125,6 @@ func main() {
 		defer wg.Done()
 		app.processScheduledTasks()
 	}()
-
-	if err := app.watchForConfigChanges(); err != nil {
-		app.edgexSdk.LoggingClient.Warn("Unable to watch for consul configuration changes.", "error", err)
-	}
 
 	// HACK: We are doing this because of an issue with running app-fn-sdk inside
 	// of docker-compose where something is hanging and not relinquishing control
@@ -327,77 +306,4 @@ func addRouteErrorHandler(edgexSdk *appsdk.AppFunctionsSDK, err error) {
 		edgexSdk.LoggingClient.Error("Error adding route: %v", err.Error())
 		os.Exit(-1)
 	}
-}
-
-// watchForConfigChanges watches for some configuration changes in EdgeX Consul and dynamically updates the application with
-// the new changes and also if the application restarts loads the existing config values from Consul
-func (app *inventoryApp) watchForConfigChanges() error {
-	sdkFlags := flags.New()
-	sdkFlags.Parse(os.Args[1:])
-	cpUrl, err := url.Parse(sdkFlags.ConfigProviderUrl())
-	if err != nil {
-		return err
-	}
-
-	cpPort := 8500
-	port := cpUrl.Port()
-	if port != "" {
-		cpPort, err = strconv.Atoi(port)
-		if err != nil {
-			app.edgexSdk.LoggingClient.Error("Error with edgex configuration provider url port: %v", err.Error())
-			cpPort = 8500
-		}
-	}
-
-	configClient, err := configuration.NewConfigurationClient(types.ServiceConfig{
-		Host:     cpUrl.Hostname(),
-		Port:     cpPort,
-		BasePath: BaseConsulPath,
-		Type:     cpUrl.Scheme,
-	})
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		errorStream := make(chan error)
-		defer close(errorStream)
-
-		updateStream := make(chan interface{})
-		defer close(updateStream)
-
-		configClient.WatchForChanges(updateStream, errorStream, app.config, "/"+serviceKey)
-		app.edgexSdk.LoggingClient.Info("Watching for consul configuration changes...")
-
-		for {
-			select {
-			case <-app.done:
-				return
-
-			case ex := <-errorStream:
-				app.edgexSdk.LoggingClient.Error(ex.Error())
-
-			case rawConfig, ok := <-updateStream:
-				if !ok {
-					return
-				}
-
-				app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("Raw configuration from Consul: %+v", rawConfig))
-
-				newConfig, ok := rawConfig.(*consulConfig)
-				if ok {
-					app.edgexSdk.LoggingClient.Info("Configuration from Consul received")
-					app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("Configuration from Consul: %#v", newConfig))
-					app.processor.SetAliases(newConfig.Aliases)
-
-					app.configMu.Lock()
-					app.config = newConfig
-					app.configMu.Unlock()
-				} else {
-					app.edgexSdk.LoggingClient.Warn("Unable to decode configuration from Consul")
-				}
-			}
-		}
-	}()
-	return nil
 }

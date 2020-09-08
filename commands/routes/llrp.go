@@ -3,9 +3,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package llrp
+package routes
 
 import (
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"time"
 )
 
@@ -22,8 +23,8 @@ const (
 // and specifically within that, the Inventory Command parameters,
 // and specifically within *that*, you're really interested in the RFControl,
 // which lets you pick an RFModeID from a Reader's UHFBandCapabilities.
-func newReaderConfig() *SetReaderConfig {
-	conf := &SetReaderConfig{
+func newReaderConfig() *llrp.SetReaderConfig {
+	conf := &llrp.SetReaderConfig{
 		ResetToFactoryDefaults: true, // Factory defaults depend on the Reader.
 
 		GPOWriteData:         nil, // limited by GeneralDeviceCapabilities.GPIOCapabilities.NumGPOs
@@ -38,10 +39,10 @@ func newReaderConfig() *SetReaderConfig {
 		// ReaderEventNotificationSpec which ReaderEventNotifications we get.
 		// BufferOverflows and ConnectionEvents cannot be disabled.
 		// Some events require specific capabilities.
-		ReaderEventNotificationSpec: &ReaderEventNotificationSpec{
-			EventNotificationStates: []EventNotificationState{
-				{ReaderEventType: NotifyReaderException, NotificationEnabled: true}, // notifies of unexpected Reader events
-				{ReaderEventType: NotifyAntenna, NotificationEnabled: true},         // (dis)connect may require the Reader tries to use antenna
+		ReaderEventNotificationSpec: &llrp.ReaderEventNotificationSpec{
+			EventNotificationStates: []llrp.EventNotificationState{
+				{ReaderEventType: llrp.NotifyReaderException, NotificationEnabled: true}, // notifies of unexpected Reader events
+				{ReaderEventType: llrp.NotifyAntenna, NotificationEnabled: true},         // (dis)connect may require the Reader tries to use antenna
 				// {ReaderEventType: llrp.NotifyROSpec, NotificationEnabled: false},                // ROSpec start/end/preempt
 				// {ReaderEventType: llrp.NotifyAISpec, NotificationEnabled: false},                // AISpec end
 				// {ReaderEventType: llrp.NotifyAISpecWithSingulation, NotificationEnabled: false}, // AISpec end & has singulation details
@@ -134,8 +135,8 @@ func newReaderConfig() *SetReaderConfig {
 		// If an ROSpec has a non-nil ReportSpec, none of these apply.
 		// The report settings (here or in the ROSpec if it overrides it)
 		// must be known to in order to disambiguate nil data in a TagDataReport.
-		ROReportSpec: &ROReportSpec{
-			Trigger: NSecondsOrAIEnd,
+		ROReportSpec: &llrp.ROReportSpec{
+			Trigger: llrp.NSecondsOrAIEnd,
 			N:       reportInterval,
 
 			// The ContentSelector controls what's eligible to come in a TagDataReport.
@@ -147,7 +148,7 @@ func newReaderConfig() *SetReaderConfig {
 			// Which values to enable in the report depends on the Trigger type,
 			// since that determines whether it's even possible
 			// that a single tag is seen multiple times.
-			TagReportContentSelector: TagReportContentSelector{
+			TagReportContentSelector: llrp.TagReportContentSelector{
 				EnableROSpecID:             false, // should set true if have >1 ROSpec
 				EnableSpecIndex:            false, // should set true if >1 Spec in ROSpec
 				EnableInventoryParamSpecID: false, // should set true if have >1 within any AISpec
@@ -158,7 +159,7 @@ func newReaderConfig() *SetReaderConfig {
 				EnableChannelIndex:         true, // channel index depends on the frequency table in use
 				EnableAntennaID:            true,
 				EnablePeakRSSI:             true,
-				C1G2EPCMemorySelector: &C1G2EPCMemorySelector{
+				C1G2EPCMemorySelector: &llrp.C1G2EPCMemorySelector{
 					CRCEnabled:     false,
 					PCBitsEnabled:  false, // PCBits can help distinguish actual EPCs from custom tags
 					XPCBitsEnabled: false, // requires C1G2LLRPCapabilities.SupportsXPC
@@ -194,11 +195,11 @@ func newReaderConfig() *SetReaderConfig {
 // Impinj Speedways allows only a single ROSpec,
 // but in general LLRP devices may support more than one,
 // which could be useful for interesting behaviors.
-func newROSpec() *ROSpec {
-	return &ROSpec{
-		ROSpecID:           1,                   // This must be >=1; used to enable/disable/start/stop/delete.
-		Priority:           0,                   // 0==highest; Impinj requires 0. The limit is LLRPCapabilities.MaxPriorityLevelSupported or 7.
-		ROSpecCurrentState: ROSpecStateDisabled, // ROSpecs must be Disabled upon creation.
+func newROSpec() *llrp.ROSpec {
+	return &llrp.ROSpec{
+		ROSpecID:           1,                        // This must be >=1; used to enable/disable/start/stop/delete.
+		Priority:           0,                        // 0==highest; Impinj requires 0. The limit is LLRPCapabilities.MaxPriorityLevelSupported or 7.
+		ROSpecCurrentState: llrp.ROSpecStateDisabled, // ROSpecs must be Disabled upon creation.
 
 		// Using a single ROSpec with StartTrigger=Immediate and StopTrigger=None,
 		// we can use the Enable and Disable ROSpec messages as start/stop
@@ -206,14 +207,14 @@ func newROSpec() *ROSpec {
 		//
 		// If a Reader supports multiple ROSpecs, we could set StartTrigger to None.
 		// Then it'd only start via StartROSpec for "one-off" behaviors.
-		ROBoundarySpec: ROBoundarySpec{
-			StartTrigger: ROSpecStartTrigger{Trigger: ROStartTriggerImmediate},
-			StopTrigger:  ROSpecStopTrigger{Trigger: ROStopTriggerNone},
+		ROBoundarySpec: llrp.ROBoundarySpec{
+			StartTrigger: llrp.ROSpecStartTrigger{Trigger: llrp.ROStartTriggerImmediate},
+			StopTrigger:  llrp.ROSpecStopTrigger{Trigger: llrp.ROStopTriggerNone},
 		},
 
 		// We must have at least one Spec. The max number is limited by capabilities.
-		AISpecs: []AISpec{{
-			StopTrigger: AISpecStopTrigger{Trigger: AIStopTriggerNone},
+		AISpecs: []llrp.AISpec{{
+			StopTrigger: llrp.AISpecStopTrigger{Trigger: llrp.AIStopTriggerNone},
 
 			// LLRP says given M AntennaIDs in this list
 			// and N InventoryParameterSpecs in the following list,
@@ -230,11 +231,11 @@ func newROSpec() *ROSpec {
 			//
 			// If we want a behavior that sequences antennas in a particular order,
 			// then we need to generate separate AISpecs for each antenna.
-			AntennaIDs: []AntennaID{0},
-			InventoryParameterSpecs: []InventoryParameterSpec{{
+			AntennaIDs: []llrp.AntennaID{0},
+			InventoryParameterSpecs: []llrp.InventoryParameterSpec{{
 				InventoryParameterSpecID: 1,   // must be >= 1
 				AntennaConfigurations:    nil, // see notes in newReaderConfig
-				AirProtocolID:            AirProtoEPCGlobalClass1Gen2,
+				AirProtocolID:            llrp.AirProtoEPCGlobalClass1Gen2,
 			}},
 		}},
 		RFSurveySpecs: nil, // requires CanDoRFSurvey (not supported by Impinj Speedway)
@@ -279,14 +280,14 @@ func newROSpec() *ROSpec {
 // Their docs are good reference, since they helped write the LLRP standard.
 // The point is, to make proper use of these things for general LLRP devices,
 // we must know the relevant limits for the specific manufacturer.
-func newReadTIDAccessSpec(wordCount uint16) *AccessSpec {
+func newReadTIDAccessSpec(wordCount uint16) *llrp.AccessSpec {
 	const TIDMemoryBank = 2
 
-	return &AccessSpec{
+	return &llrp.AccessSpec{
 		AccessSpecID:  1, // must be >= 1
-		AirProtocolID: AirProtoEPCGlobalClass1Gen2,
-		AccessCommand: AccessCommand{
-			C1G2Read: &C1G2Read{
+		AirProtocolID: llrp.AirProtoEPCGlobalClass1Gen2,
+		AccessCommand: llrp.AccessCommand{
+			C1G2Read: &llrp.C1G2Read{
 				OpSpecID:       1,
 				C1G2MemoryBank: TIDMemoryBank,
 				WordCount:      wordCount,

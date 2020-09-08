@@ -13,7 +13,6 @@ import (
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/helper"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -28,42 +27,6 @@ type TagProcessor struct {
 	cacheMu sync.Mutex
 
 	mobilityProfile *MobilityProfile
-
-	aliases map[string]string
-	aliasMu sync.RWMutex
-}
-
-func makeDefaultAlias(deviceID string, antID uint16) string {
-	return deviceID + "_" + strconv.FormatUint(uint64(antID), 10)
-}
-
-// getAlias gets the string alias of a reader based on the antenna port
-// Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
-// If there is an alias defined for that antenna port, use that instead
-func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
-	defaultAlias := makeDefaultAlias(deviceID, antennaID)
-
-	tp.aliasMu.Lock()
-	defer tp.aliasMu.Unlock()
-
-	if alias, exists := tp.aliases[defaultAlias]; exists {
-		if alias != "" {
-			return alias
-		}
-	}
-
-	tp.lc.Warn(fmt.Sprintf("Alias not set for %s.", defaultAlias))
-	return defaultAlias
-}
-
-func (tp *TagProcessor) SetAliases(aliases map[string]string) {
-	tp.aliasMu.Lock()
-	defer tp.aliasMu.Unlock()
-
-	// aliases configuration map from Consul includes an empty key too for some reason, so is deleted if it exists
-	delete(aliases, "")
-
-	tp.aliases = aliases
 }
 
 // NewTagProcessor creates a tag processor and pre-loads its mobility profile
@@ -74,7 +37,6 @@ func NewTagProcessor(lc logger.LoggingClient, eventCh chan<- Event) *TagProcesso
 		eventCh:         eventCh,
 		inventory:       make(map[string]*Tag),
 		mobilityProfile: &profile,
-		aliases:         make(map[string]string),
 	}
 }
 
@@ -202,7 +164,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 		// if we do not know the antenna id, we cannot compute the location
 		return
 	}
-	srcAlias := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
+	srcAlias := GetAntennaAlias(info.DeviceName, int(*rt.AntennaID))
 
 	incomingStats := tag.getStats(srcAlias)
 	incomingStats.update(rssi, lastReadPtr)
