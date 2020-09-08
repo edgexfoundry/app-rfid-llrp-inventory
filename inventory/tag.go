@@ -6,7 +6,9 @@
 
 package inventory
 
-import "sync"
+import (
+	"sync"
+)
 
 type TagState string
 

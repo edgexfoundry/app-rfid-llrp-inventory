@@ -42,6 +42,8 @@ func (buff *CircularBuffer) Len() int {
 
 // GetMean returns the average value of all data points in the backing slice.
 // Because this is a circular buffer, this value can be considered as a moving average
+//
+// NOTE: If there is no data in the buffer, this function will return: Nan
 func (buff *CircularBuffer) GetMean() float64 {
 	buff.mutex.RLock()
 	defer buff.mutex.RUnlock()

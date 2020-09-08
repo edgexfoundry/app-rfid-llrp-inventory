@@ -201,11 +201,16 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 	}
 	srcAlias := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
 
+	// incomingStats represents the tag statistics for the location this tag read originated
 	incomingStats := tag.getStats(srcAlias)
 	incomingStats.update(rssi, lastReadPtr)
 
-	if tag.Location == "" {
-		// we have not read this tag before, so lets set the initial location; nothing else to do
+	// locationStats represents the statistics for the tag's current/existing location
+	locationStats := tag.getStats(tag.Location)
+
+	if tag.Location == "" || locationStats.rssiCount() == 0 {
+		// we have not read this tag before, or its stats have been cleared
+		// so lets set the initial location; nothing else to do
 		tag.Location = srcAlias
 		return
 	}
@@ -217,9 +222,6 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (pr
 
 	// if the incoming read's location has at least 2 data points, lets see if the tag should move
 	if incomingStats.rssiCount() >= 2 {
-		// locationStats represents the statistics for the tag's current/existing location
-		locationStats := tag.getStats(tag.Location)
-
 		now := helper.UnixMilliNow()
 		// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
 		tp.lc.Debug("read timing",
