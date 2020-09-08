@@ -32,6 +32,10 @@ func newStaticTag(tag *Tag) StaticTag {
 	}
 
 	for k, v := range tag.locationStatsMap {
+		if v.rssiCount() == 0 {
+			// skip empty
+			continue
+		}
 		s.LocationStatsMap[k] = newStaticTagStats(v)
 	}
 
