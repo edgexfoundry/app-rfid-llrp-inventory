@@ -70,7 +70,7 @@ func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
 
 type readParams struct {
 	deviceName string
-	antenna    int
+	antenna    uint16
 	rssi       float64
 	lastSeen   time.Time
 	count      int
