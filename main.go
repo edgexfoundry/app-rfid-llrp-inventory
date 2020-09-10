@@ -249,6 +249,9 @@ func (app *inventoryApp) processScheduledTasks() {
 			if !ok {
 				return
 			}
+			if app.edgexSdkContext == nil {
+				app.edgexSdk.LoggingClient.Warn("Skipping Departed check because app-functions-sdk context has not been grabbed yet.")
+			}
 			app.edgexSdk.LoggingClient.Debug(fmt.Sprintf("RunAggregateDepartedTask: %v", t))
 			app.processor.RunAggregateDepartedTask()
 
