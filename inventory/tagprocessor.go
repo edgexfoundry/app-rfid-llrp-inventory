@@ -46,13 +46,9 @@ func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
 	tp.aliasMu.Lock()
 	defer tp.aliasMu.Unlock()
 
-	if alias, exists := tp.aliases[defaultAlias]; exists {
-		if alias != "" {
-			return alias
-		}
+	if alias, exists := tp.aliases[defaultAlias]; exists && alias != "" {
+		return alias
 	}
-
-	tp.lc.Warn(fmt.Sprintf("Alias not set for %s.", defaultAlias))
 	return defaultAlias
 }
 
@@ -323,7 +319,11 @@ func (tp *TagProcessor) RunAgeOutTask() int {
 		}
 	}
 
-	tp.lc.Info(fmt.Sprintf("Inventory ageout removed %d tag(s).", numRemoved))
+	if numRemoved > 0 {
+		tp.lc.Info(fmt.Sprintf("Inventory ageout removed %d tag(s).", numRemoved))
+	} else {
+		tp.lc.Debug("No tags were aged-out.")
+	}
 	return numRemoved
 }
 
