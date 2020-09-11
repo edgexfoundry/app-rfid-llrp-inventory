@@ -7,23 +7,25 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
+	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/commands/routes"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/behavior"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -33,12 +35,10 @@ const (
 	ResourceROAccessReport     = "ROAccessReport"
 	ResourceReaderNotification = "ReaderEventNotification"
 
-	// CoreCommandPUTDevice app settings
-	CoreCommandPUTDevice = "CoreCommandPUTDevice"
-	// CoreCommandGETDevices app settings
-	CoreCommandGETDevices = "CoreCommandGETDevices"
-
-	deviceServiceURL = "DeviceService"
+	// keys into the application settings map
+	sKeyDevServiceName   = "DeviceServiceName"
+	sKeyDeviceServiceURL = "DeviceServiceURL"
+	sKeyMetaServiceURL   = "MetadataServiceURL"
 )
 
 type logWrap struct {
@@ -79,7 +79,7 @@ func (lgr logWrap) exitIfErr(err error, msg string, params ...lg) {
 	lgr.exitIf(err != nil, msg, append(params, lg{"error", err})...)
 }
 
-var roSpecID0 = []byte(`{"ROSpecID":0}`)
+var roSpecID0 = []byte(`{"ROSpecID":"0"}`)
 
 func main() {
 	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
@@ -89,24 +89,37 @@ func main() {
 
 	lgr := logWrap{edgexSdk.LoggingClient}
 	lgr.Info("Starting.")
-	tagProc := inventory.NewTagProcessor(lgr)
-	ep := &eventProc{
-		lgr:     lgr,
-		tagProc: tagProc,
-	}
 
 	appSettings := edgexSdk.ApplicationSettings()
 	lgr.exitIf(appSettings == nil, "Missing application settings.")
 
-	devServURI, err := url.Parse(strings.TrimSpace(appSettings[deviceServiceURL]))
+	metadataURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyMetaServiceURL]))
+	lgr.exitIfErr(err, "Invalid device service URL.")
+	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
+		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
+
+	devServURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyDeviceServiceURL]))
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(devServURI.Scheme == "" || devServURI.Host == "",
 		"Invalid device service URL.", lg{"endpoint", devServURI.String()})
+	tagProc := inventory.NewTagProcessor(lgr)
 
-	devServURI.Path = "/api/v1/device/all/enableROSpec"
-	startAllProxy := routes.NewPutProxy(lgr, devServURI.String(), roSpecID0)
-	devServURI.Path = "/api/v1/device/all/disableROSpec"
-	stopAllProxy := routes.NewPutProxy(lgr, devServURI.String(), roSpecID0)
+	devService := llrp.NewDSClient(&url.URL{
+		Scheme: devServURI.Scheme,
+		Host:   devServURI.Host,
+	}, http.DefaultClient)
+
+	ep := newEventProc(lgr, tagProc, devService)
+
+	dsName := strings.TrimSpace(appSettings[sKeyDevServiceName])
+	lgr.exitIf(dsName == "", "Missing device service name.", lg{"key", sKeyDevServiceName})
+	metadataURI.Path = "/api/v1/device/servicename/" + dsName
+	deviceNames, err := internal.GetDevices(metadataURI.String(), http.DefaultClient)
+	lgr.exitIfErr(err, "Failed to get existing device names.", lg{"path", metadataURI.String()})
+	for _, name := range deviceNames {
+		lgr.exitIfErr(ep.defaultGrp.AddReader(ep.devService, name),
+			"Failed to setup device.", lg{"device", name})
+	}
 
 	// init routes
 	for _, rte := range []struct {
@@ -116,11 +129,88 @@ func main() {
 		{"/", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, "res/html/index.html")
 		}},
-		{"/api/v1/inventory/raw", http.MethodGet, routes.RawInventory(lgr, tagProc)},
-		{"/api/v1/command/reading/start", http.MethodPut, startAllProxy.HandleRequest},
-		{"/api/v1/command/reading/stop", http.MethodPut, stopAllProxy.HandleRequest},
-		{"/api/v1/command/behaviors/{behavior}", http.MethodPut,
-			routes.SetBehaviors()},
+		{"/api/v1/inventory/raw", http.MethodGet, internal.RawInventory(lgr, tagProc)},
+		{"/api/v1/command/reading/start", http.MethodPut,
+			func(w http.ResponseWriter, req *http.Request) {
+				if err := ep.defaultGrp.StartAll(devService); err != nil {
+					lgr.Error("Failed to StartAll.", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			},
+		},
+		{"/api/v1/command/reading/stop", http.MethodPut,
+			func(w http.ResponseWriter, req *http.Request) {
+				if err := ep.defaultGrp.StopAll(devService); err != nil {
+					lgr.Error("Failed to StopAll.", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			},
+		},
+		{"/api/v1/behaviors/{name}", http.MethodGet,
+			func(w http.ResponseWriter, req *http.Request) {
+				rv := mux.Vars(req)
+				bName := rv["name"]
+				if bName != "default" {
+					lgr.Error("Request to GET unknown behavior.", "name", bName)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				data, err := json.Marshal(ep.defaultGrp.Behavior())
+				if err != nil {
+					lgr.Error("Failed to marshal behavior.", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				if _, err := w.Write(data); err != nil {
+					lgr.Error("Failed to write behavior data.", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			},
+		},
+		{"/api/v1/behaviors/{name}", http.MethodPut,
+			func(w http.ResponseWriter, req *http.Request) {
+				rv := mux.Vars(req)
+				bName := rv["name"]
+				if bName != "default" {
+					lgr.Error("Attempt to PUT unknown behavior.", "name", bName)
+					if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
+						lgr.Error("Error writing failure response.", "error", err)
+					}
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
+				data, err := ioutil.ReadAll(io.LimitReader(req.Body, 100*1024))
+				if err != nil {
+					lgr.Error("Failed to read behavior body.", "error", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				var b llrp.Behavior
+				if err := json.Unmarshal(data, &b); err != nil {
+					lgr.Error("Failed to unmarshal behavior body.", "error", err,
+						"body", string(data))
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				if err := ep.defaultGrp.SetBehavior(devService, b); err != nil {
+					lgr.Error("Failed to set new behavior.", "error", err)
+					if _, err := w.Write([]byte(err.Error())); err != nil {
+						lgr.Error("Error writing failure response.", "error", err)
+					}
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				lgr.Info("Updated behavior.", "name", bName)
+			},
+		},
 	} {
 		lgr.exitIfErr(edgexSdk.AddRoute(rte.path, rte.f, rte.method),
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
@@ -133,7 +223,17 @@ func main() {
 
 func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	if len(params) != 1 {
-		return false, errors.Errorf("expected a single parameter, but got %d", len(params))
+		if len(params) == 2 {
+			if s, ok := params[1].(string); ok && s == "" {
+				// Turns out, sometimes the "pipeline" gives a second parameter:
+				// an empty string which sometimes has type info about the first param.
+				// Too bad we aren't using a compiled language with static typing.
+			} else {
+				return false, errors.Errorf("expected a single parameter, but got a second: %T %[1]+v", params[1])
+			}
+		} else {
+			return false, errors.Errorf("expected a single parameter, but got %d", len(params))
+		}
 	}
 
 	event, ok := params[0].(models.Event)
@@ -156,6 +256,7 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 		reading := &event.Readings[i] // Readings is 169 bytes. Let's avoid the copy.
 		switch reading.Name {
 		default:
+			ep.lgr.Debug("Unknown reading.", "reading", reading.Name)
 			continue
 
 		case ResourceReaderNotification:
@@ -167,9 +268,13 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 				continue
 			}
 
-			ep.handleReaderEvent(event.Device, notification)
+			if err := ep.handleReaderEvent(event.Device, notification); err != nil {
+				ep.lgr.Error("Failed to handle ReaderEventNotification.",
+					"error", err.Error(), "device", event.Device)
+			}
 
 		case ResourceROAccessReport:
+			ep.lgr.Info("Processing RO.")
 			r.Reset()
 			r.WriteString(reading.Value)
 
@@ -191,109 +296,112 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 }
 
 type eventProc struct {
-	lgr      logWrap
-	tagProc  *inventory.TagProcessor
-	deviceMu sync.RWMutex
-	readers  map[string]*behavior.BasicDevice
+	lgr     logWrap
+	tagProc *inventory.TagProcessor
+
+	devMu      sync.RWMutex
+	devService llrp.DSClient
+	defaultGrp *llrp.ReaderGroup
 }
 
-func (ep *eventProc) getReportSpec(deviceName string) (d *behavior.BasicDevice) {
-	ep.deviceMu.RLock()
-	d = ep.readers[deviceName]
-	ep.deviceMu.RUnlock()
-	return
+func newEventProc(lgr logWrap, tagProc *inventory.TagProcessor, devService llrp.DSClient) *eventProc {
+	return &eventProc{
+		lgr:        lgr,
+		tagProc:    tagProc,
+		devService: devService,
+		defaultGrp: llrp.NewReaderGroup(),
+	}
 }
 
-func (ep *eventProc) setReportSpec(deviceName string, d *behavior.BasicDevice) {
-	ep.deviceMu.Lock()
-	ep.readers[deviceName] = d
-	ep.deviceMu.Unlock()
-	return
+func (ep *eventProc) setDefaultBehavior(b llrp.Behavior) error {
+	ep.devMu.Lock()
+	err := ep.defaultGrp.SetBehavior(ep.devService, b)
+	ep.devMu.Unlock()
+	return err
 }
-
-var (
-	ErrUnknownReportSpec = fmt.Errorf("unknown report spec")
-)
 
 func (ep *eventProc) handleROAccessReport(edgeXCtx *appcontext.Context, device string, report *llrp.ROAccessReport) error {
 	if report.TagReportData == nil {
+		ep.lgr.Warn("No tag report data in report.")
 		return nil
 	}
 
-	s := ep.getReportSpec(device)
-	if s == nil {
-		return ErrUnknownReportSpec
+	// This fills in ambiguous nil values.
+	if !ep.defaultGrp.ProcessTagReport(device, report.TagReportData) {
+		// This can only happen if the device didn't exist when we started,
+		// and we never got a Connection message for it.
+		return errors.Errorf("unknown device: %q", device)
 	}
 
-	for i := range report.TagReportData {
-		tagData := &report.TagReportData[i]
-	}
-
-	gen2Read := inventory.Gen2Read{
-		EPC:       "",
-		TID:       "",
-		User:      "",
-		Reserved:  "",
-		DeviceID:  "",
-		AntennaID: 0,
-		Timestamp: 0,
-		RSSI:      0,
-	}
-
-	e := ep.tagProc.ProcessReadData(&gen2Read)
-	if e == nil {
-		return
-	}
-
-	ep.lgr.Debug("Processing event.", "eventType", e.OfType(), "event", fmt.Sprintf("%+v", e))
-
-	payload, err := json.Marshal(e)
-	if err != nil {
-		ep.lgr.Error("Failed to marshal output event.",
-			"eventType", e.OfType(), "error", err.Error())
-		return
-	}
-
-	eventName := ResourceInventoryEvent + e.OfType()
-	if _, err := edgeXCtx.PushToCoreData(device, eventName, string(payload)); err != nil {
-		ep.lgr.Error("Failed to push inventory event to core-data.", "error", err.Error())
-	}
-}
-
-func (ep *eventProc) handleReaderEvent(device string, notification *llrp.ReaderEventNotification) {
-	const connSuccess = llrp.ConnectionAttemptEvent(llrp.ConnSuccess)
-	if notification.ReaderEventNotificationData.ConnectionAttemptEvent == nil ||
-		*notification.ReaderEventNotificationData.ConnectionAttemptEvent != connSuccess {
-		return
-	}
-
-	ep.deviceMu.RLock()
-	r, ok := ep.readers[device]
-	ep.deviceMu.RUnlock()
-	if !ok {
-		devCap, err := ep.getDeviceCap(device)
-		if err != nil {
-			ep.lgr.Error("unable to get device capabilities for %q", device, "error", err.Error())
-			return
+	for _, td := range report.TagReportData {
+		if len(td.EPC96.EPC) != (96 / 8) {
+			ep.lgr.Debug("Skipping non-EPC96.")
+			continue
 		}
 
-		r, err = behavior.NewBasicDevice(devCap)
-		if err != nil {
-			ep.lgr.Error("bad capabilities for %q", device, "error", err.Error())
-			return
-		}
+		epc := hex.EncodeToString(td.EPC96.EPC)
 
-		ep.deviceMu.Lock()
-		if updated, ok := ep.readers[device]; ok {
-			r = updated
+		var antID, rssi int
+		if td.AntennaID != nil {
+			antID = int(*td.AntennaID)
 		} else {
-			ep.readers[device] = r
+			ep.lgr.Warn("Missing AntennaID.", "EPC96", epc)
 		}
-		ep.deviceMu.Unlock()
+
+		if td.PeakRSSI != nil {
+			rssi = int(*td.PeakRSSI)
+		} else {
+			ep.lgr.Warn("Missing PeakRSSI.", "EPC96", epc)
+		}
+
+		var timestamp int64
+		if td.LastSeenUTC != nil {
+			timestamp = int64(*td.LastSeenUTC)
+		} else {
+			ep.lgr.Warn("Missing Timestamp.", "EPC96", epc)
+		}
+
+		gen2Read := inventory.Gen2Read{
+			EPC:       epc,
+			DeviceID:  device,
+			AntennaID: antID,
+			RSSI:      rssi,
+			Timestamp: timestamp,
+		}
+
+		e := ep.tagProc.ProcessReadData(&gen2Read)
+		if e == nil {
+			continue
+		}
+
+		ep.lgr.Debug("Processing event.", "eventType", e.OfType(), "event", fmt.Sprintf("%+v", e))
+
+		payload, err := json.Marshal(e)
+		if err != nil {
+			ep.lgr.Error("Failed to marshal output", "EPC96", epc, "error", err.Error())
+			continue
+		}
+
+		eventName := ResourceInventoryEvent + e.OfType()
+		if _, err := edgeXCtx.PushToCoreData(device, eventName, string(payload)); err != nil {
+			ep.lgr.Error("Failed to push to Core Data", "EPC96", epc, "error", err.Error())
+		}
 	}
 
+	return nil
 }
 
-func (ep *eventProc) getDeviceCap(device string) (*llrp.GetReaderCapabilitiesResponse, error) {
+func (ep *eventProc) handleReaderEvent(device string, notification *llrp.ReaderEventNotification) error {
+	const connSuccess = llrp.ConnectionAttemptEvent(llrp.ConnSuccess)
 
+	data := notification.ReaderEventNotificationData
+	switch {
+	case data.ConnectionAttemptEvent != nil && *data.ConnectionAttemptEvent == connSuccess:
+		return ep.defaultGrp.AddReader(ep.devService, device)
+
+	case data.ConnectionCloseEvent != nil:
+		ep.defaultGrp.RemoveReader(device)
+	}
+
+	return nil
 }
