@@ -797,17 +797,16 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 			TagPopulation:  1000,
 			TagTransitTime: 5000,
 		}
+
+		if b.ImpinjOptions != nil && b.ImpinjOptions.SuppressMonza {
+			searchMode = impSearchQueryAtoBSupMonzaS1
+		}
 	case ScanDeep:
 		searchMode = impSearchSelToAQueryAtoB
 		queryAction = &C1G2SingulationControl{
 			Session:        2,
 			TagPopulation:  3000,
 			TagTransitTime: 10000,
-		}
-
-		if b.ImpinjOptions != nil && b.ImpinjOptions.SuppressMonza {
-			queryAction.Session = 1 // TagFocus only makes sense with S1
-			searchMode = impSearchQueryAtoBSupMonzaS1
 		}
 	}
 
