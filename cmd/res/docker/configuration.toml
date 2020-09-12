@@ -43,5 +43,5 @@ SubscribeTopic="events"
 PublishTopic=""
 
 [ApplicationSettings]
-CoreCommandGETDevices = "http://edgex-core-metadata:48081/api/v1/device"
-CoreCommandPUTDevice = "http://edgex-core-command:48082/api/v1/device/name"
+GetDevicesApi = "http://edgex-core-metadata:48081/api/v1/device"
+IssueCommandApi = "http://edgex-core-command:48082/api/v1/device/name"

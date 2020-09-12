@@ -67,11 +67,12 @@
 </nav>
 
 <div id="content" style="height: 100%">
-  <div class="b"><button type="button" class="btn btn-success" onclick="call('PUT', '/command/readings/StartReading')">Start Reading</button></div>
-  <div class="b"><button type="button" class="btn btn-danger" onclick="call('PUT', '/command/readings/StopReading')">Stop Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="call('POST', 'http://localhost:51992/api/v1/discovery')">Discover Readers</button></div>
   <div class="b"><button type="button" class="btn btn-primary" onclick="call('GET', '/command/readers')">List Readers</button></div>
-  <div class="b"><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/raw')">Raw Inventory</button></div>
-  <div class="b"><a href="http://localhost:48080/api/v1/event/device/LLRPDeviceService/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
+  <div class="b"><button type="button" class="btn btn-success" onclick="call('POST', '/command/readings/StartReading')">Start Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-danger" onclick="call('POST', '/command/readings/StopReading')">Stop Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-light" onclick="call('GET', '/inventory/snapshot')">Inventory Snapshot</button></div>
+  <div class="b"><a href="http://localhost:48080/api/v1/event/device/rfid-inventory/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
 
   <div id="output_log">
   </div>

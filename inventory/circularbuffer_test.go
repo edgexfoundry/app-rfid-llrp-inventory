@@ -17,12 +17,12 @@ var (
 )
 
 func assertBufferSize(t *testing.T, buff *CircularBuffer, expectedSize int) {
-	if buff.GetCount() != expectedSize {
-		t.Errorf("expected buffer size of %d, but was %d", buff.GetCount(), expectedSize)
+	if buff.Len() != expectedSize {
+		t.Errorf("expected buffer size of %d, but was %d", buff.Len(), expectedSize)
 	}
 }
 
-func TestCircularBufferAddValue(t *testing.T) {
+func TestCircularBuffer_AddValue(t *testing.T) {
 	windowSizes := []int{1, 5, 10, 20, 100, 999}
 
 	for _, window := range windowSizes {
@@ -47,7 +47,7 @@ func TestCircularBufferAddValue(t *testing.T) {
 	}
 }
 
-func TestCircularBufferGetMean(t *testing.T) {
+func TestCircularBuffer_GetMean(t *testing.T) {
 	tests := []struct {
 		name     string
 		window   int
@@ -94,4 +94,66 @@ func TestCircularBufferGetMean(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCircularBuffer_GetCount(t *testing.T) {
+	tests := []struct {
+		name          string
+		windowSize    int
+		numberToAdd   uint64
+		expectedCount int
+	}{
+		{
+			name:          "Below Window Size",
+			windowSize:    20,
+			numberToAdd:   1,
+			expectedCount: 1,
+		},
+		{
+			name:          "Above Window Size",
+			windowSize:    20,
+			numberToAdd:   100,
+			expectedCount: 20,
+		},
+		{
+			name:          "Exactly Window Size",
+			windowSize:    20,
+			numberToAdd:   20,
+			expectedCount: 20,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			buff := NewCircularBuffer(test.windowSize)
+			var i uint64
+			for i = 0; i < test.numberToAdd; i++ {
+				buff.AddValue(1.0)
+			}
+
+			count := buff.Len()
+			if count != test.expectedCount {
+				t.Errorf("buff.Len() returned %d, but we expected %d", count, test.expectedCount)
+			}
+		})
+	}
+}
+
+func TestCircularBuffer_Wrap(t *testing.T) {
+	windowSize := 10
+	buff := NewCircularBuffer(windowSize)
+
+	assertBufferSize(t, buff, 0)
+	// fill up the buffer
+	for i := 0; i < 10*windowSize; i++ {
+		val := float64(i * 2)
+		buff.AddValue(val)
+		assertBufferSize(t, buff, int(math.Min(float64(i+1), float64(windowSize))))
+		if buff.values[i%windowSize] != val {
+			t.Errorf("A value was added in the wrong location!")
+		}
+	}
+	assertBufferSize(t, buff, windowSize)
 }

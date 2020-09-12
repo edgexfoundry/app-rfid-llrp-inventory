@@ -19,6 +19,7 @@ Type = 'consul'
 
 [Logging]
 EnableRemote = false
+File = ''
 
 # Database is require when Store and Forward is enabled
 # SecretStore is required when Store and Forward is enabled and running with security
@@ -57,8 +58,8 @@ SubscribeTopic="events"
 PublishTopic="somewhere"
 
 [ApplicationSettings]
-CoreCommandGETDevices = "http://localhost:48081/api/v1/device"
-CoreCommandPUTDevice = "http://localhost:48082/api/v1/device/name"
+GetDevicesApi = "http://localhost:48081/api/v1/device"
+IssueCommandApi = "http://localhost:48082/api/v1/device/name"
 
 DeviceServiceName = "edgex-device-llrp"
 DeviceServiceURL = "http://localhost:51992/"

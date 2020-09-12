@@ -1,7 +1,8 @@
-//
-// Copyright (C) 2020 Intel Corporation
-//
-// SPDX-License-Identifier: Apache-2.0
+/* Apache v2 license
+*  Copyright (C) <2020> Intel Corporation
+*
+*  SPDX-License-Identifier: Apache-2.0
+ */
 
 package inventory
 
@@ -9,34 +10,32 @@ package inventory
 type TagStats struct {
 	LastRead     int64
 	readInterval *CircularBuffer
-	rssiMw       *CircularBuffer
+	rssiDbm      *CircularBuffer
 }
 
-const (
-	defaultWindowSize = 20
-)
-
+// NewTagStats returns a new TagStats pointer with circular buffers initialized to the configured default window size
 func NewTagStats() *TagStats {
 	return &TagStats{
-		readInterval: NewCircularBuffer(defaultWindowSize),
-		rssiMw:       NewCircularBuffer(defaultWindowSize),
+		readInterval: NewCircularBuffer(TagStatsWindowSize),
+		rssiDbm:      NewCircularBuffer(TagStatsWindowSize),
 	}
 }
 
-func (stats *TagStats) update(read *Gen2Read) {
+func (stats *TagStats) update(rssi *float64, lastRead *int64) {
+	if rssi != nil {
+		stats.rssiDbm.AddValue(*rssi)
+	}
+
+	// skip times that are either unknown or at or before the current last read timestamp
+	if lastRead == nil || *lastRead <= stats.LastRead {
+		return
+	}
 	if stats.LastRead != 0 {
-		stats.readInterval.AddValue(float64(read.Timestamp - stats.LastRead))
+		stats.readInterval.AddValue(float64(*lastRead - stats.LastRead))
 	}
-	stats.LastRead = read.Timestamp
-
-	mw := rssiToMilliwatts(float64(read.RSSI))
-	stats.rssiMw.AddValue(mw)
+	stats.LastRead = *lastRead
 }
 
-func (stats *TagStats) getMeanRSSI() float64 {
-	return milliwattsToRssi(stats.rssiMw.GetMean())
-}
-
-func (stats *TagStats) getCount() int {
-	return stats.rssiMw.GetCount()
+func (stats *TagStats) rssiCount() int {
+	return stats.rssiDbm.Len()
 }
