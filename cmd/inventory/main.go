@@ -7,39 +7,77 @@ package main
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
+	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
+	"github.com/edgexfoundry/go-mod-configuration/configuration"
+	"github.com/edgexfoundry/go-mod-configuration/pkg/types"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/inventory"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/inventory"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
-	serviceKey = "rfid-inventory"
+	serviceKey      = "rfid-inventory"
+	eventChBuffSz   = 10
+	eventDeviceName = "rfid-inventory"
 
-	ResourceInventoryEvent     = "InventoryEvent"
-	ResourceROAccessReport     = "ROAccessReport"
-	ResourceReaderNotification = "ReaderEventNotification"
+	BaseConsulPath = "edgex/appservices/1.0/"
+
+	ResourceROAccessReport         = "ROAccessReport"
+	ResourceReaderNotification     = "ReaderEventNotification"
+	ResourceInventoryEvent         = "InventoryEvent"
+	ResourceInventoryEventArrived  = "InventoryEventArrived"
+	ResourceInventoryEventMoved    = "InventoryEventMoved"
+	ResourceInventoryEventDeparted = "InventoryEventDeparted"
 
 	// keys into the application settings map
 	sKeyDevServiceName   = "DeviceServiceName"
 	sKeyDeviceServiceURL = "DeviceServiceURL"
 	sKeyMetaServiceURL   = "MetadataServiceURL"
 )
+
+type inventoryApp struct {
+	edgexSdk   *appsdk.AppFunctionsSDK
+	sdkCtx     atomic.Value
+	lgr        logWrap
+	eventCh    chan inventory.Event
+	devMu      sync.RWMutex
+	devService llrp.DSClient
+	defaultGrp *llrp.ReaderGroup
+
+	snapshotReqs chan snapshotDest
+	reports      chan reportData
+}
+
+type reportData struct {
+	report *llrp.ROAccessReport
+	info   inventory.ReportInfo
+}
+
+type snapshotDest struct {
+	w      io.Writer
+	result chan error
+}
+
+type consulConfig struct {
+	Aliases map[string]string
+}
 
 type logWrap struct {
 	logger.LoggingClient
@@ -92,6 +130,8 @@ func main() {
 
 	appSettings := edgexSdk.ApplicationSettings()
 	lgr.exitIf(appSettings == nil, "Missing application settings.")
+	cc, err := getConfigClient()
+	lgr.exitIfErr(err, "Failed to create config client.")
 
 	metadataURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyMetaServiceURL]))
 	lgr.exitIfErr(err, "Invalid device service URL.")
@@ -102,26 +142,34 @@ func main() {
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(devServURI.Scheme == "" || devServURI.Host == "",
 		"Invalid device service URL.", lg{"endpoint", devServURI.String()})
-	tagProc := inventory.NewTagProcessor(lgr)
+	eventCh := make(chan inventory.Event, eventChBuffSz)
 
+	defaultGrp := llrp.NewReaderGroup()
 	devService := llrp.NewDSClient(&url.URL{
 		Scheme: devServURI.Scheme,
 		Host:   devServURI.Host,
 	}, http.DefaultClient)
 
-	ep := newEventProc(lgr, tagProc, devService)
-
 	dsName := strings.TrimSpace(appSettings[sKeyDevServiceName])
 	lgr.exitIf(dsName == "", "Missing device service name.", lg{"key", sKeyDevServiceName})
 	metadataURI.Path = "/api/v1/device/servicename/" + dsName
-	deviceNames, err := internal.GetDevices(metadataURI.String(), http.DefaultClient)
+	deviceNames, err := llrp.GetDevices(metadataURI.String(), http.DefaultClient)
 	lgr.exitIfErr(err, "Failed to get existing device names.", lg{"path", metadataURI.String()})
 	for _, name := range deviceNames {
-		lgr.exitIfErr(ep.defaultGrp.AddReader(ep.devService, name),
+		lgr.exitIfErr(defaultGrp.AddReader(devService, name),
 			"Failed to setup device.", lg{"device", name})
 	}
 
-	// init routes
+	app := inventoryApp{
+		lgr:          lgr,
+		eventCh:      eventCh,
+		defaultGrp:   defaultGrp,
+		devService:   devService,
+		snapshotReqs: make(chan snapshotDest),
+		reports:      make(chan reportData),
+	}
+
+	// routes
 	for _, rte := range []struct {
 		path, method string
 		f            http.HandlerFunc // of course the EdgeX SDK doesn't take a http.Handler...
@@ -129,19 +177,35 @@ func main() {
 		{"/", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, "res/html/index.html")
 		}},
-		{"/api/v1/inventory/raw", http.MethodGet, internal.RawInventory(lgr, tagProc)},
-		{"/api/v1/command/reading/start", http.MethodPut,
+		{"/api/v1/inventory/snapshot", http.MethodGet,
 			func(w http.ResponseWriter, req *http.Request) {
-				if err := ep.defaultGrp.StartAll(devService); err != nil {
-					lgr.Error("Failed to StartAll.", "error", err)
+				w.Header().Set("Content-Type", "application/json")
+				re := make(chan error, 1)
+				app.snapshotReqs <- snapshotDest{w, re}
+				if err := <-re; err != nil {
+					lgr.Error("Failed to write inventory response.", "error", err.Error())
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			},
+		},
+		{"/api/v1/command/reading/start", http.MethodPost,
+			func(w http.ResponseWriter, req *http.Request) {
+				if err := app.defaultGrp.StartAll(llrp.NewDSClient(&url.URL{
+					Scheme: devServURI.Scheme,
+					Host:   devServURI.Host,
+				}, http.DefaultClient)); err != nil {
+					lgr.Error("Failed to StartAll.", "error", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 			},
 		},
-		{"/api/v1/command/reading/stop", http.MethodPut,
+		{"/api/v1/command/reading/stop", http.MethodPost,
 			func(w http.ResponseWriter, req *http.Request) {
-				if err := ep.defaultGrp.StopAll(devService); err != nil {
+				if err := app.defaultGrp.StopAll(llrp.NewDSClient(&url.URL{
+					Scheme: devServURI.Scheme,
+					Host:   devServURI.Host,
+				}, http.DefaultClient)); err != nil {
 					lgr.Error("Failed to StopAll.", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
@@ -158,7 +222,7 @@ func main() {
 					return
 				}
 
-				data, err := json.Marshal(ep.defaultGrp.Behavior())
+				data, err := json.Marshal(app.defaultGrp.Behavior())
 				if err != nil {
 					lgr.Error("Failed to marshal behavior.", "error", err)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -199,7 +263,10 @@ func main() {
 					return
 				}
 
-				if err := ep.defaultGrp.SetBehavior(devService, b); err != nil {
+				if err := app.defaultGrp.SetBehavior(llrp.NewDSClient(&url.URL{
+					Scheme: devServURI.Scheme,
+					Host:   devServURI.Host,
+				}, http.DefaultClient), b); err != nil {
 					lgr.Error("Failed to set new behavior.", "error", err)
 					if _, err := w.Write([]byte(err.Error())); err != nil {
 						lgr.Error("Error writing failure response.", "error", err)
@@ -216,12 +283,54 @@ func main() {
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	done := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		app.taskLoop(done, *cc, lgr)
+		lgr.Info("Done processing.")
+	}()
+
 	// Subscribe to events.
-	lgr.exitIfErr(edgexSdk.SetFunctionsPipeline(ep.processEdgeXEvent), "Failed to build pipeline.")
+	lgr.exitIfErr(edgexSdk.SetFunctionsPipeline(app.processEdgeXEvent), "Failed to build pipeline.")
 	lgr.exitIfErr(edgexSdk.MakeItRun(), "Failed to run pipeline.")
+
+	// let task loop complete
+	close(done)
+	wg.Wait()
 }
 
-func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
+func getConfigClient() (*configuration.Client, error) {
+	sdkFlags := flags.New()
+	sdkFlags.Parse(os.Args[1:])
+	cpUrl, err := url.Parse(sdkFlags.ConfigProviderUrl())
+	if err != nil {
+		return nil, err
+	}
+
+	cpPort := 8500
+	port := cpUrl.Port()
+	if port != "" {
+		cpPort, err = strconv.Atoi(port)
+		if err != nil {
+			return nil, errors.Wrap(err, "bad config port")
+		}
+	}
+
+	configClient, err := configuration.NewConfigurationClient(types.ServiceConfig{
+		Host:     cpUrl.Hostname(),
+		Port:     cpPort,
+		BasePath: BaseConsulPath,
+		Type:     cpUrl.Scheme,
+	})
+
+	return &configClient, errors.Wrap(err, "failed to get config client")
+}
+
+func (app *inventoryApp) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
+	app.sdkCtx.Store(edgeXCtx)
+
 	if len(params) != 1 {
 		if len(params) == 2 {
 			if s, ok := params[1].(string); ok && s == "" {
@@ -229,10 +338,14 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 				// an empty string which sometimes has type info about the first param.
 				// Too bad we aren't using a compiled language with static typing.
 			} else {
-				return false, errors.Errorf("expected a single parameter, but got a second: %T %[1]+v", params[1])
+				err := errors.Errorf("expected a single parameter, but got a second: %T %[1]+v", params[1])
+				app.lgr.Error("Processing error.", "error", err.Error())
+				return false, err
 			}
 		} else {
-			return false, errors.Errorf("expected a single parameter, but got %d", len(params))
+			err := errors.Errorf("expected a single parameter, but got %d", len(params))
+			app.lgr.Error("Processing error.", "error", err.Error())
+			return false, err
 		}
 	}
 
@@ -256,7 +369,7 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 		reading := &event.Readings[i] // Readings is 169 bytes. Let's avoid the copy.
 		switch reading.Name {
 		default:
-			ep.lgr.Debug("Unknown reading.", "reading", reading.Name)
+			app.lgr.Debug("Unknown reading.", "reading", reading.Name)
 			continue
 
 		case ResourceReaderNotification:
@@ -264,30 +377,32 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 			r.WriteString(reading.Value)
 			notification := &llrp.ReaderEventNotification{}
 			if err := decoder.Decode(notification); err != nil {
-				ep.lgr.Error("Failed to decode reader event notification", "error", err.Error())
+				app.lgr.Error("Failed to decode reader event notification", "error", err.Error())
 				continue
 			}
 
-			if err := ep.handleReaderEvent(event.Device, notification); err != nil {
-				ep.lgr.Error("Failed to handle ReaderEventNotification.",
+			if err := app.handleReaderEvent(event.Device, notification); err != nil {
+				app.lgr.Error("Failed to handle ReaderEventNotification.",
 					"error", err.Error(), "device", event.Device)
 			}
 
 		case ResourceROAccessReport:
-			ep.lgr.Info("Processing RO.")
 			r.Reset()
 			r.WriteString(reading.Value)
 
 			report := &llrp.ROAccessReport{}
 			if err := decoder.Decode(report); err != nil {
-				ep.lgr.Error("Failed to decode tag report",
+				app.lgr.Error("Failed to decode tag report",
 					"error", err.Error(), "device", event.Device)
 				continue
 			}
 
-			if err := ep.handleROAccessReport(edgeXCtx, event.Device, report); err != nil {
-				ep.lgr.Error("Failed to process ROAccessReport.",
-					"error", err.Error(), "device", event.Device)
+			if report.TagReportData == nil {
+				app.lgr.Warn("No tag report data in report.", "device", event.Device)
+			} else {
+				app.reports <- reportData{report, inventory.NewReportInfo(reading)}
+				app.lgr.Info("New ROAccessReport.",
+					"device", event.Device, "tags", len(report.TagReportData))
 			}
 		}
 	}
@@ -295,113 +410,161 @@ func (ep *eventProc) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...i
 	return false, nil
 }
 
-type eventProc struct {
-	lgr     logWrap
-	tagProc *inventory.TagProcessor
-
-	devMu      sync.RWMutex
-	devService llrp.DSClient
-	defaultGrp *llrp.ReaderGroup
-}
-
-func newEventProc(lgr logWrap, tagProc *inventory.TagProcessor, devService llrp.DSClient) *eventProc {
-	return &eventProc{
-		lgr:        lgr,
-		tagProc:    tagProc,
-		devService: devService,
-		defaultGrp: llrp.NewReaderGroup(),
-	}
-}
-
-func (ep *eventProc) setDefaultBehavior(b llrp.Behavior) error {
-	ep.devMu.Lock()
-	err := ep.defaultGrp.SetBehavior(ep.devService, b)
-	ep.devMu.Unlock()
-	return err
-}
-
-func (ep *eventProc) handleROAccessReport(edgeXCtx *appcontext.Context, device string, report *llrp.ROAccessReport) error {
-	if report.TagReportData == nil {
-		ep.lgr.Warn("No tag report data in report.")
-		return nil
-	}
-
-	// This fills in ambiguous nil values.
-	if !ep.defaultGrp.ProcessTagReport(device, report.TagReportData) {
-		// This can only happen if the device didn't exist when we started,
-		// and we never got a Connection message for it.
-		return errors.Errorf("unknown device: %q", device)
-	}
-
-	for _, td := range report.TagReportData {
-		if len(td.EPC96.EPC) != (96 / 8) {
-			ep.lgr.Debug("Skipping non-EPC96.")
-			continue
-		}
-
-		epc := hex.EncodeToString(td.EPC96.EPC)
-
-		var antID, rssi int
-		if td.AntennaID != nil {
-			antID = int(*td.AntennaID)
-		} else {
-			ep.lgr.Warn("Missing AntennaID.", "EPC96", epc)
-		}
-
-		if td.PeakRSSI != nil {
-			rssi = int(*td.PeakRSSI)
-		} else {
-			ep.lgr.Warn("Missing PeakRSSI.", "EPC96", epc)
-		}
-
-		var timestamp int64
-		if td.LastSeenUTC != nil {
-			timestamp = int64(*td.LastSeenUTC)
-		} else {
-			ep.lgr.Warn("Missing Timestamp.", "EPC96", epc)
-		}
-
-		gen2Read := inventory.Gen2Read{
-			EPC:       epc,
-			DeviceID:  device,
-			AntennaID: antID,
-			RSSI:      rssi,
-			Timestamp: timestamp,
-		}
-
-		e := ep.tagProc.ProcessReadData(&gen2Read)
-		if e == nil {
-			continue
-		}
-
-		ep.lgr.Debug("Processing event.", "eventType", e.OfType(), "event", fmt.Sprintf("%+v", e))
-
-		payload, err := json.Marshal(e)
-		if err != nil {
-			ep.lgr.Error("Failed to marshal output", "EPC96", epc, "error", err.Error())
-			continue
-		}
-
-		eventName := ResourceInventoryEvent + e.OfType()
-		if _, err := edgeXCtx.PushToCoreData(device, eventName, string(payload)); err != nil {
-			ep.lgr.Error("Failed to push to Core Data", "EPC96", epc, "error", err.Error())
-		}
-	}
-
-	return nil
-}
-
-func (ep *eventProc) handleReaderEvent(device string, notification *llrp.ReaderEventNotification) error {
+func (app *inventoryApp) handleReaderEvent(device string, notification *llrp.ReaderEventNotification) error {
 	const connSuccess = llrp.ConnectionAttemptEvent(llrp.ConnSuccess)
 
 	data := notification.ReaderEventNotificationData
 	switch {
 	case data.ConnectionAttemptEvent != nil && *data.ConnectionAttemptEvent == connSuccess:
-		return ep.defaultGrp.AddReader(ep.devService, device)
+		return app.defaultGrp.AddReader(app.devService, device)
 
 	case data.ConnectionCloseEvent != nil:
-		ep.defaultGrp.RemoveReader(device)
+		app.defaultGrp.RemoveReader(device)
 	}
 
 	return nil
+}
+
+// taskLoop is our main event loop for async processes
+// that can't be modeled within the SDK's pipeline event loop.
+//
+// Namely, it launches scheduled tasks and configuration changes.
+func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, lc logger.LoggingClient) {
+	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
+	ageoutTicker := time.NewTicker(1 * time.Hour)
+	confErrs := make(chan error)
+	confUpdates := make(chan interface{})
+
+	defer func() {
+		close(confErrs)
+		close(confUpdates)
+	}()
+
+	// load tag data
+	var snapshot []inventory.StaticTag
+	snapshotData, err := ioutil.ReadFile(inventory.TagCacheFile)
+	if err != nil {
+		lc.Warn("Failed to load inventory snapshot.", "error", err.Error())
+	} else {
+		if err := json.Unmarshal(snapshotData, &snapshot); err != nil {
+			lc.Warn("Failed to unmarshal inventory snapshot.", "error", err.Error())
+		}
+	}
+	processor := inventory.NewTagProcessor(lc, snapshot)
+
+	config := &consulConfig{
+		Aliases: make(map[string]string),
+	}
+	cc.WatchForChanges(confUpdates, confErrs, config, "/"+serviceKey)
+
+	lc.Info("Starting event loop.")
+
+	for {
+		var updatedSnapshot []inventory.StaticTag
+		select {
+		case <-done:
+			return
+
+		case rd := <-app.reports:
+			lc.Info("New report")
+			if !app.defaultGrp.ProcessTagReport(rd.info.DeviceName, rd.report.TagReportData) {
+				// This can only happen if the device didn't exist when we started,
+				// and we never got a Connection message for it.
+				lc.Error("Tag Report for unknown device", "device", rd.info.DeviceName)
+			}
+
+			var events []inventory.Event
+			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
+			for _, e := range events {
+				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
+				if err := app.pushEventToCoreData(e); err != nil {
+					lc.Error("Failed to push events to CoreData", "error", err.Error())
+				}
+			}
+
+		case e := <-app.eventCh:
+			lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
+			if err := app.pushEventToCoreData(e); err != nil {
+				lc.Error("Failed to push events to CoreData", "error", err.Error())
+			}
+
+		case t := <-aggregateDepartedTicker.C:
+			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
+			var events []inventory.Event
+			events, updatedSnapshot = processor.AggregateDeparted()
+			for _, e := range events {
+				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
+				if err := app.pushEventToCoreData(e); err != nil {
+					lc.Error("Failed to push events to CoreData", "error", err.Error())
+				}
+			}
+
+		case t := <-ageoutTicker.C:
+			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
+			_, updatedSnapshot = processor.AgeOut()
+
+		case rawConfig := <-confUpdates:
+			if newConfig, ok := rawConfig.(*consulConfig); ok {
+				lc.Info("Configuration updated.")
+				lc.Debug("New configuration", "raw", fmt.Sprintf("%+v", newConfig))
+				config = newConfig
+				processor.SetAliases(newConfig.Aliases)
+			} else {
+				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%+v", rawConfig))
+			}
+
+		case req := <-app.snapshotReqs:
+			_, err := req.w.Write(snapshotData)
+			req.result <- err
+
+		case err := <-confErrs:
+			lc.Error("Configuration error.", "error", err.Error())
+		}
+
+		if updatedSnapshot == nil {
+			continue
+		}
+
+		snapshot = updatedSnapshot
+
+		lc.Info("Updating inventory snapshot.")
+		data, err := json.Marshal(snapshot)
+		if err != nil {
+			lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
+			continue
+		}
+
+		snapshotData = data
+		if err := ioutil.WriteFile(inventory.TagCacheFile, data, 0644); err != nil {
+			lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
+			continue
+		}
+		lc.Debug("Persisted inventory snapshot.", "tags", len(snapshot))
+	}
+}
+
+func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
+	app.devMu.Lock()
+	err := app.defaultGrp.SetBehavior(app.devService, b)
+	app.devMu.Unlock()
+	return err
+}
+
+func (app *inventoryApp) pushEventToCoreData(event inventory.Event) error {
+	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
+	if !ok {
+		return errors.New("unable to push event to core data: missing app-functions-sdk context")
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return errors.Wrap(err, "error marshalling event")
+	}
+
+	eventName := ResourceInventoryEvent + string(event.OfType())
+	if _, err = sdkCtx.PushToCoreData(eventDeviceName, eventName, string(payload)); err != nil {
+		return errors.Wrap(err, "unable to push inventory event to core-data")
+	}
+
+	return err
 }

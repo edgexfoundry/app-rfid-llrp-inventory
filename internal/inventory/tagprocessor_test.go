@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -212,20 +211,20 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 		t.Error(err)
 	}
 	// should not remove any tags
-	ds.tp.RunAgeOutTask()
+	ds.tp.AgeOut()
 	if len(ds.tp.inventory) != ds.size() {
 		t.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
 			ds.size(), len(ds.tp.inventory), ds.tp.inventory)
 	}
 
 	// now we will flag the items as departed and run the ageout task again
-	ds.tp.RunAggregateDepartedTask()
+	ds.tp.AggregateDeparted()
 	ds.sniffEvents()
 	if err := ds.verifyStateAll(Departed); err != nil {
 		t.Error(err)
 	}
 	// this time they should be removed from the inventory
-	ds.tp.RunAgeOutTask()
+	ds.tp.AgeOut()
 	if len(ds.tp.inventory) != 0 {
 		t.Errorf("expected there to be 0 items in the inventory, but there were %d.\ninventory: %#v",
 			len(ds.tp.inventory), ds.tp.inventory)
@@ -276,7 +275,7 @@ func TestAgeOutThreshold(t *testing.T) {
 			}
 
 			// mark any potential tags as Departed
-			ds.tp.RunAggregateDepartedTask()
+			ds.tp.AggregateDeparted()
 			ds.sniffEvents()
 			if err := ds.verifyStateAll(test.state); err != nil {
 				t.Error(err)
@@ -287,7 +286,7 @@ func TestAgeOutThreshold(t *testing.T) {
 				expectedCount = 0
 			}
 			// run ageout and check how many tags remain
-			ds.tp.RunAgeOutTask()
+			ds.tp.AgeOut()
 			if err := ds.verifyInventoryCount(expectedCount); err != nil {
 				t.Error(err)
 			}
@@ -309,7 +308,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 	ds.sniffEvents()
 
 	// expect all tags to depart, and their stats to be set to Departed
-	ds.tp.RunAggregateDepartedTask()
+	ds.tp.AggregateDeparted()
 	ds.sniffEvents()
 	if err := ds.verifyEventPattern(ds.size(), DepartedType); err != nil {
 		t.Error(err)
@@ -336,7 +335,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 
 	// run departed check again, however nothing should depart now because we are
 	// within the departed time limit
-	ds.tp.RunAggregateDepartedTask()
+	ds.tp.AggregateDeparted()
 	ds.sniffEvents()
 	if err := ds.verifyNoEvents(); err != nil {
 		t.Error(err)

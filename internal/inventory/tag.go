@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -19,18 +18,28 @@ const (
 )
 
 type Tag struct {
-	EPC string
-	TID string
-
-	Location string
-
+	EPC          string
+	TID          string
+	Location     string
 	LastRead     int64
 	LastDeparted int64
 	LastArrived  int64
+	state        TagState
 
-	state            TagState
 	locationStatsMap map[string]*TagStats
 	statsMu          sync.Mutex
+}
+
+// StaticTag represents a Tag object stuck in time for use with APIs
+type StaticTag struct {
+	EPC              string                    `json:"epc"`
+	TID              string                    `json:"tid"`
+	Location         string                    `json:"location"`
+	LastRead         int64                     `json:"last_read"`
+	LastArrived      int64                     `json:"last_arrived"`
+	LastDeparted     int64                     `json:"last_departed"`
+	State            TagState                  `json:"state"`
+	LocationStatsMap map[string]StaticTagStats `json:"location_stats_map"`
 }
 
 type previousTag struct {

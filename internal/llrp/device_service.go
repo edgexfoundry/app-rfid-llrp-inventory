@@ -224,8 +224,8 @@ func (ds DSClient) NewReader(device string) (*TagReader, error) {
 	}
 
 	var cr TProc
-	switch devCap.GeneralDeviceCapabilities.DeviceManufacturer {
-	case ImpinjPEN:
+	switch VendorPEN(devCap.GeneralDeviceCapabilities.DeviceManufacturer) {
+	case PENImpinj:
 		impDev, err := NewImpinjDevice(devCap)
 		if err != nil {
 			return nil, err
@@ -452,4 +452,37 @@ func (d *ImpinjDevice) EnableCustomExt(name string, ds DSClient) error {
 	}
 
 	return nil
+}
+
+// GetDevices return a list of device names.
+func GetDevices(metadataDevicesURL string, client *http.Client) ([]string, error) {
+	req, err := http.NewRequest(http.MethodGet, metadataDevicesURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("GET failed with status: %d", resp.StatusCode)
+	}
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	ds := &[]struct{ Name string }{}
+	if err := json.Unmarshal(respBody, ds); err != nil {
+		return nil, errors.Wrap(err, "failed to parse EdgeX device list")
+	}
+
+	deviceList := make([]string, len(*ds))
+	for i, dev := range *ds {
+		deviceList[i] = dev.Name
+	}
+	return deviceList, nil
 }
