@@ -62,20 +62,12 @@ type PowerTarget struct {
 	Max MillibelMilliwatt
 }
 
-type (
-	ScanType int
-	Trigger  int
-)
+type ScanType int
 
 const (
 	ScanFast = ScanType(iota)
 	ScanNormal
 	ScanDeep
-)
-
-const (
-	TriggerImmediate = Trigger(iota)
-	TriggerGPI
 )
 
 var (
@@ -91,6 +83,13 @@ func errMissingCapInfo(name string, path ...string) error {
 	return errors.Wrapf(ErrMissingCapInfo, "missing LLRP %s", name)
 }
 
+// BasicDevice holds details of an LLRP device
+// and uses those details to determine how best to satisfy desired behaviors.
+//
+// In particular, it maintains lists of LLRP capabilities,
+// such as UHF RF Modes and device power levels.
+// Much of the information it tracks mirrors the device's capabilities,
+// but it preprocesses some of it to simplify later device command generation.
 type BasicDevice struct {
 	// connected   time.Time
 	modes       []UHFC1G2RFModeTableEntry
@@ -109,12 +108,12 @@ type BasicDevice struct {
 	stateAware                 bool
 }
 
-// ImpinjDevice embeds BasicDevice with Impinj-specific Behavior implementations.
+// ImpinjDevice embeds BasicDevice to provide some Impinj-specific Behavior implementations.
 //
 // Impinj isn't compliant with the following elements of the LLRP standard:
-// - UHF Modes incorrectly report BLF instead of BDR.
+// - UHF Modes incorrectly report BLF (in Hz) instead of BDR (in bps).
 // - UHF Modes include "Autoset" modes with IDs > 1000,
-//   for which the parameter values are incorrect;
+//   for which the parameter values are made up;
 //   the actual mode used is one of the non-Autoset modes,
 //   but the Reader interprets the given ModeID as a hint
 //   for it to choose which of those it thinks is best.
@@ -137,9 +136,6 @@ type BasicDevice struct {
 //     They call it MaxMiller because it uses Miller8 backscatter encoding.
 //   - They don't support State Aware Filtering, at least not directly.
 //     There is a custom parameter for "Search Mode" which essentially does it.
-//
-// - Newer firmware versions slightly lower the BLF (again, reported in the BDR field)
-//   of
 type ImpinjDevice struct {
 	BasicDevice
 }
@@ -909,11 +905,6 @@ var (
 		ScanNormal: []byte("Normal"),
 		ScanDeep:   []byte("Deep"),
 	}
-
-	triggerStrs = [...][]byte{
-		TriggerImmediate: []byte("Immediate"),
-		TriggerGPI:       []byte("GPI"),
-	}
 )
 
 func (s ScanType) MarshalText() ([]byte, error) {
@@ -932,22 +923,4 @@ func (s *ScanType) UnmarshalText(text []byte) error {
 	}
 
 	return errors.Errorf("unknown ScanType: %q", string(text))
-}
-
-func (t Trigger) MarshalText() ([]byte, error) {
-	if !(0 <= int(t) && int(t) < len(triggerStrs)) {
-		return nil, errors.Errorf("unknown Trigger: %v", t)
-	}
-	return triggerStrs[t], nil
-}
-
-func (t *Trigger) UnmarshalText(text []byte) error {
-	for i := range triggerStrs {
-		if bytes.Equal(triggerStrs[i], text) {
-			*t = Trigger(i)
-			return nil
-		}
-	}
-
-	return errors.Errorf("unknown Trigger: %q", string(text))
 }

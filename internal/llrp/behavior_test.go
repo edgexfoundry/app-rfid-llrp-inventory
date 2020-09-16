@@ -5,7 +5,6 @@
 
 package llrp
 
-/*
 import (
 	"bytes"
 	"encoding/json"
@@ -29,13 +28,9 @@ func TestMarshalBehaviorText(t *testing.T) {
 		shouldFail bool
 	}{
 		{"fast", ScanFast, []byte(`"Fast"`), false},
-		{"suppression", ScanFastSuppression, []byte(`"FastSuppression"`), false},
 		{"normal", ScanNormal, []byte(`"Normal"`), false},
 		{"deep", ScanDeep, []byte(`"Deep"`), false},
-		{"immediate", TriggerImmediate, []byte(`"Immediate"`), false},
-		{"GPI", TriggerGPI, []byte(`"GPI"`), false},
 		{"unknownScan", ScanType(501), nil, true},
-		{"unknownTrigger", Trigger(501), nil, true},
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -67,4 +62,3 @@ func TestMarshalBehaviorText(t *testing.T) {
 		})
 	}
 }
-*/
