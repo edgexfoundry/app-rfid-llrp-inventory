@@ -234,9 +234,9 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, statsAtPrevLoc.LastRead)
 		logTagStats(tp, tag, curLocation, incomingMean, locationMean, weight)
 
-		// If the mean RSSI at the new location is greater than the weighted average
-		// RSSI of the existing location, update the location.
-		// This will generate a moved event.
+		// Update the location if the mean RSSI at the new location 
+		// is greater than the adjusted mean RSSI of the existing location.
+		// Note: This will generate a moved event.
 		if incomingMean > (locationMean + weight) {
 			tag.Location = curLocation
 		}
