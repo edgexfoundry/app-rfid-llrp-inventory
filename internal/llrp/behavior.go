@@ -103,9 +103,10 @@ type BasicDevice struct {
 	// lastData is the value of tag parameter the last time it was reported.
 	lastData TagReportData
 
-	nGPIs, nFreqs, nSpecsPerRO uint16
-	allowsHop                  bool
-	stateAware                 bool
+	nGPIs, nFreqs uint16
+	nSpecsPerRO   uint32
+	allowsHop     bool
+	stateAware    bool
 }
 
 // ImpinjDevice embeds BasicDevice to provide some Impinj-specific Behavior implementations.
@@ -233,10 +234,11 @@ func NewBasicDevice(c *GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 	return &BasicDevice{
 		modes:       copyModes,
 		pwrMinToMax: pwrLvls,
+		nFreqs:      nFreqs,
 		nGPIs:       genCap.GPIOCapabilities.NumGPIs,
 		freqInfo:    freqInfo,
-		nFreqs:      nFreqs,
 		allowsHop:   freqInfo.Hopping,
+		nSpecsPerRO: llrpCap.MaxSpecsPerROSpec,
 		stateAware:  llrpCap.CanDoTagInventoryStateAwareSingulation,
 		lastData: TagReportData{
 			ROSpecID:                 new(ROSpecID),
@@ -259,7 +261,7 @@ func NewImpinjDevice(c *GetReaderCapabilitiesResponse) (*ImpinjDevice, error) {
 	}
 
 	// Correct Impinj's buggy mode table
-	fixed := make([]UHFC1G2RFModeTableEntry, len(bd.modes)/2)
+	fixed := make([]UHFC1G2RFModeTableEntry, 0, len(bd.modes)/2)
 	for _, m := range bd.modes {
 		if m.ModeID >= 1000 { // the values for these modes are meaningless
 			continue
@@ -296,22 +298,28 @@ func (d ImpinjDevice) NewConfig() *SetReaderConfig {
 	conf.ROReportSpec.Custom = append(conf.Custom, Custom{
 		VendorID: uint32(PENImpinj),
 		Subtype:  ImpinjTagReportContentSelector,
-		Data: []byte{
-			// The data format of Impinj's custom sub-parameters
-			// matches the LLRP parameter format,
-			// Since LLRP itself allows vendors to put whatever data here,
-			// no general purpose parser can assume the format should match,
-			// but it's probably easier on their implementation to do so.
-			//
-			// This data enables Impinj's detailed RSSI in reports.
-			0x03, 0xff, // param sub-type (1023, CustomParameter)
-			0x00, 0x0e, // param length, incl. header (12+2=14=0xe)
-			0x00, 0x00, 0x65, 0x1a, // vendor PEN (Impinj=25882=0x641a)
-			0x00, 0x00, 0x00, 0x34, // subtype (ImpinjEnablePeakRSSI=53=0x34)
-			0x00, 0x01, // data (uint16, 0=false, 1=true)
-		},
+		Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
 	})
 	return conf
+}
+
+// impinjEnableBool16 returns the encoding of a Custom parameter
+// that consists only of a boolean value represented as a uint16,
+// since Impinj uses them often as sub-parameters of their own Custom parameters.
+func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
+	const (
+		pen0 = uint8(0xff & (uint32(PENImpinj) >> (8 * (3 - iota))))
+		pen1
+		pen2
+		pen3
+	)
+
+	return []byte{
+		0x03, 0xff, 0, 14, // param type & length (incl. header)
+		pen0, pen1, pen2, pen3,
+		uint8(subtype >> 24), uint8(subtype >> 16), uint8(subtype >> 8), uint8(subtype),
+		0, 1, // data (uint16, 0=disabled, 1=enabled)
+	}
 }
 
 // FillAmbiguousNil handles the worst feature of LLRP: ambiguous nil parameters.
@@ -466,6 +474,8 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	}
 
 	// In hopping regulatory regions, we assume the power is legal for all frequencies.
+	// This also assumes the first HopTableID is acceptable/worth using,
+	// which may or may not be true.
 	if d.allowsHop {
 		return &RFTransmitter{
 			HopTableID:         uint16(d.freqInfo.FrequencyHopTables[0].HopTableID),
@@ -485,7 +495,8 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	}
 
 	return nil, errors.Wrapf(ErrUnsatisfiable,
-		"no frequency permits the desired power level (%f dBm)", float32(b.Power.Max)/10.0)
+		"no frequency permits the desired power level (%.2f dBm)",
+		float32(b.Power.Max)/100.0)
 }
 
 // findPower returns the device's best match to a given power level,
@@ -507,9 +518,16 @@ func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value
 	})
 
 	var t TransmitPowerLevelTableEntry
-	if pwrIdx == 0 {
+	if d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
+		// The power exactly matches one of the Reader's available power settings.
 		t = d.pwrMinToMax[pwrIdx]
 	} else {
+		// The index represents a power value greater than our target,
+		// so instead return one less than the target.
+		// This also covers the case where the target power
+		// is greater than any available power setting,
+		// as in that case pwrIdx = len(list),
+		// and we want to return the max power, which is at len(list)-1
 		t = d.pwrMinToMax[pwrIdx-1]
 	}
 
@@ -579,7 +597,22 @@ func (d BasicDevice) findBestMode(nReaders uint) (bestIdx int, mode UHFC1G2RFMod
 // More information can be found in Appendix G of the
 // EPC Radio-Frequency Identity Protocols Generation-2 UHF RFID Standard.
 func (d BasicDevice) fastestAt(mask SpectralMaskType) (bestIdx int, ok bool) {
-	const bestRTcal, bestBDR = 15625, 640000
+	// During singulation, tags only backscatter about 150 bits.
+	// At low BDRs, the backscatter time indeed dominates singulation,
+	// but at higher BDRs, the forward link can make up to a 3x difference.
+	//
+	// Roughly speaking, RTcal is an OK approximation of the forward link
+	// and BDR is an OK approximation of the backward link.
+	// This scales them relative their best possible values
+	// and calculates a score as a weighted average of those value.
+	//
+	// fwdLinkBias determines how much importance
+	// we place on the forward vs backward links.
+	// 0.5 gives equal weight to the forward and backward links,
+	// effectively the special case of simply averaging them.
+	// It must be between 0 and 1.
+	const fwdLinkBias = 0.5
+	const bestRTcal, bestBDR = 15625000, 640000
 	var bestScore float64 // lower is better
 
 	for i, m := range d.modes {
@@ -587,15 +620,9 @@ func (d BasicDevice) fastestAt(mask SpectralMaskType) (bestIdx int, ok bool) {
 			continue
 		}
 
-		// During singulation, tags only backscatter about 150 bits.
-		// At low BDRs, the backscatter time indeed dominates singulation,
-		// but at higher BDRs, the forward link can make up to a 3x difference.
-		// Roughly speaking, RTcal is an OK approximation of the forward link
-		// and BDR is an OK approximation of the backward link.
-		// This scales them relative the best possible values
-		// and averages those values together, yielding a score >= 1.
-		RTcal := float64(m.MinTariTime) * float64(1000+m.PIERatio)
-		score := 0.5 * ((bestRTcal / RTcal) + (float64(m.BackscatterDataRate) / bestBDR))
+		fwdLink := bestRTcal / (float64(m.MinTariTime) * float64(1000+m.PIERatio))
+		bwdLink := bestBDR / float64(m.BackscatterDataRate)
+		score := (fwdLinkBias * fwdLink) + ((1 - fwdLinkBias) * bwdLink)
 		if !ok || score < bestScore {
 			bestScore = score
 			bestIdx = i
