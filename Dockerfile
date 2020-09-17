@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-FROM golang:1.14-alpine AS builder
+FROM golang:1.15-alpine AS builder
 
 # add git for go modules
 RUN apk update && apk add --no-cache make git gcc libc-dev libsodium-dev zeromq-dev
