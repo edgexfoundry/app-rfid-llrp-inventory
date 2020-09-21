@@ -5,24 +5,18 @@
 
 package inventory
 
-var (
-	// todo: these are supposed to be configurable
+type ApplicationSettingsType struct {
+	DeviceServiceName  string
+	DeviceServiceURL   string
+	MetadataServiceURL string
 
-	AdjustLastReadOnByOrigin = true
+	AdjustLastReadOnByOrigin     bool
+	DepartedThresholdSeconds     int
+	DepartedCheckIntervalSeconds int
+	AgeOutHours                  int
+}
 
-	MobilityProfileBaseProfile   = "default"
-	MobilityProfileThreshold     = 0.0 // todo
-	MobilityProfileHoldoffMillis = 0.0 // todo
-	MobilityProfileSlope         = 0.0 // todo
-
-	MobilityProfileSlopeOverridden         = false // todo
-	MobilityProfileThresholdOverridden     = false // todo
-	MobilityProfileHoldoffMillisOverridden = false // todo
-
-	// NOTE: If you change the default values, please update the README.md
-	DepartedThresholdSeconds     = 30
-	DepartedCheckIntervalSeconds = 10
-	AgeOutHours                  = 336
-
-	TagStatsWindowSize = 20
-)
+type ConsulConfig struct {
+	ApplicationSettings ApplicationSettingsType
+	Aliases             map[string]string
+}

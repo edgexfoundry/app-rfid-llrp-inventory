@@ -21,7 +21,7 @@ n = 100
 build: $(MICROSERVICES)
 
 cmd/rfid-inventory:
-	$(GO) build $(GOFLAGS) -o $@ ./main.go
+	$(GO) build $(GOFLAGS) -o $@ ./cmd/inventory/main.go
 
 test:
 	$(GO) test $(args) ./... -coverprofile=coverage.out

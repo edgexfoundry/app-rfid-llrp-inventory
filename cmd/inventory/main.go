@@ -75,10 +75,6 @@ type snapshotDest struct {
 	result chan error
 }
 
-type consulConfig struct {
-	Aliases map[string]string
-}
-
 type logWrap struct {
 	logger.LoggingClient
 }
@@ -452,7 +448,7 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 	}
 	processor := inventory.NewTagProcessor(lc, snapshot)
 
-	config := &consulConfig{
+	config := &inventory.ConsulConfig{
 		Aliases: make(map[string]string),
 	}
 	cc.WatchForChanges(confUpdates, confErrs, config, "/"+serviceKey)
@@ -504,7 +500,7 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			_, updatedSnapshot = processor.AgeOut()
 
 		case rawConfig := <-confUpdates:
-			if newConfig, ok := rawConfig.(*consulConfig); ok {
+			if newConfig, ok := rawConfig.(*inventory.ConsulConfig); ok {
 				lc.Info("Configuration updated.")
 				lc.Debug("New configuration", "raw", fmt.Sprintf("%+v", newConfig))
 				config = newConfig
