@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -21,19 +20,20 @@ func NewTagStats() *TagStats {
 	}
 }
 
-func (stats *TagStats) update(rssi *float64, lastRead *int64) {
-	if rssi != nil {
-		stats.rssiDbm.AddValue(*rssi)
-	}
+func (stats *TagStats) updateRSSI(rssi float64) {
+	stats.rssiDbm.AddValue(rssi)
+}
 
-	// skip times that are either unknown or at or before the current last read timestamp
-	if lastRead == nil || *lastRead <= stats.LastRead {
+func (stats *TagStats) updateLastRead(lastRead int64) {
+	// skip times that are at or before the current last read timestamp
+	if lastRead <= stats.LastRead {
 		return
 	}
+
 	if stats.LastRead != 0 {
-		stats.readInterval.AddValue(float64(*lastRead - stats.LastRead))
+		stats.readInterval.AddValue(float64(lastRead - stats.LastRead))
 	}
-	stats.LastRead = *lastRead
+	stats.LastRead = lastRead
 }
 
 func (stats *TagStats) rssiCount() int {

@@ -20,20 +20,11 @@ Type = 'consul'
 [Logging]
 EnableRemote = false
 
-# Database is require when Store and Forward is enabled
-# SecretStore is required when Store and Forward is enabled and running with security
-# so Database credentials can be pulled from Vault.
-
 [Clients]
   [Clients.CoreData]
   Protocol = 'http'
   Host = 'edgex-core-data'
   Port = 48080
-
-  [Clients.Logging]
-  Protocol = "http"
-  Host = "edgex-core-logging"
-  Port = 48061
 
 [MessageBus]
 Type = 'zero'
@@ -46,15 +37,10 @@ Type = 'zero'
         Port = 5563
         Protocol = 'tcp'
 
-# Choose either an HTTP trigger or MessageBus trigger (aka Binding)
-
-#[Binding]
-#Type="http"
-
 [Binding]
 Type="messagebus"
 SubscribeTopic="events"
-PublishTopic="somewhere"
+PublishTopic=""
 
 [ApplicationSettings]
 GetDevicesApi = "http://edgex-core-metadata:48081/api/v1/device"

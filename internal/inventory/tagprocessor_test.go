@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -43,7 +42,6 @@ func TestBasicArrival(t *testing.T) {
 		rssi:       rssiWeak,
 		count:      1,
 	})
-	ds.sniffEvents()
 
 	if err := ds.verifyAll(Present, ds.tp.getAlias(front, defaultAntenna)); err != nil {
 		t.Error(err)
@@ -68,7 +66,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		rssi:       rssiMin,
 		count:      1,
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyAll(Present, ds.tp.getAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
@@ -77,6 +75,8 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		t.Error(err)
 	}
 
+	ds.events = make([]Event, 0)
+
 	// move tags to different sensor
 	ds.readAll(readParams{
 		deviceName: back2,
@@ -84,7 +84,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		rssi:       rssiStrong,
 		count:      4,
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
@@ -92,6 +92,8 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
 
 	// test that tag stays at new location even with concurrent reads from weaker sensor
 	// MOVE back doesn't happen with weak RSSI
@@ -101,10 +103,11 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		rssi:       rssiWeak,
 		count:      1,
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
+
 	// ensure no events generated
 	if err := ds.verifyNoEvents(); err != nil {
 		t.Error(err)
@@ -127,12 +130,13 @@ func TestMoveAntennaLocation(t *testing.T) {
 				rssi:       rssiMin,
 				count:      1,
 			})
-			ds.sniffEvents()
+
 			// ensure arrival events generated
 			if err := ds.verifyEventPattern(1, ArrivedType); err != nil {
 				t.Error(err)
 			}
 
+			ds.events = make([]Event, 0)
 			epc := ds.epcs[0]
 			tag := ds.tp.inventory[epc]
 			// move tag to a different antenna port on same sensor
@@ -142,7 +146,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 				rssi:       rssiStrong,
 				count:      4,
 			})
-			ds.sniffEvents()
+
 			if tag.Location != ds.tp.getAlias(sensor, antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
 					tag.Location, ds.tp.getAlias(sensor, antID), tag)
@@ -168,7 +172,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 		rssi:       rssiMin,
 		count:      1,
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyAll(Present, ds.tp.getAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
@@ -177,6 +181,8 @@ func TestMoveBetweenSensors(t *testing.T) {
 		t.Error(err)
 	}
 
+	ds.events = make([]Event, 0)
+
 	// move tag to different sensor
 	ds.readAll(readParams{
 		deviceName: back2,
@@ -184,10 +190,11 @@ func TestMoveBetweenSensors(t *testing.T) {
 		rssi:       rssiStrong,
 		count:      4,
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
+
 	// ensure moved events generated
 	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
 		t.Error(err)
@@ -204,28 +211,29 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 		antenna:    defaultAntenna,
 		lastSeen:   time.Now().Add(time.Duration(-3*AgeOutHours) * time.Hour),
 	})
-	ds.sniffEvents()
 
 	// make sure all tags are marked as Present and are NOT aged out, because the algorithm
 	// should only age out tags that are Departed
 	if err := ds.verifyStateAll(Present); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
+
 	// should not remove any tags
-	ds.tp.RunAgeOutTask()
+	ds.tp.AgeOut()
 	if len(ds.tp.inventory) != ds.size() {
 		t.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
 			ds.size(), len(ds.tp.inventory), ds.tp.inventory)
 	}
 
 	// now we will flag the items as departed and run the ageout task again
-	ds.tp.RunAggregateDepartedTask()
-	ds.sniffEvents()
+	ds.tp.AggregateDeparted()
 	if err := ds.verifyStateAll(Departed); err != nil {
 		t.Error(err)
 	}
 	// this time they should be removed from the inventory
-	ds.tp.RunAgeOutTask()
+	ds.tp.AgeOut()
 	if len(ds.tp.inventory) != 0 {
 		t.Errorf("expected there to be 0 items in the inventory, but there were %d.\ninventory: %#v",
 			len(ds.tp.inventory), ds.tp.inventory)
@@ -270,14 +278,15 @@ func TestAgeOutThreshold(t *testing.T) {
 				antenna:    defaultAntenna,
 				lastSeen:   test.lastSeen,
 			})
-			ds.sniffEvents()
+
 			if err := ds.verifyInventoryCount(ds.size()); err != nil {
 				t.Error(err)
 			}
 
+			ds.events = make([]Event, 0)
+
 			// mark any potential tags as Departed
-			ds.tp.RunAggregateDepartedTask()
-			ds.sniffEvents()
+			ds.tp.AggregateDeparted()
 			if err := ds.verifyStateAll(test.state); err != nil {
 				t.Error(err)
 			}
@@ -287,7 +296,7 @@ func TestAgeOutThreshold(t *testing.T) {
 				expectedCount = 0
 			}
 			// run ageout and check how many tags remain
-			ds.tp.RunAgeOutTask()
+			ds.tp.AgeOut()
 			if err := ds.verifyInventoryCount(expectedCount); err != nil {
 				t.Error(err)
 			}
@@ -306,17 +315,18 @@ func TestAggregateDepartedTask(t *testing.T) {
 		count:      10,
 		lastSeen:   time.Now().Add(-2 * (time.Duration(DepartedThresholdSeconds) * time.Second)),
 	})
-	ds.sniffEvents()
 
 	// expect all tags to depart, and their stats to be set to Departed
-	ds.tp.RunAggregateDepartedTask()
-	ds.sniffEvents()
+	ds.events, _ = ds.tp.AggregateDeparted()
 	if err := ds.verifyEventPattern(ds.size(), DepartedType); err != nil {
 		t.Error(err)
 	}
+
 	if err := ds.verifyStateAll(Departed); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
 
 	// read the tags again, this time 1/2 the way between the departed time limit
 	// they should all be returned, and generate Arrived events and be Present state
@@ -326,7 +336,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		count:      10,
 		lastSeen:   time.Now().Add(-(time.Duration(DepartedThresholdSeconds) * time.Second) / 2),
 	})
-	ds.sniffEvents()
+
 	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
@@ -334,10 +344,11 @@ func TestAggregateDepartedTask(t *testing.T) {
 		t.Error(err)
 	}
 
+	ds.events = make([]Event, 0)
+
 	// run departed check again, however nothing should depart now because we are
 	// within the departed time limit
-	ds.tp.RunAggregateDepartedTask()
-	ds.sniffEvents()
+	ds.tp.AggregateDeparted()
 	if err := ds.verifyNoEvents(); err != nil {
 		t.Error(err)
 	}
@@ -354,11 +365,13 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 		count:      10,
 		lastSeen:   current,
 	})
-	ds.sniffEvents()
+
 	// make sure the last read is properly set
 	if err := ds.verifyLastReadAll(current.UnixNano() / int64(time.Millisecond)); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
 
 	// read all of the tags using the outdated timestamps
 	outdated := current.Add(-5 * time.Minute)
@@ -368,11 +381,13 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 		count:      10,
 		lastSeen:   outdated,
 	})
-	ds.sniffEvents()
+
 	// make sure the last read was NOT updated, because it was older than current last read
 	if err := ds.verifyLastReadAll(current.UnixNano() / int64(time.Millisecond)); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
 
 	// read all of the tags using an even newer timestamp
 	next := time.Now()
@@ -382,12 +397,11 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 		count:      10,
 		lastSeen:   next,
 	})
-	ds.sniffEvents()
+
 	// make sure the last read WAS updated this time when a newer value was given
 	if err := ds.verifyLastReadAll(next.UnixNano() / int64(time.Millisecond)); err != nil {
 		t.Error(err)
 	}
-
 }
 
 func TestAdjustLastReadOnByOrigin(t *testing.T) {
@@ -406,12 +420,14 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 		lastSeen:   lastSeen,
 		origin:     origin,
 	})
-	ds.sniffEvents()
+
 	// make sure the last read is properly set to the ADJUSTED time, which would be the origin, NOT the
 	// lastSeen time
 	if err := ds.verifyLastReadOf(epc0, origin.UnixNano()/int64(time.Millisecond)); err != nil {
 		t.Error(err)
 	}
+
+	ds.events = make([]Event, 0)
 
 	// turn OFF the timestamp adjuster
 	AdjustLastReadOnByOrigin = false
@@ -424,7 +440,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 		lastSeen:   lastSeen,
 		origin:     origin,
 	})
-	ds.sniffEvents()
+
 	// make sure the last read is properly set to the ADJUSTED time, which would be the origin, NOT the
 	// lastSeen time
 	if err := ds.verifyLastReadOf(epc1, lastSeen.UnixNano()/int64(time.Millisecond)); err != nil {

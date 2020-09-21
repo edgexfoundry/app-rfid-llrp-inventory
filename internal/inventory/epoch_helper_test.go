@@ -1,10 +1,9 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
-package helper
+package inventory
 
 import (
 	"fmt"
@@ -13,7 +12,6 @@ import (
 )
 
 func TestUnixMilli(t *testing.T) {
-
 	var target time.Time
 
 	ms := UnixMilli(target)
