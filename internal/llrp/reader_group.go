@@ -6,7 +6,9 @@
 package llrp
 
 import (
+	"encoding/json"
 	"github.com/pkg/errors"
+	"io"
 	"strings"
 	"sync"
 )
@@ -45,6 +47,19 @@ func NewReaderGroup() *ReaderGroup {
 
 func (rg *ReaderGroup) Behavior() Behavior {
 	return rg.behavior
+}
+
+// ListReaders writes to w a JSON-formatted list of readers in this group.
+func (rg *ReaderGroup) ListReaders(w io.Writer) error {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
+
+	s := struct{ Readers []string }{Readers: make([]string, 0, len(rg.readers))}
+	for r := range rg.readers {
+		s.Readers = append(s.Readers, r)
+	}
+
+	return json.NewEncoder(w).Encode(s)
 }
 
 func (rg *ReaderGroup) ProcessTagReport(name string, tags []TagReportData) bool {

@@ -28,7 +28,7 @@ const (
 	disableCmd   = "/disableROSpec"
 	stopCmd      = "/stopROSpec"
 	startCmd     = "/startROSpec"
-	deleteCmd    = "/deleteROSpeck"
+	deleteCmd    = "/deleteROSpec"
 
 	enableImpinjCmd = "/enableImpinjExt"
 
@@ -204,7 +204,7 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 		return errors.Wrap(err, "failed to marshal ReaderConfig edgex request")
 	}
 
-	return errors.WithMessage(ds.put(ds.baseURL+device+configDevCmd, edgexReq),
+	return errors.WithMessage(ds.put(device+configDevCmd, edgexReq),
 		"failed to set reader config")
 }
 
@@ -220,7 +220,7 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 		return errors.Wrap(err, "failed to marshal ReaderConfig edgex request")
 	}
 
-	return errors.WithMessage(ds.put(ds.baseURL+device+addCmd, edgexReq),
+	return errors.WithMessage(ds.put(device+addCmd, edgexReq),
 		"failed to add ROSpec")
 }
 
@@ -263,7 +263,7 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 	}
 
 	// this uses roCmd[1:] because it starts with "/"
-	return errors.WithMessage(ds.put(ds.baseURL+device+roCmd, edgexReq),
+	return errors.WithMessage(ds.put(device+roCmd, edgexReq),
 		"failed to "+roCmd[1:])
 }
 
@@ -271,8 +271,7 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 // Note that the device in question must be registered
 // with a device profile that has an enableImpinjExt deviceCommand.
 func (d *ImpinjDevice) EnableCustomExt(name string, ds DSClient) error {
-	return errors.WithMessage(ds.put(
-		ds.baseURL+name+enableImpinjCmd,
+	return errors.WithMessage(ds.put(name+enableImpinjCmd,
 		[]byte(`{"ImpinjCustomExtensionMessage":"AAAAAA=="}`)),
 		"failed to enable Impinj extensions")
 }

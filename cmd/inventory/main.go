@@ -172,6 +172,13 @@ func main() {
 		{"/", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, "res/html/index.html")
 		}},
+		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			if err := app.defaultGrp.ListReaders(w); err != nil {
+				app.lgr.Error("Failed to write readers list.", "error", err.Error())
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}},
 		{"/api/v1/inventory/snapshot", http.MethodGet,
 			func(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
