@@ -54,6 +54,7 @@ var fccFreqs = []Kilohertz{
 	927250,
 }
 
+// newImpinjCaps returns capabilities matching an Impinj Reader in an FCC region.
 func newImpinjCaps() *GetReaderCapabilitiesResponse {
 	powerTable := make([]TransmitPowerLevelTableEntry, 81)
 	for i := range powerTable {
@@ -248,7 +249,6 @@ func TestImpinjDevice_invalid(t *testing.T) {
 func TestImpinjDevice_NewConfig(t *testing.T) {
 	caps := newImpinjCaps()
 	d, err := NewImpinjDevice(caps)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,9 +277,13 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 			d.nGPIs, caps.GeneralDeviceCapabilities.GPIOCapabilities.NumGPIs)
 	}
 
+	// make sure we removed the meaningless Autoset modes
 	if len(d.modes) != 5 {
 		t.Errorf("expected 5 modes; got %d", len(d.modes))
 	}
+
+	// verify the mode ordering
+	d.fastestAt(SpectralMaskDenseInterrogator)
 
 	for i := range d.pwrMinToMax[1:] {
 		if d.pwrMinToMax[i].TransmitPowerValue > d.pwrMinToMax[i+1].TransmitPowerValue {
@@ -343,6 +347,7 @@ func TestMarshalBehaviorText(t *testing.T) {
 		{"unknownScan", ScanType(501), nil, true},
 	}
 	for _, testCase := range tests {
+		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
