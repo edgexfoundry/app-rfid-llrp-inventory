@@ -468,7 +468,7 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	pwrIdx, pwr := d.findPower(b.Power.Max)
 	if pwr > b.Power.Max {
 		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"target power (%.2f dBm) exceeds lowest supported (%.2f dBm)",
+			"target power (%.2f dBm) is lower than the lowest supported (%.2f dBm)",
 			float32(b.Power.Max)/100.0, float32(pwr)/100.0)
 	}
 
