@@ -6,6 +6,7 @@
 package inventory
 
 import (
+	"strconv"
 	"sync"
 )
 
@@ -20,7 +21,7 @@ const (
 type Tag struct {
 	EPC          string
 	TID          string
-	Location     string
+	Location     Location
 	LastRead     int64
 	LastDeparted int64
 	LastArrived  int64
@@ -30,11 +31,32 @@ type Tag struct {
 	statsMu          sync.Mutex
 }
 
+type Location struct {
+	DeviceName string `json:"device_name"`
+	AntennaID  uint16 `json:"antenna_id"`
+}
+
+func NewLocation(deviceName string, antennaID uint16) Location {
+	return Location{DeviceName: deviceName, AntennaID: antennaID}
+}
+
+func (loc Location) Equals(other Location) bool {
+	return loc.AntennaID == other.AntennaID && loc.DeviceName == other.DeviceName
+}
+
+func (loc Location) IsEmpty() bool {
+	return loc.DeviceName == "" && loc.AntennaID == 0
+}
+
+func (loc Location) String() string {
+	return loc.DeviceName + "_" + strconv.Itoa(int(loc.AntennaID))
+}
+
 // StaticTag represents a Tag object stuck in time for use with APIs
 type StaticTag struct {
 	EPC              string                    `json:"epc"`
 	TID              string                    `json:"tid"`
-	Location         string                    `json:"location"`
+	Location         Location                  `json:"location"`
 	LocationAlias    string                    `json:"location_alias"`
 	LastRead         int64                     `json:"last_read"`
 	LastArrived      int64                     `json:"last_arrived"`
@@ -51,7 +73,7 @@ type StaticTagStats struct {
 }
 
 type previousTag struct {
-	location string
+	location Location
 	lastRead int64
 	state    TagState
 }
@@ -59,7 +81,6 @@ type previousTag struct {
 func NewTag(epc string) *Tag {
 	return &Tag{
 		EPC:              epc,
-		Location:         "",
 		state:            Unknown,
 		locationStatsMap: make(map[string]*TagStats),
 	}
@@ -114,7 +135,7 @@ func (tp *TagProcessor) newStaticTag(tag *Tag) StaticTag {
 		EPC:              tag.EPC,
 		TID:              tag.TID,
 		Location:         tag.Location,
-		LocationAlias:    tp.getAlias(tag.Location),
+		LocationAlias:    tp.getAlias(tag.Location.String()),
 		LastRead:         tag.LastRead,
 		LastArrived:      tag.LastArrived,
 		LastDeparted:     tag.LastDeparted,

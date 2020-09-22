@@ -11,7 +11,6 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -44,13 +43,6 @@ func NewTagProcessor(lc logger.LoggingClient, tags []StaticTag) *TagProcessor {
 	}
 
 	return tp
-}
-
-// makeLocation concatenates a deviceName and antenna ID as a string using the
-// format deviceName_antenna, which is used as the tag location, and as the
-// default alias value.
-func makeLocation(deviceName string, antID uint16) string {
-	return deviceName + "_" + strconv.Itoa(int(antID))
 }
 
 // getAlias returns the alias associated with a location if one has been defined,
@@ -165,23 +157,25 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 				EPC:       tag.EPC,
 				TID:       tag.TID,
 				Timestamp: tag.LastRead,
-				Location:  tp.getAlias(tag.Location),
+				Location:  tp.getAlias(tag.Location.String()),
 			}
 
 		case Present:
-			if prevLoc != "" && prevLoc != tag.Location {
-				prevAlias := tp.getAlias(prevLoc)
-				curAlias := tp.getAlias(tag.Location)
-				if prevAlias == curAlias {
-					break // do not send event if the two locations share the same alias
-				}
-				event = MovedEvent{
-					EPC:          tag.EPC,
-					TID:          tag.TID,
-					Timestamp:    tag.LastRead,
-					PrevLocation: prevAlias,
-					Location:     curAlias,
-				}
+			if prevLoc.IsEmpty() || prevLoc.Equals(tag.Location) {
+				break
+			}
+
+			prevAlias := tp.getAlias(prevLoc.String())
+			curAlias := tp.getAlias(tag.Location.String())
+			if prevAlias == curAlias {
+				break // do not send event if the two locations share the same alias
+			}
+			event = MovedEvent{
+				EPC:          tag.EPC,
+				TID:          tag.TID,
+				Timestamp:    tag.LastRead,
+				PrevLocation: prevAlias,
+				Location:     curAlias,
 			}
 		}
 	}()
@@ -209,8 +203,8 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		return
 	}
 
-	readLocation := makeLocation(info.DeviceName, uint16(*rt.AntennaID))
-	statsAtReadLoc := tag.getStats(readLocation)
+	readLocation := NewLocation(info.DeviceName, uint16(*rt.AntennaID))
+	statsAtReadLoc := tag.getStats(readLocation.String())
 
 	if rssi, hasRSSI := rt.ExtractRSSI(); hasRSSI {
 		statsAtReadLoc.updateRSSI(rssi)
@@ -220,12 +214,12 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		statsAtReadLoc.updateLastRead(lastRead)
 	}
 
-	if prevLoc == "" || tag.Location == readLocation {
+	if prevLoc.IsEmpty() || tag.Location.Equals(readLocation) {
 		tag.Location = readLocation
 		return
 	}
 
-	statsAtPrevLoc := tag.getStats(tag.Location)
+	statsAtPrevLoc := tag.getStats(tag.Location.String())
 	if statsAtPrevLoc.rssiCount() == 0 {
 		// Its stats have been cleared; update location.
 		tag.Location = readLocation
@@ -239,8 +233,9 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		locationMean := statsAtPrevLoc.rssiDbm.Mean()
 		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
+		// todo: info.IsDeepScan  should be based on the Deep Scan state of `tag.Location.DeviceName`
 		offset := tp.mobilityProfile.ComputeOffset(info.IsDeepScan, info.referenceTimestamp, statsAtPrevLoc.LastRead)
-		logTagStats(tp, tag, readLocation, incomingMean, locationMean, offset)
+		logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
 
 		// Update the location if the mean RSSI at the new location
 		// is greater than the adjusted mean RSSI of the existing location.
@@ -318,7 +313,7 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 				TID:               tag.TID,
 				Timestamp:         nowMs,
 				LastRead:          tag.LastRead,
-				LastKnownLocation: tp.getAlias(tag.Location),
+				LastKnownLocation: tp.getAlias(tag.Location.String()),
 			}
 
 			// reset the read stats so if it arrives again it will start with fresh data

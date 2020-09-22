@@ -142,9 +142,9 @@ func TestMoveAntennaLocation(t *testing.T) {
 				count:      4,
 			})
 
-			if tag.Location != ds.findAlias(sensor, antID) {
+			if tag.Location.String() != ds.findAlias(sensor, antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					tag.Location, ds.findAlias(sensor, antID), tag)
+					tag.Location.String(), ds.findAlias(sensor, antID), tag)
 			}
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(events, 1, MovedType); err != nil {

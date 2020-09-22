@@ -86,7 +86,7 @@ func (params *readParams) sanitize() {
 // findAlias is a helper method to make the default alias for a device and antenna and lookup any
 // associated alias
 func (ds *testDataset) findAlias(deviceID string, antID uint16) string {
-	return ds.tp.getAlias(makeLocation(deviceID, antID))
+	return ds.tp.getAlias(NewLocation(deviceID, antID).String())
 }
 
 func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
@@ -164,7 +164,7 @@ func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLoc
 	}
 
 	// if expectedLocation is empty string, we do not care to validate that field
-	if expectedLocation != "" && tag.Location != expectedLocation {
+	if expectedLocation != "" && ds.tp.getAlias(tag.Location.String()) != expectedLocation {
 		return fmt.Errorf("tag %s: location %v does not match expected location %v\n\t%#v", epc, tag.Location, expectedLocation, tag)
 	}
 
