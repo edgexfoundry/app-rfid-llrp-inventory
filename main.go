@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
@@ -14,8 +15,10 @@ import (
 	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
 	"github.com/edgexfoundry/go-mod-configuration/configuration"
 	"github.com/edgexfoundry/go-mod-configuration/pkg/types"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/inventory"
@@ -38,9 +41,11 @@ const (
 
 	BaseConsulPath = "edgex/appservices/1.0/"
 
-	ResourceROAccessReport     = "ROAccessReport"
-	ResourceReaderNotification = "ReaderEventNotification"
-	ResourceInventoryEvent     = "InventoryEvent"
+	ResourceROAccessReport         = "ROAccessReport"
+	ResourceReaderNotification     = "ReaderEventNotification"
+	ResourceInventoryEventArrived  = "InventoryEventArrived"
+	ResourceInventoryEventMoved    = "InventoryEventMoved"
+	ResourceInventoryEventDeparted = "InventoryEventDeparted"
 
 	// keys into the application settings map
 	sKeyDevServiceName   = "DeviceServiceName"
@@ -506,22 +511,16 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 
 			var events []inventory.Event
 			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
-			for _, e := range events {
-				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-				if err := app.pushEventToCoreData(e); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
-				}
+			if err := app.pushEventsToCoreData(events); err != nil {
+				lc.Error("Failed to push events to CoreData", "error", err.Error())
 			}
 
 		case t := <-aggregateDepartedTicker.C:
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
 			var events []inventory.Event
 			events, updatedSnapshot = processor.AggregateDeparted()
-			for _, e := range events {
-				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-				if err := app.pushEventToCoreData(e); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
-				}
+			if err := app.pushEventsToCoreData(events); err != nil {
+				lc.Error("Failed to push events to CoreData", "error", err.Error())
 			}
 
 		case t := <-ageoutTicker.C:
@@ -576,24 +575,63 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 	return err
 }
 
-// pushEventToCoreData pushes an event to EdgeX's core data service
-// provided that the inventoryApp has an instance of the SDK context,
-// which unfortunately isn't available until after starting the execution pipeline.
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) error {
+// pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
+// an EdgeX Reading for each Inventory Event
+func (app *inventoryApp) pushEventsToCoreData(events []inventory.Event) error {
 	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
 	if !ok {
-		return errors.New("unable to push event to core data: missing app-functions-sdk context")
+		return errors.New("unable to push events to core data: missing app-functions-sdk context")
 	}
 
-	payload, err := json.Marshal(event)
-	if err != nil {
-		return errors.Wrap(err, "error marshalling event")
+	now := time.Now().UnixNano()
+	readings := make([]models.Reading, 0, len(events))
+
+	var errs []error
+	for _, event := range events {
+		payload, err := json.Marshal(event)
+		if err != nil {
+			errs = append(errs, errors.Wrap(err, "error marshalling event"))
+			continue
+		}
+
+		var resource string
+		switch event.OfType() {
+		case inventory.ArrivedType:
+			resource = ResourceInventoryEventArrived
+		case inventory.MovedType:
+			resource = ResourceInventoryEventMoved
+		case inventory.DepartedType:
+			resource = ResourceInventoryEventDeparted
+		default:
+			errs = append(errs, errors.New("unknown event type!"))
+			continue
+		}
+
+		app.edgexSdk.LoggingClient.Info("processing event",
+			"type", event.OfType(), "payload", string(payload))
+
+		readings = append(readings, models.Reading{
+			Value:  string(payload),
+			Origin: now,
+			Device: eventDeviceName,
+			Name:   resource,
+		})
 	}
 
-	eventName := ResourceInventoryEvent + string(event.OfType())
-	if _, err = sdkCtx.PushToCoreData(eventDeviceName, eventName, string(payload)); err != nil {
-		return errors.Wrap(err, "unable to push inventory event to core-data")
+	edgeXEvent := &models.Event{
+		Device:   eventDeviceName,
+		Origin:   now,
+		Readings: readings,
 	}
 
-	return err
+	correlation := uuid.New().String()
+	ctx := context.WithValue(context.Background(), clients.CorrelationHeader, correlation)
+	if _, err := sdkCtx.EventClient.Add(ctx, edgeXEvent); err != nil {
+		errs = append(errs, errors.Wrap(err, "unable to push inventory event(s) to core-data"))
+	}
+
+	if errs != nil {
+		return llrp.MultiErr(errs)
+	}
+	return nil
 }

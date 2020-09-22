@@ -84,6 +84,12 @@ func (params *readParams) sanitize() {
 	}
 }
 
+// findAlias is a helper method to make the default alias for a device and antenna and lookup any
+// associated alias
+func (ds *testDataset) findAlias(deviceID string, antID uint16) string {
+	return ds.tp.getAlias(makeDefaultAlias(deviceID, antID))
+}
+
 func (ds *testDataset) readTag(epc string, params readParams) {
 	params.sanitize()
 

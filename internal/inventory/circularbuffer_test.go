@@ -88,7 +88,7 @@ func TestCircularBuffer_GetMean(t *testing.T) {
 				buff.AddValue(val)
 			}
 
-			mean := buff.GetMean()
+			mean := buff.Mean()
 			if math.Abs(mean-test.expected) > epsilon {
 				t.Errorf("expected mean of %v, but got %v", test.expected, mean)
 			}

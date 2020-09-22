@@ -43,7 +43,7 @@ func TestBasicArrival(t *testing.T) {
 		count:      1,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(front, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(front, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure ALL arrivals WERE generated
@@ -67,7 +67,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		count:      1,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(back1, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure arrival events generated
@@ -85,7 +85,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		count:      4,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -104,7 +104,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		count:      1,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
@@ -147,9 +147,9 @@ func TestMoveAntennaLocation(t *testing.T) {
 				count:      4,
 			})
 
-			if tag.Location != ds.tp.getAlias(sensor, antID) {
+			if tag.Location != ds.findAlias(sensor, antID) {
 				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					tag.Location, ds.tp.getAlias(sensor, antID), tag)
+					tag.Location, ds.findAlias(sensor, antID), tag)
 			}
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(1, MovedType); err != nil {
@@ -173,7 +173,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 		count:      1,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(back1, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(back1, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 	// ensure moved events generated
@@ -191,7 +191,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 		count:      4,
 	})
 
-	if err := ds.verifyAll(Present, ds.tp.getAlias(back2, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(back2, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
@@ -340,7 +340,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
-	if err := ds.verifyAll(Present, ds.tp.getAlias(sensor, defaultAntenna)); err != nil {
+	if err := ds.verifyAll(Present, ds.findAlias(sensor, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
@@ -478,7 +478,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
-			alias := ds.tp.getAlias(test.deviceID, test.antennaID)
+			alias := ds.findAlias(test.deviceID, test.antennaID)
 			if alias != test.expected {
 				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
 			}
@@ -519,7 +519,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
-			alias := ds.tp.getAlias(test.deviceID, test.antennaID)
+			alias := ds.findAlias(test.deviceID, test.antennaID)
 			if alias != test.expected {
 				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
 			}

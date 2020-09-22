@@ -53,16 +53,14 @@ func makeDefaultAlias(deviceID string, antID uint16) string {
 // getAlias gets the string alias of a reader based on the antenna port
 // Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
 // If there is an alias defined for that antenna port, use that instead
-func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
-	defaultAlias := makeDefaultAlias(deviceID, antennaID)
+func (tp *TagProcessor) getAlias(location string) string {
+	tp.aliasMu.RLock()
+	defer tp.aliasMu.RUnlock()
 
-	tp.aliasMu.Lock()
-	defer tp.aliasMu.Unlock()
-
-	if alias, exists := tp.aliases[defaultAlias]; exists && alias != "" {
+	if alias, exists := tp.aliases[location]; exists && alias != "" {
 		return alias
 	}
-	return defaultAlias
+	return location
 }
 
 func (tp *TagProcessor) SetAliases(aliases map[string]string) {
@@ -133,7 +131,7 @@ func NewReportInfo(reading *contract.Reading) ReportInfo {
 func (tp *TagProcessor) snapshot() []StaticTag {
 	res := make([]StaticTag, 0, len(tp.inventory))
 	for _, tag := range tp.inventory {
-		res = append(res, newStaticTag(tag))
+		res = append(res, tp.newStaticTag(tag))
 	}
 	return res
 }
@@ -162,17 +160,24 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 			tag.setState(Present)
 			event = ArrivedEvent{
 				EPC:       tag.EPC,
+				TID:       tag.TID,
 				Timestamp: tag.LastRead,
-				Location:  tag.Location,
+				Location:  tp.getAlias(tag.Location),
 			}
 
 		case Present:
 			if prevLoc != "" && prevLoc != tag.Location {
+				prevAlias := tp.getAlias(prevLoc)
+				curAlias := tp.getAlias(tag.Location)
+				if prevAlias == curAlias {
+					break // do not send event if the two locations share the same alias
+				}
 				event = MovedEvent{
 					EPC:          tag.EPC,
+					TID:          tag.TID,
 					Timestamp:    tag.LastRead,
-					PrevLocation: prevLoc,
-					Location:     tag.Location,
+					PrevLocation: prevAlias,
+					Location:     curAlias,
 				}
 			}
 		}
@@ -201,7 +206,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		return
 	}
 
-	readLocation := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
+	readLocation := makeDefaultAlias(info.DeviceName, uint16(*rt.AntennaID))
 	statsAtReadLoc := tag.getStats(readLocation)
 
 	if rssi, hasRSSI := rt.ExtractRSSI(); hasRSSI {
@@ -228,8 +233,8 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	if statsAtReadLoc.rssiCount() >= 2 {
 		logReadTiming(tp, info, statsAtPrevLoc, tag)
 
-		locationMean := statsAtPrevLoc.rssiDbm.GetMean()
-		incomingMean := statsAtReadLoc.rssiDbm.GetMean()
+		locationMean := statsAtPrevLoc.rssiDbm.Mean()
+		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
 		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, statsAtPrevLoc.LastRead)
 		logTagStats(tp, tag, readLocation, incomingMean, locationMean, weight)
@@ -245,12 +250,12 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	return
 }
 
-func logTagStats(tp *TagProcessor, tag *Tag, srcAlias string, incomingMean float64, locationMean float64, weight float64) {
+func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, locationMean float64, weight float64) {
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
 	tp.lc.Debug("tag stats",
 		"epc", tag.EPC,
-		"incomingLoc", srcAlias,
-		"existingLoc", tag.Location,
+		"readLoc", readLocation,
+		"prevLoc", tag.Location,
 		"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
 		"existingAvg", fmt.Sprintf("%.2f", locationMean),
 		"weight", fmt.Sprintf("%.2f", weight),
@@ -306,10 +311,11 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 		if tag.state == Present && tag.LastRead < expiration {
 			tag.setStateAt(Departed, nowMs)
 			e := DepartedEvent{
-				EPC:          tag.EPC,
-				Timestamp:    nowMs,
-				LastRead:     tag.LastRead,
-				LastLocation: tag.Location,
+				EPC:               tag.EPC,
+				TID:               tag.TID,
+				Timestamp:         nowMs,
+				LastRead:          tag.LastRead,
+				LastKnownLocation: tp.getAlias(tag.Location),
 			}
 
 			// reset the read stats so if it arrives again it will start with fresh data

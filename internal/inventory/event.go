@@ -15,22 +15,25 @@ const (
 
 type ArrivedEvent struct {
 	EPC       string `json:"epc"`
+	TID       string `json:"tid"`
 	Timestamp int64  `json:"timestamp"`
 	Location  string `json:"location"`
 }
 
 type MovedEvent struct {
 	EPC          string `json:"epc"`
+	TID          string `json:"tid"`
 	Timestamp    int64  `json:"timestamp"`
 	PrevLocation string `json:"prev_location"`
 	Location     string `json:"location"`
 }
 
 type DepartedEvent struct {
-	EPC          string `json:"epc"`
-	Timestamp    int64  `json:"timestamp"`
-	LastRead     int64  `json:"last_read"`
-	LastLocation string `json:"last_location"`
+	EPC               string `json:"epc"`
+	TID               string `json:"tid"`
+	Timestamp         int64  `json:"timestamp"`
+	LastRead          int64  `json:"last_read"`
+	LastKnownLocation string `json:"last_known_location"`
 }
 
 type Event interface {
