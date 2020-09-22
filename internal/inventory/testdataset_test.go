@@ -47,7 +47,7 @@ type testDataset struct {
 
 func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
 	ds := testDataset{
-		tp:     NewTagProcessor(lc, nil),
+		tp:     NewTagProcessor(lc, ApplicationSettings{}, nil),
 		lc:     lc,
 		epcs:   make([]string, tagCount),
 		events: make([]Event, 0),

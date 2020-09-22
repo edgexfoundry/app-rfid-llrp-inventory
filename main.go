@@ -102,7 +102,8 @@ func (lgr logWrap) errIf(cond bool, msg string, params ...lg) bool {
 
 func (lgr logWrap) exitIf(cond bool, msg string, params ...lg) {
 	if lgr.errIf(cond, msg, params...) {
-		os.Exit(1)
+		// todo: re-enable
+		//os.Exit(1)
 	}
 }
 
@@ -457,7 +458,8 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
 func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, lc logger.LoggingClient) {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
+	// todo: inventory.DepartedCheckIntervalSeconds
+	aggregateDepartedTicker := time.NewTicker(time.Duration(30) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrs := make(chan error)
 	confUpdates := make(chan interface{})
@@ -477,11 +479,13 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			lc.Warn("Failed to unmarshal inventory snapshot.", "error", err.Error())
 		}
 	}
-	processor := inventory.NewTagProcessor(lc, snapshot)
 
 	config := &inventory.ConsulConfig{
 		Aliases: make(map[string]string),
 	}
+
+	processor := inventory.NewTagProcessor(lc, config.ApplicationSettings, snapshot)
+
 	cc.WatchForChanges(confUpdates, confErrs, config, "/"+serviceKey)
 
 	lc.Info("Starting event loop.")

@@ -24,18 +24,20 @@ type TagProcessor struct {
 	lc              logger.LoggingClient
 	inventory       map[string]*Tag
 	mobilityProfile *MobilityProfile
+	config          ApplicationSettings
 
 	aliases map[string]string
 	aliasMu sync.RWMutex
 }
 
 // NewTagProcessor creates a tag processor and pre-loads its mobility profile
-func NewTagProcessor(lc logger.LoggingClient, tags []StaticTag) *TagProcessor {
-	profile := loadMobilityProfile(lc)
+func NewTagProcessor(lc logger.LoggingClient, cfg ApplicationSettings, tags []StaticTag) *TagProcessor {
+	profile := loadMobilityProfile(cfg)
 	tp := &TagProcessor{
 		lc:              lc,
 		inventory:       make(map[string]*Tag),
 		mobilityProfile: &profile,
+		config:          cfg,
 		aliases:         make(map[string]string),
 	}
 
@@ -79,7 +81,7 @@ func (tp *TagProcessor) SetAliases(aliases map[string]string) {
 // For every TagReportData it will update the corresponding tag our in-memory tag database
 // based on the latest information.
 func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (events []Event, snapshot []StaticTag) {
-	if AdjustLastReadOnByOrigin {
+	if tp.config.AdjustLastReadOnByOrigin {
 		// offsetMicros is an adjustment of timestamps
 		// based on when the device service first saw the message
 		// compared to when the sensor said it sent it.
@@ -275,7 +277,7 @@ func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, t
 // structures if it has not been seen in a long enough time. Only applies to
 // tags which are already Departed.
 func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
-	expiration := UnixMilli(time.Now().Add(time.Hour * time.Duration(-AgeOutHours)))
+	expiration := UnixMilli(time.Now().Add(time.Hour * time.Duration(-tp.config.AgeOutHours)))
 
 	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
@@ -300,7 +302,7 @@ func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTag) {
 	now := time.Now()
 	nowMs := now.UnixNano() / 1e6
-	expiration := now.Add(-time.Duration(DepartedThresholdSeconds)*time.Second).UnixNano() / 1e6
+	expiration := now.Add(-time.Duration(tp.config.DepartedThresholdSeconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {

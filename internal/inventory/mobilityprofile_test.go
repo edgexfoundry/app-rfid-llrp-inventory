@@ -26,8 +26,8 @@ func TestNewMobilityProfile(t *testing.T) {
 	if mp.Threshold <= 0.0 {
 		t.Errorf("mobility profile: Threshold is %v, but should be greater than 0.\n\t%#v", mp.Threshold, mp)
 	}
-	if mp.YIntercept != (mp.Threshold - (mp.Slope * mp.HoldoffMillis)) {
-		t.Errorf("mobility profile: YIntercept of %v is NOT equal to expected: %v.\n\t%#v", mp.YIntercept, mp.Threshold-(mp.Slope*mp.HoldoffMillis), mp)
+	if mp.yIntercept != (mp.Threshold - (mp.Slope * mp.HoldoffMillis)) {
+		t.Errorf("mobility profile: yIntercept of %v is NOT equal to expected: %v.\n\t%#v", mp.yIntercept, mp.Threshold-(mp.Slope*mp.HoldoffMillis), mp)
 	}
 }
 
@@ -40,7 +40,7 @@ func TestMobilityProfileOverrideThreshold(t *testing.T) {
 	if mp2.Threshold != mp1.Threshold*2 {
 		t.Errorf("mobility profile 2 threshold of %v does not equal the expected: %v", mp2.Threshold, mp1.Threshold*2)
 	}
-	if mp2.YIntercept == mp1.YIntercept {
+	if mp2.yIntercept == mp1.yIntercept {
 		t.Errorf("mobility profile 2 should have a different Y-Iintercept than mobility profile 1!")
 	}
 	MobilityProfileThresholdOverridden = false
@@ -56,7 +56,7 @@ func TestMobilityProfileOverrideSlope(t *testing.T) {
 	if mp2.Slope != mp1.Slope*2 {
 		t.Errorf("mobility profile 2 Slope of %v does not equal the expected: %v", mp2.Slope, mp1.Slope*2)
 	}
-	if mp2.YIntercept == mp1.YIntercept {
+	if mp2.yIntercept == mp1.yIntercept {
 		t.Errorf("mobility profile 2 should have a different Y-Iintercept than mobility profile 1!")
 	}
 	MobilityProfileSlopeOverridden = false
@@ -72,7 +72,7 @@ func TestMobilityProfileOverrideHoldoff(t *testing.T) {
 	if mp2.HoldoffMillis != mp1.HoldoffMillis+10000 {
 		t.Errorf("mobility profile 2 HoldoffMillis of %v does not equal the expected: %v", mp2.HoldoffMillis, mp1.HoldoffMillis+10000)
 	}
-	if mp2.YIntercept == mp1.YIntercept {
+	if mp2.yIntercept == mp1.yIntercept {
 		t.Errorf("mobility profile 2 should have a different Y-Iintercept than mobility profile 1!")
 	}
 	MobilityProfileHoldoffMillisOverridden = false

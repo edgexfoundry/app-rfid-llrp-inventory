@@ -5,11 +5,6 @@
 
 package inventory
 
-import (
-	"fmt"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-)
-
 var (
 	assetTracking = MobilityProfile{
 		Slope:         -0.008,
@@ -38,39 +33,27 @@ var (
 // For a tag to move from one location to another, the other location must be either a better signal or be more recent.
 type MobilityProfile struct {
 	// Slope (dBm per millisecond): Used to determine the weight applied to older RSSI values
-	Slope float64 `json:"m"`
+	Slope float64
 	// Threshold (dBm) RSSI threshold that must be exceeded for the tag to move from the previous sensor
-	Threshold float64 `json:"t"`
+	Threshold float64
 	// HoldoffMillis (milliseconds) Amount of time in which the weight used is just the threshold, effectively the slope is not used
-	HoldoffMillis float64 `json:"a"`
+	HoldoffMillis float64
 	// b = y - (m*x)
-	YIntercept float64 `json:"b"`
+	yIntercept float64
 }
 
 // b = y - (m*x)
 func (profile *MobilityProfile) calculateYIntercept() {
-	profile.YIntercept = profile.Threshold - (profile.Slope * profile.HoldoffMillis)
+	profile.yIntercept = profile.Threshold - (profile.Slope * profile.HoldoffMillis)
 }
 
 // loadMobilityProfile will attempt to load a mobility profile based on defaults and user's configuration
-func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
-	id := MobilityProfileBaseProfile
-	profile, ok := mobilityProfiles[id]
-	if !ok {
-		lc.Warn(fmt.Sprintf("Unable to find mobility profile with id: %s. using defaults.", id))
-		profile = defaultProfile
+func loadMobilityProfile(cfg ApplicationSettings) MobilityProfile {
+	profile := MobilityProfile{
+		Slope:         cfg.MobilityProfileSlope,
+		Threshold:     cfg.MobilityProfileThreshold,
+		HoldoffMillis: cfg.MobilityProfileHoldoffMillis,
 	}
-
-	if MobilityProfileSlopeOverridden {
-		profile.Slope = MobilityProfileSlope
-	}
-	if MobilityProfileThresholdOverridden {
-		profile.Threshold = MobilityProfileThreshold
-	}
-	if MobilityProfileHoldoffMillisOverridden {
-		profile.HoldoffMillis = MobilityProfileHoldoffMillis
-	}
-
 	profile.calculateYIntercept()
 	return profile
 }
@@ -78,7 +61,7 @@ func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
 // ComputeWeight computes the weight to be applied to a value based on the time it was read vs the reference timestamp.
 func (profile *MobilityProfile) ComputeWeight(referenceTimestamp int64, lastRead int64) float64 {
 	// y = mx + b
-	weight := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.YIntercept
+	weight := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.yIntercept
 
 	// check if weight needs to be capped at threshold ceiling
 	if weight > profile.Threshold {

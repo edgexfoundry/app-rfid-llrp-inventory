@@ -5,18 +5,22 @@
 
 package inventory
 
-type ApplicationSettingsType struct {
-	DeviceServiceName  string
-	DeviceServiceURL   string
-	MetadataServiceURL string
-
+type ApplicationSettings struct {
 	AdjustLastReadOnByOrigin     bool
 	DepartedThresholdSeconds     int
 	DepartedCheckIntervalSeconds int
 	AgeOutHours                  int
+
+	MobilityProfileThreshold     float64
+	MobilityProfileHoldoffMillis float64
+	MobilityProfileSlope         float64
+
+	DeviceServiceName  string
+	DeviceServiceURL   string
+	MetadataServiceURL string
 }
 
 type ConsulConfig struct {
-	ApplicationSettings ApplicationSettingsType
+	ApplicationSettings ApplicationSettings
 	Aliases             map[string]string
 }
