@@ -244,7 +244,7 @@ The location will change when the following equation is true:
   - default: `'default'` *(which is currently the same as `'asset_tracking'`)*
   - available options: `'default'`, `'asset_tracking'`, `'retail_garment'`
 
-- **`MobilityProfileSlope`** *`[float]`*: Used to determine the decay applied to older RSSI values (aka rate of decay)
+- **`MobilityProfileSlope`** *`[float]`*: Used to determine the offset applied to older RSSI values (aka rate of decay)
   - default: *(none, inherit from base profile)*
   - units: `dBm per millisecond`
 
@@ -252,7 +252,7 @@ The location will change when the following equation is true:
   - default: *(none, inherit from base profile)*
   - units: `dBm`
 
-- **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the decay used is equal to the threshold, effectively the slope is not used
+- **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the offset used is equal to the threshold, effectively the slope is not used
   - default: *(none, inherit from base profile)*
   - units: `milliseconds`
   
