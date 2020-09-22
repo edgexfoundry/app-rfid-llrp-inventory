@@ -295,7 +295,7 @@ func (d BasicDevice) NewConfig() *SetReaderConfig {
 func (d ImpinjDevice) NewConfig() *SetReaderConfig {
 	conf := d.BasicDevice.NewConfig()
 
-	conf.ROReportSpec.Custom = append(conf.Custom, Custom{
+	conf.ROReportSpec.Custom = append(conf.ROReportSpec.Custom, Custom{
 		VendorID: uint32(PENImpinj),
 		Subtype:  ImpinjTagReportContentSelector,
 		Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
