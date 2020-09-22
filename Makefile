@@ -2,13 +2,9 @@
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
-MICROSERVICES=cmd/rfid-inventory
+MICROSERVICE=rfid-inventory
 
-.PHONY: $(MICROSERVICES)
-
-DOCKERS=docker_rfid_inventory
-
-.PHONY: $(DOCKERS) run up clean fmt deploy iterate tail stop-container down stop
+.PHONY: docker run up clean fmt deploy iterate tail stop-container down stop
 
 VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
 GIT_SHA=$(shell git rev-parse HEAD)
@@ -18,16 +14,14 @@ GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-inventory.Vers
 # default tail lines
 n = 100
 
-build: $(MICROSERVICES)
-
-cmd/rfid-inventory:
-	$(GO) build $(GOFLAGS) -o $@ ./main.go
+build:
+	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
 
 test:
 	$(GO) test $(args) ./... -coverprofile=coverage.out
 
 clean:
-	rm -f $(MICROSERVICES)
+	rm -f $(MICROSERVICE)
 
 fmt:
 	go fmt ./...
@@ -45,9 +39,7 @@ iterate: fmt
 	$(MAKE) -j docker stop-container
 	$(MAKE) deploy tail
 
-docker: $(DOCKERS)
-
-docker_rfid_inventory:
+docker:
 	docker build \
 		--rm \
 		--build-arg http_proxy \
@@ -57,8 +49,8 @@ docker_rfid_inventory:
 			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
 			.
 
-run: cmd/rfid-inventory
-	cd ./cmd && ./rfid-inventory -cp=consul://localhost:8500 -confdir=res
+run: build
+	./$(MICROSERVICE) -cp=consul://localhost:8500 -confdir=res
 
 up:
 	docker-compose up
