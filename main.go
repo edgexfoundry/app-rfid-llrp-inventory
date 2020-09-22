@@ -41,18 +41,17 @@ const (
 
 	BaseConsulPath = "edgex/appservices/1.0/"
 
-	ResourceROAccessReport         = "ROAccessReport"
-	ResourceReaderNotification     = "ReaderEventNotification"
-	ResourceInventoryEventArrived  = "InventoryEventArrived"
-	ResourceInventoryEventMoved    = "InventoryEventMoved"
-	ResourceInventoryEventDeparted = "InventoryEventDeparted"
+	ResourceROAccessReport     = "ROAccessReport"
+	ResourceReaderNotification = "ReaderEventNotification"
+	ResourceInventoryEvent     = "InventoryEvent"
 
 	// keys into the application settings map
 	sKeyDevServiceName   = "DeviceServiceName"
 	sKeyDeviceServiceURL = "DeviceServiceURL"
 	sKeyMetaServiceURL   = "MetadataServiceURL"
 
-	maxBodyBytes = 100 * 1024
+	maxBodyBytes        = 100 * 1024
+	coreDataPostTimeout = 3 * time.Minute
 )
 
 type inventoryApp struct {
@@ -506,17 +505,17 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 				// and we never got a Connection message for it.
 				lc.Error("Tag Report for unknown device", "device", rd.info.DeviceName)
 			}
-			// todo: the deep scan status needs to be ascertained on a per-tag basis
-			//       depending on whether or not the tag's existing device location is performing
-			//       a deep scan. However for now we only support a single reader group so we can
-			//       apply the logic as a single check.
-			rd.info.IsDeepScan = app.defaultGrp.IsDeepScan()
 
 			var events []inventory.Event
 			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
-			if err := app.pushEventsToCoreData(events); err != nil {
-				lc.Error("Failed to push events to CoreData", "error", err.Error())
-			}
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), coreDataPostTimeout)
+				defer cancel()
+
+				if err := app.pushEventsToCoreData(ctx, events); err != nil {
+					lc.Error("Failed to push events to CoreData", "error", err.Error())
+				}
+			}()
 
 		case t := <-aggregateDepartedTicker.C:
 			_, ok := app.sdkCtx.Load().(*appcontext.Context)
@@ -527,9 +526,14 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
 			var events []inventory.Event
 			events, updatedSnapshot = processor.AggregateDeparted()
-			if err := app.pushEventsToCoreData(events); err != nil {
-				lc.Error("Failed to push events to CoreData", "error", err.Error())
-			}
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), coreDataPostTimeout)
+				defer cancel()
+
+				if err := app.pushEventsToCoreData(ctx, events); err != nil {
+					lc.Error("Failed to push events to CoreData", "error", err.Error())
+				}
+			}()
 
 		case t := <-ageoutTicker.C:
 			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
@@ -585,7 +589,7 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
-func (app *inventoryApp) pushEventsToCoreData(events []inventory.Event) error {
+func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
 	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
 	if !ok {
 		return errors.New("unable to push events to core data: missing app-functions-sdk context")
@@ -602,27 +606,14 @@ func (app *inventoryApp) pushEventsToCoreData(events []inventory.Event) error {
 			continue
 		}
 
-		var resource string
-		switch event.OfType() {
-		case inventory.ArrivedType:
-			resource = ResourceInventoryEventArrived
-		case inventory.MovedType:
-			resource = ResourceInventoryEventMoved
-		case inventory.DepartedType:
-			resource = ResourceInventoryEventDeparted
-		default:
-			errs = append(errs, errors.New("unknown event type!"))
-			continue
-		}
-
 		app.edgexSdk.LoggingClient.Info("processing event",
-			"type", event.OfType(), "payload", string(payload))
+			"type", event.OfType(), "event", fmt.Sprintf("%+v", event))
 
 		readings = append(readings, models.Reading{
 			Value:  string(payload),
 			Origin: now,
 			Device: eventDeviceName,
-			Name:   resource,
+			Name:   string(event.OfType()),
 		})
 	}
 
@@ -633,7 +624,7 @@ func (app *inventoryApp) pushEventsToCoreData(events []inventory.Event) error {
 	}
 
 	correlation := uuid.New().String()
-	ctx := context.WithValue(context.Background(), clients.CorrelationHeader, correlation)
+	ctx = context.WithValue(ctx, clients.CorrelationHeader, correlation)
 	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
 	//       resolved, we can use the appsdk.AppFunctionsSDK EventClient directly without the need
 	//       for the appcontext.Context.

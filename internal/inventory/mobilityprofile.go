@@ -77,13 +77,8 @@ func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
 
 // ComputeOffset computes the offset to be applied to a value based on the time it was read vs the reference timestamp.
 // Offsets can be positive or negative. Typically they will start out positive, and the longer the duration
-// between the reference time and the lastRead, the more negative the offset will become. If the reader is currently
-// performing a deep scan, this will return the profile's threshold value.
-func (profile *MobilityProfile) ComputeOffset(isDeepScan bool, referenceTimestamp int64, lastRead int64) float64 {
-	if isDeepScan {
-		return profile.Threshold
-	}
-
+// between the reference time and the lastRead, the more negative the offset will become.
+func (profile *MobilityProfile) ComputeOffset(referenceTimestamp int64, lastRead int64) float64 {
 	// y = mx + b
 	offset := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.YIntercept
 

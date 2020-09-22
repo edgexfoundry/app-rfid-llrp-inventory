@@ -104,7 +104,6 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (
 type ReportInfo struct {
 	DeviceName  string
 	OriginNanos int64
-	IsDeepScan  bool
 
 	offsetMicros int64
 	// referenceTimestamp is the same as OriginNanos, but converted to milliseconds
@@ -233,8 +232,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		locationMean := statsAtPrevLoc.rssiDbm.Mean()
 		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
-		// todo: info.IsDeepScan  should be based on the Deep Scan state of `tag.Location.DeviceName`
-		offset := tp.mobilityProfile.ComputeOffset(info.IsDeepScan, info.referenceTimestamp, statsAtPrevLoc.LastRead)
+		offset := tp.mobilityProfile.ComputeOffset(info.referenceTimestamp, statsAtPrevLoc.LastRead)
 		logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
 
 		// Update the location if the mean RSSI at the new location

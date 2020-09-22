@@ -62,12 +62,6 @@ func (rg *ReaderGroup) ListReaders(w io.Writer) error {
 	return json.NewEncoder(w).Encode(s)
 }
 
-// IsDeepScan returns whether or not this reader group is currently performing a deep scan
-// operation which can be used to adjust timeouts and algorithm values
-func (rg *ReaderGroup) IsDeepScan() bool {
-	return rg.behavior.ScanType == ScanDeep
-}
-
 func (rg *ReaderGroup) ProcessTagReport(name string, tags []TagReportData) bool {
 	rg.mu.RLock()
 	tr, ok := rg.readers[name]
