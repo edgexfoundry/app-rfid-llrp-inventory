@@ -124,8 +124,7 @@ func (tp *TagProcessor) newStaticTag(tag *Tag) StaticTag {
 
 	for k, v := range tag.locationStatsMap {
 		if v.rssiCount() == 0 {
-			// skip empty
-			continue
+			continue // skip empty
 		}
 		s.LocationStatsMap[k] = newStaticTagStats(v)
 	}

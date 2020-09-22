@@ -119,8 +119,6 @@ func (lgr logWrap) exitIfErr(err error, msg string, params ...lg) {
 	lgr.exitIf(err != nil, msg, append(params, lg{"error", err})...)
 }
 
-var roSpecID0 = []byte(`{"ROSpecID":"0"}`)
-
 func main() {
 	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := edgexSdk.Initialize(); err != nil {
@@ -508,6 +506,11 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 				// and we never got a Connection message for it.
 				lc.Error("Tag Report for unknown device", "device", rd.info.DeviceName)
 			}
+			// todo: the deep scan status needs to be ascertained on a per-tag basis
+			//       depending on whether or not the tag's existing device location is performing
+			//       a deep scan. However for now we only support a single reader group so we can
+			//       apply the logic as a single check.
+			rd.info.IsDeepScan = app.defaultGrp.IsDeepScan()
 
 			var events []inventory.Event
 			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
@@ -516,6 +519,11 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			}
 
 		case t := <-aggregateDepartedTicker.C:
+			_, ok := app.sdkCtx.Load().(*appcontext.Context)
+			if !ok {
+				lc.Warn("Delaying AggregateDeparted processor: missing app-functions-sdk context")
+				break
+			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
 			var events []inventory.Event
 			events, updatedSnapshot = processor.AggregateDeparted()
@@ -626,6 +634,9 @@ func (app *inventoryApp) pushEventsToCoreData(events []inventory.Event) error {
 
 	correlation := uuid.New().String()
 	ctx := context.WithValue(context.Background(), clients.CorrelationHeader, correlation)
+	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
+	//       resolved, we can use the appsdk.AppFunctionsSDK EventClient directly without the need
+	//       for the appcontext.Context.
 	if _, err := sdkCtx.EventClient.Add(ctx, edgeXEvent); err != nil {
 		errs = append(errs, errors.Wrap(err, "unable to push inventory event(s) to core-data"))
 	}

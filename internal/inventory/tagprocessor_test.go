@@ -36,7 +36,7 @@ func TestBasicArrival(t *testing.T) {
 
 	ds := newTestDataset(lc, 10)
 
-	ds.readAll(readParams{
+	events := ds.readAll(readParams{
 		deviceName: front,
 		antenna:    defaultAntenna,
 		rssi:       rssiWeak,
@@ -47,7 +47,7 @@ func TestBasicArrival(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure ALL arrivals WERE generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 }
@@ -60,7 +60,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	back3 := nextSensor()
 
 	// start all tags in the back stock
-	ds.readAll(readParams{
+	events := ds.readAll(readParams{
 		deviceName: back1,
 		antenna:    defaultAntenna,
 		rssi:       rssiMin,
@@ -71,14 +71,12 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure arrival events generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// move tags to different sensor
-	ds.readAll(readParams{
+	events = ds.readAll(readParams{
 		deviceName: back2,
 		antenna:    defaultAntenna,
 		rssi:       rssiStrong,
@@ -89,15 +87,13 @@ func TestTagMoveWeakRssi(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), MovedType); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// test that tag stays at new location even with concurrent reads from weaker sensor
 	// MOVE back doesn't happen with weak RSSI
-	ds.readAll(readParams{
+	events = ds.readAll(readParams{
 		deviceName: back3,
 		antenna:    defaultAntenna,
 		rssi:       rssiWeak,
@@ -109,7 +105,7 @@ func TestTagMoveWeakRssi(t *testing.T) {
 	}
 
 	// ensure no events generated
-	if err := ds.verifyNoEvents(); err != nil {
+	if err := ds.verifyNoEvents(events); err != nil {
 		t.Error(err)
 	}
 }
@@ -124,7 +120,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 			ds := newTestDataset(lc, 1)
 
 			// start all tags at initialAntenna
-			ds.readAll(readParams{
+			events := ds.readAll(readParams{
 				deviceName: sensor,
 				antenna:    initialAntenna,
 				rssi:       rssiMin,
@@ -132,15 +128,14 @@ func TestMoveAntennaLocation(t *testing.T) {
 			})
 
 			// ensure arrival events generated
-			if err := ds.verifyEventPattern(1, ArrivedType); err != nil {
+			if err := ds.verifyEventPattern(events, 1, ArrivedType); err != nil {
 				t.Error(err)
 			}
 
-			ds.events = make([]Event, 0)
 			epc := ds.epcs[0]
 			tag := ds.tp.inventory[epc]
 			// move tag to a different antenna port on same sensor
-			ds.readTag(epc, readParams{
+			events = ds.readTag(epc, readParams{
 				deviceName: sensor,
 				antenna:    antID,
 				rssi:       rssiStrong,
@@ -152,7 +147,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 					tag.Location, ds.findAlias(sensor, antID), tag)
 			}
 			// ensure moved events generated
-			if err := ds.verifyEventPattern(1, MovedType); err != nil {
+			if err := ds.verifyEventPattern(events, 1, MovedType); err != nil {
 				t.Error(err)
 			}
 		})
@@ -166,7 +161,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 	back2 := nextSensor()
 
 	// start all tags in the back stock
-	ds.readAll(readParams{
+	events := ds.readAll(readParams{
 		deviceName: back1,
 		antenna:    defaultAntenna,
 		rssi:       rssiMin,
@@ -177,14 +172,12 @@ func TestMoveBetweenSensors(t *testing.T) {
 		t.Error(err)
 	}
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// move tag to different sensor
-	ds.readAll(readParams{
+	events = ds.readAll(readParams{
 		deviceName: back2,
 		antenna:    defaultAntenna,
 		rssi:       rssiStrong,
@@ -196,7 +189,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 	}
 
 	// ensure moved events generated
-	if err := ds.verifyEventPattern(ds.size(), MovedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), MovedType); err != nil {
 		t.Error(err)
 	}
 }
@@ -206,7 +199,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 	sensor := nextSensor()
 
 	// read past ageout threshold
-	ds.readAll(readParams{
+	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		lastSeen:   time.Now().Add(time.Duration(-3*AgeOutHours) * time.Hour),
@@ -218,8 +211,6 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// should not remove any tags
 	ds.tp.AgeOut()
 	if len(ds.tp.inventory) != ds.size() {
@@ -228,7 +219,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 	}
 
 	// now we will flag the items as departed and run the ageout task again
-	ds.tp.AggregateDeparted()
+	_, _ = ds.tp.AggregateDeparted()
 	if err := ds.verifyStateAll(Departed); err != nil {
 		t.Error(err)
 	}
@@ -273,7 +264,7 @@ func TestAgeOutThreshold(t *testing.T) {
 			ds := newTestDataset(lc, 5)
 			sensor := nextSensor()
 
-			ds.readAll(readParams{
+			_ = ds.readAll(readParams{
 				deviceName: sensor,
 				antenna:    defaultAntenna,
 				lastSeen:   test.lastSeen,
@@ -283,10 +274,8 @@ func TestAgeOutThreshold(t *testing.T) {
 				t.Error(err)
 			}
 
-			ds.events = make([]Event, 0)
-
 			// mark any potential tags as Departed
-			ds.tp.AggregateDeparted()
+			_, _ = ds.tp.AggregateDeparted()
 			if err := ds.verifyStateAll(test.state); err != nil {
 				t.Error(err)
 			}
@@ -309,7 +298,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 	sensor := nextSensor()
 
 	// read past departed threshold
-	ds.readAll(readParams{
+	events := ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
@@ -317,8 +306,8 @@ func TestAggregateDepartedTask(t *testing.T) {
 	})
 
 	// expect all tags to depart, and their stats to be set to Departed
-	ds.events, _ = ds.tp.AggregateDeparted()
-	if err := ds.verifyEventPattern(ds.size(), DepartedType); err != nil {
+	events, _ = ds.tp.AggregateDeparted()
+	if err := ds.verifyEventPattern(events, ds.size(), DepartedType); err != nil {
 		t.Error(err)
 	}
 
@@ -326,30 +315,26 @@ func TestAggregateDepartedTask(t *testing.T) {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// read the tags again, this time 1/2 the way between the departed time limit
 	// they should all be returned, and generate Arrived events and be Present state
-	ds.readAll(readParams{
+	events = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
 		lastSeen:   time.Now().Add(-(time.Duration(DepartedThresholdSeconds) * time.Second) / 2),
 	})
 
-	if err := ds.verifyEventPattern(ds.size(), ArrivedType); err != nil {
+	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
 		t.Error(err)
 	}
 	if err := ds.verifyAll(Present, ds.findAlias(sensor, defaultAntenna)); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// run departed check again, however nothing should depart now because we are
 	// within the departed time limit
-	ds.tp.AggregateDeparted()
-	if err := ds.verifyNoEvents(); err != nil {
+	events, _ = ds.tp.AggregateDeparted()
+	if err := ds.verifyNoEvents(events); err != nil {
 		t.Error(err)
 	}
 }
@@ -359,7 +344,7 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	sensor := nextSensor()
 
 	current := time.Now()
-	ds.readAll(readParams{
+	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
@@ -367,15 +352,13 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	})
 
 	// make sure the last read is properly set
-	if err := ds.verifyLastReadAll(current.UnixNano() / int64(time.Millisecond)); err != nil {
+	if err := ds.verifyLastReadAll(current.UnixNano() / 1e6); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// read all of the tags using the outdated timestamps
 	outdated := current.Add(-5 * time.Minute)
-	ds.readAll(readParams{
+	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
@@ -383,15 +366,13 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	})
 
 	// make sure the last read was NOT updated, because it was older than current last read
-	if err := ds.verifyLastReadAll(current.UnixNano() / int64(time.Millisecond)); err != nil {
+	if err := ds.verifyLastReadAll(current.UnixNano() / 1e6); err != nil {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// read all of the tags using an even newer timestamp
 	next := time.Now()
-	ds.readAll(readParams{
+	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
@@ -399,7 +380,7 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 	})
 
 	// make sure the last read WAS updated this time when a newer value was given
-	if err := ds.verifyLastReadAll(next.UnixNano() / int64(time.Millisecond)); err != nil {
+	if err := ds.verifyLastReadAll(next.UnixNano() / 1e6); err != nil {
 		t.Error(err)
 	}
 }
@@ -414,7 +395,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 	epc0 := ds.epcs[0]
 	origin := time.Now()
 	lastSeen := origin.Add(-53 * time.Minute)
-	ds.readTag(epc0, readParams{
+	_ = ds.readTag(epc0, readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		lastSeen:   lastSeen,
@@ -427,14 +408,12 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 		t.Error(err)
 	}
 
-	ds.events = make([]Event, 0)
-
 	// turn OFF the timestamp adjuster
 	AdjustLastReadOnByOrigin = false
 	epc1 := ds.epcs[1]
 	origin = time.Now()
 	lastSeen = origin.Add(-19 * time.Second)
-	ds.readTag(epc1, readParams{
+	_ = ds.readTag(epc1, readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		lastSeen:   lastSeen,

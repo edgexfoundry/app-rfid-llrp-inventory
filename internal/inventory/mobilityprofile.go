@@ -75,15 +75,21 @@ func loadMobilityProfile(lc logger.LoggingClient) MobilityProfile {
 	return profile
 }
 
-// ComputeWeight computes the weight to be applied to a value based on the time it was read vs the reference timestamp.
-func (profile *MobilityProfile) ComputeWeight(referenceTimestamp int64, lastRead int64) float64 {
-	// y = mx + b
-	weight := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.YIntercept
-
-	// check if weight needs to be capped at threshold ceiling
-	if weight > profile.Threshold {
-		weight = profile.Threshold
+// ComputeOffset computes the offset to be applied to a value based on the time it was read vs the reference timestamp.
+// Offsets can be positive or negative. Typically they will start out positive, and the longer the duration
+// between the reference time and the lastRead, the more negative the offset will become. If the reader is currently
+// performing a deep scan, this will return the profile's threshold value.
+func (profile *MobilityProfile) ComputeOffset(isDeepScan bool, referenceTimestamp int64, lastRead int64) float64 {
+	if isDeepScan {
+		return profile.Threshold
 	}
 
-	return weight
+	// y = mx + b
+	offset := (profile.Slope * float64(referenceTimestamp-lastRead)) + profile.YIntercept
+
+	// check if offset needs to be capped at threshold ceiling
+	if offset > profile.Threshold {
+		offset = profile.Threshold
+	}
+	return offset
 }

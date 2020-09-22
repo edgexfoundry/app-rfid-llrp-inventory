@@ -46,13 +46,15 @@ func NewTagProcessor(lc logger.LoggingClient, tags []StaticTag) *TagProcessor {
 	return tp
 }
 
-func makeDefaultAlias(deviceID string, antID uint16) string {
-	return deviceID + "_" + strconv.FormatUint(uint64(antID), 10)
+// makeLocation concatenates a deviceName and antenna ID as a string using the
+// format deviceName_antenna, which is used as the tag location, and as the
+// default alias value.
+func makeLocation(deviceName string, antID uint16) string {
+	return deviceName + "_" + strconv.Itoa(int(antID))
 }
 
-// getAlias gets the string alias of a reader based on the antenna port
-// Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
-// If there is an alias defined for that antenna port, use that instead
+// getAlias returns the alias associated with a location if one has been defined,
+// otherwise it returns back the original location.
 func (tp *TagProcessor) getAlias(location string) string {
 	tp.aliasMu.RLock()
 	defer tp.aliasMu.RUnlock()
@@ -67,7 +69,7 @@ func (tp *TagProcessor) SetAliases(aliases map[string]string) {
 	tp.aliasMu.Lock()
 	defer tp.aliasMu.Unlock()
 
-	// aliases configuration map from Consul includes an empty key too for some reason, so is deleted if it exists
+	// delete empty key/value pair returned from Consul if it exists
 	delete(aliases, "")
 
 	tp.aliases = aliases
@@ -110,6 +112,7 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (
 type ReportInfo struct {
 	DeviceName  string
 	OriginNanos int64
+	IsDeepScan  bool
 
 	offsetMicros int64
 	// referenceTimestamp is the same as OriginNanos, but converted to milliseconds
@@ -206,7 +209,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		return
 	}
 
-	readLocation := makeDefaultAlias(info.DeviceName, uint16(*rt.AntennaID))
+	readLocation := makeLocation(info.DeviceName, uint16(*rt.AntennaID))
 	statsAtReadLoc := tag.getStats(readLocation)
 
 	if rssi, hasRSSI := rt.ExtractRSSI(); hasRSSI {
@@ -236,13 +239,13 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		locationMean := statsAtPrevLoc.rssiDbm.Mean()
 		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
-		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, statsAtPrevLoc.LastRead)
-		logTagStats(tp, tag, readLocation, incomingMean, locationMean, weight)
+		offset := tp.mobilityProfile.ComputeOffset(info.IsDeepScan, info.referenceTimestamp, statsAtPrevLoc.LastRead)
+		logTagStats(tp, tag, readLocation, incomingMean, locationMean, offset)
 
 		// Update the location if the mean RSSI at the new location
 		// is greater than the adjusted mean RSSI of the existing location.
 		// Note: This will generate a moved event.
-		if incomingMean > (locationMean + weight) {
+		if incomingMean > (locationMean + offset) {
 			tag.Location = readLocation
 		}
 	}
@@ -250,18 +253,18 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	return
 }
 
-func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, locationMean float64, weight float64) {
+func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, existingMean float64, offset float64) {
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
 	tp.lc.Debug("tag stats",
 		"epc", tag.EPC,
 		"readLoc", readLocation,
 		"prevLoc", tag.Location,
 		"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
-		"existingAvg", fmt.Sprintf("%.2f", locationMean),
-		"weight", fmt.Sprintf("%.2f", weight),
-		"existingAdjusted", fmt.Sprintf("%.2f", locationMean+weight),
+		"existingAvg", fmt.Sprintf("%.2f", existingMean),
+		"offset", fmt.Sprintf("%.2f", offset),
+		"existingAdjusted", fmt.Sprintf("%.2f", existingMean+offset),
 		// if stayFactor is positive, tag will stay, if negative, generates a moved event
-		"stayFactor", fmt.Sprintf("%.2f", (locationMean+weight)-incomingMean))
+		"stayFactor", fmt.Sprintf("%.2f", (existingMean+offset)-incomingMean))
 }
 
 func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, tag *Tag) {
