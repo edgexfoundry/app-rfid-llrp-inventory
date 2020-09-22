@@ -613,7 +613,7 @@ func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 			Value:  string(payload),
 			Origin: now,
 			Device: eventDeviceName,
-			Name:   string(event.OfType()),
+			Name:   ResourceInventoryEvent + string(event.OfType()),
 		})
 	}
 
