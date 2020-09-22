@@ -201,44 +201,44 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		return
 	}
 
-	curLocation := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
-	statsAtCurLoc := tag.getStats(curLocation)
+	readLocation := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
+	statsAtReadLoc := tag.getStats(readLocation)
 
 	if rssi, hasRSSI := rt.ExtractRSSI(); hasRSSI {
-		statsAtCurLoc.updateRSSI(rssi)
+		statsAtReadLoc.updateRSSI(rssi)
 	}
 
 	if hasTimestamp {
-		statsAtCurLoc.updateLastRead(lastRead)
+		statsAtReadLoc.updateLastRead(lastRead)
 	}
 
-	if prevLoc == "" || tag.Location == curLocation {
-		tag.Location = curLocation
+	if prevLoc == "" || tag.Location == readLocation {
+		tag.Location = readLocation
 		return
 	}
 
 	statsAtPrevLoc := tag.getStats(tag.Location)
 	if statsAtPrevLoc.rssiCount() == 0 {
 		// Its stats have been cleared; update location.
-		tag.Location = curLocation
+		tag.Location = readLocation
 		return
 	}
 
 	// if the incoming read's location has at least 2 data points, lets see if the tag should move
-	if statsAtCurLoc.rssiCount() >= 2 {
+	if statsAtReadLoc.rssiCount() >= 2 {
 		logReadTiming(tp, info, statsAtPrevLoc, tag)
 
 		locationMean := statsAtPrevLoc.rssiDbm.GetMean()
-		incomingMean := statsAtCurLoc.rssiDbm.GetMean()
+		incomingMean := statsAtReadLoc.rssiDbm.GetMean()
 
 		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, statsAtPrevLoc.LastRead)
-		logTagStats(tp, tag, curLocation, incomingMean, locationMean, weight)
+		logTagStats(tp, tag, readLocation, incomingMean, locationMean, weight)
 
 		// Update the location if the mean RSSI at the new location
 		// is greater than the adjusted mean RSSI of the existing location.
 		// Note: This will generate a moved event.
 		if incomingMean > (locationMean + weight) {
-			tag.Location = curLocation
+			tag.Location = readLocation
 		}
 	}
 
@@ -298,22 +298,23 @@ func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 // AggregateDeparted loops through all tags and sees if any of them should be Departed
 // due to not being read in a long enough time.
 func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTag) {
-	now := UnixMilliNow()
-	expiration := now - int64(DepartedThresholdSeconds*1000)
+	now := time.Now()
+	nowMs := now.UnixNano() / 1e6
+	expiration := now.Add(-time.Duration(DepartedThresholdSeconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {
-			tag.setStateAt(Departed, now)
+			tag.setStateAt(Departed, nowMs)
 			e := DepartedEvent{
 				EPC:          tag.EPC,
-				Timestamp:    now,
+				Timestamp:    nowMs,
 				LastRead:     tag.LastRead,
 				LastLocation: tag.Location,
 			}
+
 			// reset the read stats so if it arrives again it will start with fresh data
 			tag.resetStats()
-			tp.lc.Debug(fmt.Sprintf("Departed %+v (Last seen %v ago)",
-				e, time.Duration(now-tag.LastRead)*time.Millisecond))
+			tp.lc.Debug("Tag departed.", "epc", tag.EPC, "msSinceLastSeen", nowMs-tag.LastRead)
 			events = append(events, e)
 		}
 	}

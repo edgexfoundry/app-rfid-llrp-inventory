@@ -458,9 +458,8 @@ func (d BasicDevice) FillAmbiguousNil(tags []TagReportData) {
 }
 
 // FillAmbiguousNil does nothing for Impinj Readers,
-// as not only do they not use the aspect of LLRP,
-// but they sometimes send nil for enabled optional values,
-// which _should_ mean "same as previous", but _doesn't_.
+// as they say they do not use this particular aspect of LLRP.
+// Hopefully that is true.
 func (d ImpinjDevice) FillAmbiguousNil(_ []TagReportData) {}
 
 // Transmit returns a legal llrp.RFTransmitter value.
@@ -469,7 +468,7 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	pwrIdx, pwr := d.findPower(b.Power.Max)
 	if pwr > b.Power.Max {
 		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"target power (%.2f dBm) exceeds lowest supported (%.2f dBm)",
+			"target power (%.2f dBm) is lower than the lowest supported (%.2f dBm)",
 			float32(b.Power.Max)/100.0, float32(pwr)/100.0)
 	}
 
@@ -669,17 +668,12 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	tari := d.modes[mIdx].MinTariTime
 	canDualTarget := d.stateAware && d.nSpecsPerRO >= 2
 
-	selection := []C1G2Filter{{
-		TruncateAction: FilterActionDoNotTruncate,
-		TagInventoryMask: C1G2TagInventoryMask{
-			MemoryBank: 1,
-		},
-	}}
-
+	// This query only applies if the Reader supports state aware actions.
 	query := &C1G2SingulationControl{
 		InvAwareAction: new(C1G2TagInventoryStateAwareSingulationAction),
 	}
 
+	// Our basic AISpec targets all antennas and runs forever.
 	aiSpecs := []AISpec{{
 		AntennaIDs: []AntennaID{0},
 		InventoryParameterSpecs: []InventoryParameterSpec{{
@@ -689,21 +683,28 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 				AntennaID:     0,
 				RFTransmitter: transmit,
 				C1G2InventoryCommand: &C1G2InventoryCommand{
-					TagInventoryStateAware: false,
+					TagInventoryStateAware: d.stateAware,
 					RFControl: &C1G2RFControl{
 						RFModeID: uint16(best.ModeID),
 						Tari:     uint16(tari),
 					},
+
 					SingulationControl: query,
-					Filters:            selection,
 				},
 			}},
 		}},
 	}}
 
+	// Grab the pointer to the first InventoryCommand
+	invCmd := aiSpecs[0].InventoryParameterSpecs[0].
+		AntennaConfigurations[0].C1G2InventoryCommand
+
 	switch b.ScanType {
 	case ScanFast:
-		// S0 reverts on its own when not powered
+		invCmd.Filters = nil // remove the filter
+
+		// For a Fast scan, search for tags with S0 in State A.
+		// S0 reverts on its own when not powered.
 		query = &C1G2SingulationControl{
 			Session:        0,
 			TagPopulation:  500,
@@ -715,11 +716,12 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 		}
 
 	case ScanNormal:
-		selection[0].AwareFilterAction = &C1G2TagInventoryStateAwareFilterAction{
-			Target:       InvTargetInventoriedS1,
-			FilterAction: OnSelectMFlipUKeep,
-		}
-
+		// For a Normal scan, search for tags with S1 in State A.
+		// Inventorying S1 allows a lower Q value without collisions,
+		// as over time tags spread out in the persistence time window.
+		// If the population is smaller than (S1 persistence) * (read rate),
+		// then eventually each round only one tag is eligible for singulation
+		// (i.e., only a single tag's S1 will have fallen back to A).
 		query = &C1G2SingulationControl{
 			Session:        1,
 			TagPopulation:  1000,
@@ -731,19 +733,40 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 		}
 
 	case ScanDeep:
-		selection[0].AwareFilterAction = &C1G2TagInventoryStateAwareFilterAction{
-			Target:       InvTargetInventoriedS2,
-			FilterAction: OnSelectMClearUKeep,
-		}
+		// If we can't control session flags directly
+		// or if we can only have a single AISpec,
+		// we use a Filter with a mask that matches no tags
+		// with an action that "Selects" non-matches and "Unselects" matches,
+		// then set the SingulationControl to target S2.
+		// The only reasonable way for a Reader to implement that
+		// is with a Select for S2 B->A and a Query for target S2 in state A.
+		// Our choice of Filter effectively matches all tags,
+		// but minimizes the amount of data the Reader actually sends.
+		//
+		// If we have enough controls to do so, just use two Queries:
+		// first inventory S2 A->B until it's quiet for 500ms or more,
+		// then inventory S2 B->A until it's quiet for 500ms or more.
+		if !d.stateAware || d.nSpecsPerRO == 1 {
+			action := C1G2TagInventoryStateUnawareFilterAction(UnawareSelectMKeepUClear)
 
-		query = &C1G2SingulationControl{
-			Session:        2,
-			TagPopulation:  3000,
-			TagTransitTime: 10000,
-			InvAwareAction: &C1G2TagInventoryStateAwareSingulationAction{
-				SessionState: SessionStateB,
-				SLState:      SLStateDeasserted,
-			},
+			invCmd.Filters = []C1G2Filter{{
+				TruncateAction: FilterActionDoNotTruncate,
+				TagInventoryMask: C1G2TagInventoryMask{
+					MemoryBank: 1,
+				},
+				UnawareFilterAction: &action,
+			}}
+
+			query = &C1G2SingulationControl{
+				Session:        2,
+				TagPopulation:  3000,
+				TagTransitTime: 10000,
+				InvAwareAction: &C1G2TagInventoryStateAwareSingulationAction{
+					SessionState: SessionStateB,
+					SLState:      SLStateDeasserted,
+				},
+			}
+
 		}
 
 		if !canDualTarget {
@@ -759,6 +782,14 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 
 			aiSpecs[i] = AISpec{
 				AntennaIDs: []AntennaID{0},
+				StopTrigger: AISpecStopTrigger{
+					Trigger: AIStopTriggerTagObservation,
+					TagObservationTrigger: &TagObservationTrigger{
+						Trigger: TagObsTriggerNoNewAfterT,
+						T:       500,
+					},
+				},
+
 				InventoryParameterSpecs: []InventoryParameterSpec{{
 					InventoryParameterSpecID: uint16(i + 1),
 					AirProtocolID:            AirProtoEPCGlobalClass1Gen2,
@@ -824,7 +855,7 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	// Impinj doesn't support state aware filtering via standard LLRP messages,
 	// but does support the concept via a custom parameter they call "Search modes".
 	queryAction := &C1G2SingulationControl{}
-	searchMode := impSearchQueryAtoBtoA
+	searchMode := impjDualTarget
 
 	switch b.ScanType {
 	case ScanFast:
@@ -836,7 +867,7 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 
 		if b.ImpinjOptions != nil && b.ImpinjOptions.SuppressMonza {
 			queryAction.Session = 1 // TagFocus only makes sense with S1
-			searchMode = impSearchQueryAtoBSupMonzaS1
+			searchMode = impjSingleTargetSuppressed
 		}
 	case ScanNormal:
 		queryAction = &C1G2SingulationControl{
@@ -846,10 +877,10 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 		}
 
 		if b.ImpinjOptions != nil && b.ImpinjOptions.SuppressMonza {
-			searchMode = impSearchQueryAtoBSupMonzaS1
+			searchMode = impjSingleTargetSuppressed
 		}
 	case ScanDeep:
-		searchMode = impSearchSelToAQueryAtoB
+		searchMode = impjDualTargetWithReset
 		queryAction = &C1G2SingulationControl{
 			Session:        2,
 			TagPopulation:  3000,

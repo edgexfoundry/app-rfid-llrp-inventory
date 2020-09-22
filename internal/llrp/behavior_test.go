@@ -54,6 +54,7 @@ var fccFreqs = []Kilohertz{
 	927250,
 }
 
+// newImpinjCaps returns capabilities matching an Impinj Reader in an FCC region.
 func newImpinjCaps() *GetReaderCapabilitiesResponse {
 	powerTable := make([]TransmitPowerLevelTableEntry, 81)
 	for i := range powerTable {
@@ -248,7 +249,6 @@ func TestImpinjDevice_invalid(t *testing.T) {
 func TestImpinjDevice_NewConfig(t *testing.T) {
 	caps := newImpinjCaps()
 	d, err := NewImpinjDevice(caps)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,6 +277,7 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 			d.nGPIs, caps.GeneralDeviceCapabilities.GPIOCapabilities.NumGPIs)
 	}
 
+	// make sure we removed the meaningless Autoset modes
 	if len(d.modes) != 5 {
 		t.Errorf("expected 5 modes; got %d", len(d.modes))
 	}
@@ -320,6 +321,195 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 				pwrAtI.TransmitPowerValue, pwrAtI.Index, pValue, pIdx)
 		}
 	}
+
+}
+
+func TestFastestAt(t *testing.T) {
+	caps := newImpinjCaps()
+	d, err := NewImpinjDevice(caps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// find best should return something, regardless of the number of readers
+	for i := 0; i < 100; i++ {
+		best, m := d.findBestMode(0)
+		if best > len(d.modes)-1 {
+			t.Errorf("find best returned an invalid mode: %d, %+v", best, m)
+		}
+	}
+
+	type expMode struct {
+		mask           SpectralMaskType
+		modeIdx        int
+		shouldHaveMode bool
+	}
+
+	// because there's a Dense mask, there's always some mode available
+	for _, testCase := range []expMode{
+		{SpectralMaskUnknown, 0, true},
+		{SpectralMaskSingleInterrogator, 0, true},
+		{SpectralMaskMultiInterrogator, 0, true},
+		{SpectralMaskDenseInterrogator, 2, true},
+	} {
+		bestIdx, ok := d.fastestAt(testCase.mask)
+		if !testCase.shouldHaveMode {
+			if ok {
+				t.Errorf("did not expect a mode index for %+v, but found %d",
+					testCase, bestIdx)
+			}
+			continue
+		}
+
+		if !ok {
+			t.Errorf("expected mode index for %+v, but none found", testCase)
+			continue
+		}
+
+		if testCase.modeIdx != bestIdx {
+			t.Errorf("expected mode %d for %+v, but got %d",
+				testCase.modeIdx, testCase, bestIdx)
+		}
+	}
+
+	// if we remove the denser masks, we shouldn't get modes at those higher levels
+	for i := range d.modes {
+		d.modes[i].SpectralMask = SpectralMaskSingleInterrogator
+	}
+
+	for _, testCase := range []expMode{
+		{SpectralMaskUnknown, 0, true},
+		{SpectralMaskSingleInterrogator, 0, true},
+		{SpectralMaskMultiInterrogator, 0, false},
+		{SpectralMaskDenseInterrogator, 0, false},
+	} {
+		bestIdx, ok := d.fastestAt(testCase.mask)
+		if !testCase.shouldHaveMode {
+			if ok {
+				t.Errorf("did not expect a mode index for %+v, but found %d",
+					testCase, bestIdx)
+			}
+			continue
+		}
+
+		if !ok {
+			t.Errorf("expected mode index for %+v, but none found", testCase)
+			continue
+		}
+
+		if testCase.modeIdx != bestIdx {
+			t.Errorf("expected mode %d for %+v, but got %d",
+				testCase.modeIdx, testCase, bestIdx)
+		}
+	}
+
+	// find best should return something, regardless of the number of readers
+	for i := 0; i < 100; i++ {
+		best, m := d.findBestMode(0)
+		if best > len(d.modes)-1 {
+			t.Errorf("find best returned an invalid mode: %d, %+v", best, m)
+		}
+	}
+}
+
+func TestBehavior_Boundary_zero(t *testing.T) {
+	b := Behavior{}
+
+	bound := b.Boundary()
+	checkStartImmediate(t, bound)
+	checkStopNone(t, bound)
+
+	b.Duration = 10
+	bound = b.Boundary()
+	checkStartNone(t, bound)
+	checkStopDuration(t, bound)
+
+	b.Duration = 0
+	b.GPITrigger = &GPITrigger{}
+	bound = b.Boundary()
+	checkStartGPI(t, bound)
+	checkStopNone(t, bound)
+}
+
+func checkStartImmediate(t *testing.T, spec ROBoundarySpec) {
+	t.Helper()
+	if spec.StartTrigger.Trigger != ROStartTriggerImmediate {
+		t.Errorf("behavior should have immediate start trigger, not %v",
+			spec.StartTrigger.Trigger)
+	}
+
+	if spec.StartTrigger.GPITrigger != nil {
+		t.Errorf("behavior without GPI trigger should not have a GPI trigger")
+	}
+
+	if spec.StartTrigger.PeriodicTrigger != nil {
+		t.Error("behavior with immediate start trigger should not have a periodic trigger")
+	}
+}
+
+func checkStartNone(t *testing.T, spec ROBoundarySpec) {
+	t.Helper()
+	if spec.StartTrigger.Trigger != ROStartTriggerNone {
+		t.Errorf("behavior should not have a start trigger, but has %v",
+			spec.StartTrigger.Trigger)
+	}
+
+	if spec.StartTrigger.GPITrigger != nil {
+		t.Errorf("behavior without GPI trigger should not have a GPI trigger")
+	}
+
+	if spec.StartTrigger.PeriodicTrigger != nil {
+		t.Error("behavior should not have a periodic trigger")
+	}
+}
+
+func checkStartGPI(t *testing.T, spec ROBoundarySpec) {
+	t.Helper()
+	if spec.StartTrigger.Trigger != ROStartTriggerGPI {
+		t.Errorf("behavior should have GPI start trigger, not %v",
+			spec.StartTrigger.Trigger)
+	}
+
+	if spec.StartTrigger.GPITrigger == nil {
+		t.Errorf("behavior should have GPI trigger, but doesn't")
+	}
+
+	if spec.StartTrigger.PeriodicTrigger != nil {
+		t.Error("behavior should not have a periodic trigger")
+	}
+}
+
+func checkStopNone(t *testing.T, spec ROBoundarySpec) {
+	t.Helper()
+	if spec.StopTrigger.Trigger != ROStopTriggerNone {
+		t.Errorf("behavior should not have a stop trigger, but has %v",
+			spec.StopTrigger.Trigger)
+	}
+
+	if spec.StopTrigger.DurationTriggerValue != 0 {
+		t.Errorf("behavior stop trigger duration should be 0, not %d",
+			spec.StopTrigger.DurationTriggerValue)
+	}
+
+	if spec.StopTrigger.GPITriggerValue != nil {
+		t.Error("behavior should not have a GPI stop trigger")
+	}
+}
+
+func checkStopDuration(t *testing.T, spec ROBoundarySpec) {
+	t.Helper()
+	if spec.StopTrigger.Trigger != ROStopTriggerDuration {
+		t.Errorf("behavior should have a duration stop trigger, but has %v",
+			spec.StopTrigger.Trigger)
+	}
+
+	if spec.StopTrigger.DurationTriggerValue == 0 {
+		t.Error("behavior stop trigger duration should not be 0")
+	}
+
+	if spec.StopTrigger.GPITriggerValue != nil {
+		t.Error("behavior should not have a GPI stop trigger")
+	}
 }
 
 func TestMarshalBehaviorText(t *testing.T) {
@@ -343,6 +533,7 @@ func TestMarshalBehaviorText(t *testing.T) {
 		{"unknownScan", ScanType(501), nil, true},
 	}
 	for _, testCase := range tests {
+		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 

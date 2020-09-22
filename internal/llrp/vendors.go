@@ -51,57 +51,29 @@ const (
 	// There's no way to know exactly what it will do.
 	impSearchReaderSelected = impinjSearchMode(0)
 
-	// impSearchQueryAtoB Impinj calls "Single Target".
-	// It sets the Target field in Queries to A,
-	// but there's no indication what it uses for the SL flag.
-	//
-	// It has the effect of setting singulated tags' Session flag to B.
-	// In S2 and S3, tags remain quiet once singulated as long as they're powered.
-	// In S1, they'll fall back after the persistence timeout (500ms-5s),
-	// so as long as the population small enough to read before that timeout,
-	// this has the effect of "spreading" their observations through the read window.
-	// In S0, the flag resets so quickly, this is unlikely to have much impact.
-	impSearchQueryAtoB = impinjSearchMode(1)
+	// impjSingleTarget is Impinj's "Single Target".
+	// It's just a normal Query with the Target field set to A.
+	impjSingleTarget = impinjSearchMode(1)
 
-	// impSearchQueryBtoA Impinj calls "Single Target Reset".
-	// This is just a Query with the Target set to B instead of A.
-	impSearchQueryBtoA = impinjSearchMode(5)
+	// impjSingleTargetReset is Impinj's "Single Target Reset".
+	// It's just a normal Query with the Target field set to B.
+	impjSingleTargetReset = impinjSearchMode(5)
 
-	// impSearchQueryAtoBSupMonzaS1 is maybe the reason Impinj has "Search Modes".
-	// They call this one "Single Target Inventory with Suppression (aka TagFocus)",
-	// it is just the above QueryAtoB mode, but sends a command to Impinj Monza tags
-	// to refresh their S1 flag persistence:
+	// impjSingleTargetSuppressed is Impinj's
+	// "Single Target Inventory with Suppression (aka TagFocus)".
+	// This is identical to "Single Target",
+	// but instructs Impinj Monza tags to refresh their S1 flag persistence:
 	// https://platform.impinj.com/indy/itk/latest/Glossary/Glossary.html#term-tagfocus
 	//
 	// Importantly, it only makes sense if used with Session 1,
 	// and only if you've got mostly Impinj Monza tags.
-	// Otherwise it's just the same as querying A->B, but probably slower.
-	//
-	// The S1 flag resets itself B->A after 500ms-5s, unless refreshed,
-	// which can be done with standard LLRP commands
-	// if a Reader supports State Aware filtering,
-	// but does require more than one AISpec.
-	//
-	// It's unclear how Impinj is issuing custom commands to its Monza tags
-	// while still complying with part 2.3.4 of the Gen2 standard:
-	// "An Interrogator shall issue a custom command only after (1) singulating a Tag,
-	// and (2) reading (or having prior knowledge of) the Tag['s] TID [...]
-	// A custom command shall not solely duplicate the functionality
-	// of any mandatory or optional command defined in this protocol".
-	// That should slow down the process considerably,
-	// but since it doesn't, maybe they're just sending a Select
-	// that filters on their TID but the tag interprets it a special way?
-	impSearchQueryAtoBSupMonzaS1 = impinjSearchMode(3)
+	// Otherwise it's exactly the same as querying A->B, but probably slower.
+	impjSingleTargetSuppressed = impinjSearchMode(3)
 
-	// impSearchQueryAtoBtoA Impinj calls "Dual Target Inventory" and says it:
+	// impjDualTarget is Impinj's "Dual Target Inventory",
+	// which queries A->B til quiet, then B->A til quiet,
+	// something you'd normally do with two AISpecs and State Aware singulation.
 	//
-	//   "Inventories tags in state A, transitioning the tags to state B.
-	//    Inventories tags in state B, transitioning the tags to state [A, sic]".
-	//
-	// This should require multiple Queries, repeated in a loop:
-	// the first with Target set to B, repeated until there are few/no observations,
-	// and a second with Target set to A, likewise repeated until quiet.
-	// The process repeats indefinitely.
 	// In S0, you're likely to never move from step 1 to step 2,
 	// but even if you do, there's little advantage of S0 B->A in most cases.
 	// In S1, it only makes sense if there are so few tags you can read them
@@ -111,25 +83,49 @@ const (
 	//
 	// Impinj says its useful for "Low-to-medium tag count,
 	// low-throughput [...] repeated tag observation".
-	impSearchQueryAtoBtoA = impinjSearchMode(2)
+	impjDualTarget = impinjSearchMode(2)
 
-	// impSearchSelToAQueryAtoB Impinj calls "Dual Target Inventory with Reset",
-	// and says is good for "High tag count, high-throughput [with] repeated observation".
+	// impjDualTargetWithReset is Impinj's "Dual Target Inventory with Reset".
+	// Despite the name, this mode only targets state A in the given session.
+	// Once it's quiet, it uses a Select command to flip tags' states B->A.
 	//
-	// This mode sends Queries with Target A until it's quiet,
-	// then sends a Select command to flip the session B->A.
+	// Note that as far as Impinj is concerned,
+	// "Reset" means "put the session flag into state B".
+	// In "SingleTargetReset", the "Reset" is just a normal Query command,
+	// whereas here in "DualTargetReset", the "Reset" is a Select command.
+	// Sending a Select command before an inventory round
+	// takes a long time relative singulating a single tag,
+	// but since it only has to be done once at the beginning of the round,
+	// that time is amortized over the tag population,
+	// so it's far more efficient for a large population.
+	// On the other hand, if a tag doesn't "hear" the Select command,
+	// its session flag will remain in state B,
+	// and it won't be inventoried during that round.
+	//
 	// In standard LLRP with State Aware filtering,
-	// this is just two AISpecs:
-	// the first with a Filter for the Select command
-	// which times out quickly (or searches for a single tag, etc.)
-	// followed by a second AISpec that just inventories Target A.
-	impSearchSelToAQueryAtoB = impinjSearchMode(6)
+	// you can achieve this by targeting A
+	// and using a Filter that targets all tags and clears matches,
+	// or one that targets no tags and sets non-matches.
+	// You can put these in the same AISpec,
+	// in which case the Reader should send the Select before every inventory round,
+	// or you can put the Filter in an AISpec that times out quickly,
+	// and configure the Stop trigger on the "main" spec
+	// so that it only stops after some time without seeing new tags.
+	//
+	// They say it's good for "High tag count,
+	// high-throughput [with] repeated observation".
+	impjDualTargetWithReset = impinjSearchMode(6)
 )
 
+// ExtractRSSI returns the RSSI value from TagReportData, if present.
+//
+// If the report includes a Custom Impinj RSSI parameter, it returns that.
+// Because those values are dBm x100, it converts it to dBm (by dividing by 100),
+// and hence the returned value is a floats instead of an int.
 func (rt *TagReportData) ExtractRSSI() (rssi float64, ok bool) {
 	for _, c := range rt.Custom {
 		if c.Is(PENImpinj, ImpinjEnablePeakRSSI) && len(c.Data) == 2 {
-			return float64(binary.BigEndian.Uint16(c.Data) / 100.0), true // dBm x100
+			return float64(binary.BigEndian.Uint16(c.Data)) / 100.0, true // dBm x100
 		}
 	}
 
@@ -140,6 +136,8 @@ func (rt *TagReportData) ExtractRSSI() (rssi float64, ok bool) {
 	return
 }
 
+// ReadDataAsHex returns a hex string representation of a ReadOpSpecResult
+// if the TagReportData has one and its result type indicates success.
 func (rt *TagReportData) ReadDataAsHex() (data string, ok bool) {
 	if rt.C1G2ReadOpSpecResult == nil {
 		return
@@ -155,6 +153,10 @@ func (rt *TagReportData) ReadDataAsHex() (data string, ok bool) {
 
 const hexChars = "0123456789abcdef"
 
+// wordsToHex converts an array of 16-bit words to a hex string.
+//
+// This is essentially the same method as hex.EncodeToString,
+// but operates on []uint16 instead of []byte.
 func wordsToHex(src []uint16) string {
 	dst := make([]byte, len(src)*4)
 
