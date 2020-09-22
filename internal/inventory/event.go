@@ -21,11 +21,11 @@ type ArrivedEvent struct {
 }
 
 type MovedEvent struct {
-	EPC          string `json:"epc"`
-	TID          string `json:"tid"`
-	Timestamp    int64  `json:"timestamp"`
-	PrevLocation string `json:"prev_location"`
-	Location     string `json:"location"`
+	EPC         string `json:"epc"`
+	TID         string `json:"tid"`
+	Timestamp   int64  `json:"timestamp"`
+	OldLocation string `json:"old_location"`
+	NewLocation string `json:"new_location"`
 }
 
 type DepartedEvent struct {

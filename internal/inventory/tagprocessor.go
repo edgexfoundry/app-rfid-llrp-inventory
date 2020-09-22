@@ -171,11 +171,11 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 				break // do not send event if the two locations share the same alias
 			}
 			event = MovedEvent{
-				EPC:          tag.EPC,
-				TID:          tag.TID,
-				Timestamp:    tag.LastRead,
-				PrevLocation: prevAlias,
-				Location:     curAlias,
+				EPC:         tag.EPC,
+				TID:         tag.TID,
+				Timestamp:   tag.LastRead,
+				OldLocation: prevAlias,
+				NewLocation: curAlias,
 			}
 		}
 	}()

@@ -93,7 +93,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "origin": 1598401259697580500,
       "device": "rfid-inventory",
       "name": "InventoryEventMoved",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"prev_location\":\"Freezer\",\"location\":\"Kitchen\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
   ]
 }

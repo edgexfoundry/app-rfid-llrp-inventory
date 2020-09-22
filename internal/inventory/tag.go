@@ -27,8 +27,8 @@ type Tag struct {
 	LastArrived  int64
 	state        TagState
 
-	locationStatsMap map[string]*TagStats
-	statsMu          sync.Mutex
+	statsMap map[string]*TagStats
+	statsMu  sync.Mutex
 }
 
 type Location struct {
@@ -54,15 +54,15 @@ func (loc Location) String() string {
 
 // StaticTag represents a Tag object stuck in time for use with APIs
 type StaticTag struct {
-	EPC              string                    `json:"epc"`
-	TID              string                    `json:"tid"`
-	Location         Location                  `json:"location"`
-	LocationAlias    string                    `json:"location_alias"`
-	LastRead         int64                     `json:"last_read"`
-	LastArrived      int64                     `json:"last_arrived"`
-	LastDeparted     int64                     `json:"last_departed"`
-	State            TagState                  `json:"state"`
-	LocationStatsMap map[string]StaticTagStats `json:"location_stats_map"`
+	EPC           string                    `json:"epc"`
+	TID           string                    `json:"tid"`
+	Location      Location                  `json:"location"`
+	LocationAlias string                    `json:"location_alias"`
+	LastRead      int64                     `json:"last_read"`
+	LastArrived   int64                     `json:"last_arrived"`
+	LastDeparted  int64                     `json:"last_departed"`
+	State         TagState                  `json:"state"`
+	StatsMap      map[string]StaticTagStats `json:"stats_map"`
 }
 
 // StaticTagStats represents a TagStats object stuck in time for use with APIs
@@ -72,25 +72,11 @@ type StaticTagStats struct {
 	MeanRSSI float64 `json:"mean_rssi"`
 }
 
-type previousTag struct {
-	location Location
-	lastRead int64
-	state    TagState
-}
-
 func NewTag(epc string) *Tag {
 	return &Tag{
-		EPC:              epc,
-		state:            Unknown,
-		locationStatsMap: make(map[string]*TagStats),
-	}
-}
-
-func (tag *Tag) asPreviousTag() previousTag {
-	return previousTag{
-		location: tag.Location,
-		lastRead: tag.LastRead,
-		state:    tag.state,
+		EPC:      epc,
+		state:    Unknown,
+		statsMap: make(map[string]*TagStats),
 	}
 }
 
@@ -114,17 +100,17 @@ func (tag *Tag) resetStats() {
 	tag.statsMu.Lock()
 	defer tag.statsMu.Unlock()
 
-	tag.locationStatsMap = make(map[string]*TagStats)
+	tag.statsMap = make(map[string]*TagStats)
 }
 
 func (tag *Tag) getStats(location string) *TagStats {
 	tag.statsMu.Lock()
 	defer tag.statsMu.Unlock()
 
-	stats, found := tag.locationStatsMap[location]
+	stats, found := tag.statsMap[location]
 	if !found {
 		stats = NewTagStats()
-		tag.locationStatsMap[location] = stats
+		tag.statsMap[location] = stats
 	}
 	return stats
 }
@@ -132,22 +118,22 @@ func (tag *Tag) getStats(location string) *TagStats {
 // newStaticTag constructs a StaticTag object from an existing Tag pointer
 func (tp *TagProcessor) newStaticTag(tag *Tag) StaticTag {
 	s := StaticTag{
-		EPC:              tag.EPC,
-		TID:              tag.TID,
-		Location:         tag.Location,
-		LocationAlias:    tp.getAlias(tag.Location.String()),
-		LastRead:         tag.LastRead,
-		LastArrived:      tag.LastArrived,
-		LastDeparted:     tag.LastDeparted,
-		State:            tag.state,
-		LocationStatsMap: make(map[string]StaticTagStats, len(tag.locationStatsMap)),
+		EPC:           tag.EPC,
+		TID:           tag.TID,
+		Location:      tag.Location,
+		LocationAlias: tp.getAlias(tag.Location.String()),
+		LastRead:      tag.LastRead,
+		LastArrived:   tag.LastArrived,
+		LastDeparted:  tag.LastDeparted,
+		State:         tag.state,
+		StatsMap:      make(map[string]StaticTagStats, len(tag.statsMap)),
 	}
 
-	for k, v := range tag.locationStatsMap {
+	for k, v := range tag.statsMap {
 		if v.rssiCount() == 0 {
 			continue // skip empty
 		}
-		s.LocationStatsMap[k] = newStaticTagStats(v)
+		s.StatsMap[k] = newStaticTagStats(v)
 	}
 
 	return s
@@ -166,20 +152,20 @@ func newStaticTagStats(stats *TagStats) StaticTagStats {
 // timestamp and a single RSSI value which was the previously computed rolling average.
 func (s StaticTag) asTagPtr() *Tag {
 	t := &Tag{
-		EPC:              s.EPC,
-		TID:              s.TID,
-		Location:         s.Location,
-		LastRead:         s.LastRead,
-		LastDeparted:     s.LastDeparted,
-		LastArrived:      s.LastArrived,
-		state:            s.State,
-		locationStatsMap: make(map[string]*TagStats),
+		EPC:          s.EPC,
+		TID:          s.TID,
+		Location:     s.Location,
+		LastRead:     s.LastRead,
+		LastDeparted: s.LastDeparted,
+		LastArrived:  s.LastArrived,
+		state:        s.State,
+		statsMap:     make(map[string]*TagStats),
 	}
 
 	// fill in any cached tag stats. this just adds the mean rssi as a single value,
 	// so some precision is lost by not having every single value, but it preserves
 	// a general view of the data which is good enough for now
-	for location, stats := range s.LocationStatsMap {
+	for location, stats := range s.StatsMap {
 		tagStats := t.getStats(location)
 		tagStats.LastRead = stats.LastRead
 		tagStats.rssiDbm.AddValue(stats.MeanRSSI)

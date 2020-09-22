@@ -505,3 +505,76 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 		})
 	}
 }
+
+func TestEventLocationMatchesAlias(t *testing.T) {
+	ds := newTestDataset(lc, 10)
+	sensor1 := nextSensor()
+	sensor2 := nextSensor()
+	alias1 := "Freezer"
+	alias2 := "BackRoom"
+
+	// create a time way in the past to ensure tags depart
+	origin := time.Now().Add(-99 * time.Hour)
+
+	aliasesMap := map[string]string{
+		NewLocation(sensor1, defaultAntenna).String(): alias1,
+		NewLocation(sensor2, defaultAntenna).String(): alias2,
+	}
+	ds.tp.SetAliases(aliasesMap)
+
+	// Generate arrived events at alias1
+	events := ds.readAll(readParams{
+		deviceName: sensor1,
+		antenna:    defaultAntenna,
+		rssi:       rssiMin,
+		count:      10,
+		lastSeen:   origin,
+		origin:     origin,
+	})
+	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
+		t.Error(err)
+	}
+	// make sure the Location field matches the alias for Arrived events
+	for _, event := range events {
+		a := event.(ArrivedEvent)
+		if a.Location != alias1 {
+			t.Errorf("Expected arrived event location to be %s, but was %s", alias1, a.Location)
+		}
+	}
+
+	// Generate moved events alias1 -> alias2
+	events = ds.readAll(readParams{
+		deviceName: sensor2,
+		antenna:    defaultAntenna,
+		rssi:       rssiMax,
+		count:      10,
+		lastSeen:   origin,
+		origin:     origin,
+	})
+	if err := ds.verifyEventPattern(events, ds.size(), MovedType); err != nil {
+		t.Error(err)
+	}
+	// make sure the 2 Location fields match the alias for Moved events
+	for _, event := range events {
+		m := event.(MovedEvent)
+		if m.OldLocation != alias1 {
+			t.Errorf("Expected moved event old location to be %s, but was %s", alias1, m.OldLocation)
+		}
+		if m.NewLocation != alias2 {
+			t.Errorf("Expected moved event new location to be %s, but was %s", alias2, m.NewLocation)
+		}
+	}
+
+	// Generate departed events
+	events, _ = ds.tp.AggregateDeparted()
+	if err := ds.verifyEventPattern(events, ds.size(), DepartedType); err != nil {
+		t.Error(err)
+	}
+	// make sure the Location field matches the alias for Departed events
+	for _, event := range events {
+		d := event.(DepartedEvent)
+		if d.LastKnownLocation != alias2 {
+			t.Errorf("Expected departed event last known location to be %s, but was %s", alias2, d.LastKnownLocation)
+		}
+	}
+}
