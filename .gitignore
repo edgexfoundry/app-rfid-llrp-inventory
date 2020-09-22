@@ -51,3 +51,6 @@ logs/
 **/reports
 **/*.xml
 **/*.html
+
+# keep the important stuff
+!res/html/*
