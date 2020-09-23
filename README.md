@@ -223,7 +223,7 @@ These values are used in the Location algorithm as an adjustment function which
 will decay RSSI values over time. This offset value is then applied to the existing Tag's Location
 and compared to the non-adjusted average. Positive `offset` values will increase the likelihood of a tag
 staying in the same location, whereas negative `offset` values will increase the likelihood that the tag
-will move to the location it was just read at.
+will move to the new location it was just read at.
 
 The main goal of the Mobility Profile is to provide a way to customize the various tradeoffs when
 dealing with erratic data such as RSSI values. In general there is a tradeoff between responsiveness

@@ -15,10 +15,8 @@ import (
 	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
 	"github.com/edgexfoundry/go-mod-configuration/configuration"
 	"github.com/edgexfoundry/go-mod-configuration/pkg/types"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/inventory"
@@ -52,6 +50,7 @@ const (
 
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
+	eventChSz           = 10
 )
 
 type inventoryApp struct {
@@ -465,12 +464,16 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, lc logger.LoggingClient) {
 	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
-	confErrs := make(chan error)
-	confUpdates := make(chan interface{})
+	confErrCh := make(chan error)
+	confUpdateCh := make(chan interface{})
+	eventCh := make(chan []inventory.Event, eventChSz)
+	taskCtx, taskCancel := context.WithCancel(context.Background())
 
 	defer func() {
-		close(confErrs)
-		close(confUpdates)
+		close(confErrCh)
+		close(confUpdateCh)
+		close(eventCh)
+		taskCancel()
 	}()
 
 	// load tag data
@@ -488,14 +491,24 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 	config := &consulConfig{
 		Aliases: make(map[string]string),
 	}
-	cc.WatchForChanges(confUpdates, confErrs, config, "/"+serviceKey)
+	cc.WatchForChanges(confUpdateCh, confErrCh, config, "/"+serviceKey)
 
-	lc.Info("Starting event loop.")
+	go func() {
+		lc.Info("Starting event processor.")
+		for events := range eventCh {
+			if err := app.pushEventsToCoreData(taskCtx, events); err != nil {
+				lc.Error("Failed to push events to CoreData.", "error", err.Error())
+			}
+		}
+		lc.Info("Event processor stopped.")
+	}()
 
+	lc.Info("Starting task loop.")
 	for {
 		var updatedSnapshot []inventory.StaticTag
 		select {
 		case <-done:
+			lc.Info("Stopping task loop.")
 			return
 
 		case rd := <-app.reports:
@@ -508,41 +521,32 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 
 			var events []inventory.Event
 			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
-			func() {
-				ctx, cancel := context.WithTimeout(context.Background(), coreDataPostTimeout)
-				defer cancel()
-
-				if err := app.pushEventsToCoreData(ctx, events); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
-				}
-			}()
+			if len(events) > 0 {
+				eventCh <- events
+			}
 
 		case t := <-aggregateDepartedTicker.C:
 			_, ok := app.sdkCtx.Load().(*appcontext.Context)
 			if !ok {
-				lc.Warn("Delaying AggregateDeparted processor: missing app-functions-sdk context")
+				lc.Info("Delaying AggregateDeparted processor: missing app-functions-sdk context")
 				break
 			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
+
 			var events []inventory.Event
 			events, updatedSnapshot = processor.AggregateDeparted()
-			func() {
-				ctx, cancel := context.WithTimeout(context.Background(), coreDataPostTimeout)
-				defer cancel()
-
-				if err := app.pushEventsToCoreData(ctx, events); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
-				}
-			}()
+			if len(events) > 0 {
+				eventCh <- events
+			}
 
 		case t := <-ageoutTicker.C:
 			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
 			_, updatedSnapshot = processor.AgeOut()
 
-		case rawConfig := <-confUpdates:
+		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*consulConfig); ok {
 				lc.Info("Configuration updated.")
-				lc.Debug("New configuration", "raw", fmt.Sprintf("%+v", newConfig))
+				lc.Debug("New configuration.", "raw", fmt.Sprintf("%+v", newConfig))
 				config = newConfig
 				processor.SetAliases(newConfig.Aliases)
 			} else {
@@ -553,7 +557,7 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			_, err := req.w.Write(snapshotData)
 			req.result <- err
 
-		case err := <-confErrs:
+		case err := <-confErrCh:
 			lc.Error("Configuration error.", "error", err.Error())
 		}
 
@@ -589,7 +593,7 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
-func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
+func (app *inventoryApp) pushEventsToCoreData(parentCtx context.Context, events []inventory.Event) error {
 	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
 	if !ok {
 		return errors.New("unable to push events to core data: missing app-functions-sdk context")
@@ -606,14 +610,15 @@ func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 			continue
 		}
 
-		app.edgexSdk.LoggingClient.Info("processing event",
-			"type", event.OfType(), "event", fmt.Sprintf("%+v", event))
+		resourceName := ResourceInventoryEvent + string(event.OfType())
+		app.edgexSdk.LoggingClient.Info("Sending Inventory Event.",
+			"type", resourceName, "data", fmt.Sprintf("%+v", event))
 
 		readings = append(readings, models.Reading{
 			Value:  string(payload),
 			Origin: now,
 			Device: eventDeviceName,
-			Name:   ResourceInventoryEvent + string(event.OfType()),
+			Name:   resourceName,
 		})
 	}
 
@@ -623,8 +628,9 @@ func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 		Readings: readings,
 	}
 
-	correlation := uuid.New().String()
-	ctx = context.WithValue(ctx, clients.CorrelationHeader, correlation)
+	ctx, cancel := context.WithTimeout(parentCtx, coreDataPostTimeout)
+	defer cancel()
+
 	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
 	//       resolved, we can use the appsdk.AppFunctionsSDK EventClient directly without the need
 	//       for the appcontext.Context.

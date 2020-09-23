@@ -8,6 +8,7 @@ package inventory
 type EventType string
 
 const (
+	// note: these values are also used when creating the EdgeX event names
 	ArrivedType  EventType = "Arrived"
 	MovedType    EventType = "Moved"
 	DepartedType EventType = "Departed"
