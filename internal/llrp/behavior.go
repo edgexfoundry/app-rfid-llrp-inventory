@@ -517,7 +517,7 @@ func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value
 	})
 
 	var t TransmitPowerLevelTableEntry
-	if d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
+	if pwrIdx < len(d.pwrMinToMax) && d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
 		// The power exactly matches one of the Reader's available power settings.
 		t = d.pwrMinToMax[pwrIdx]
 	} else {
