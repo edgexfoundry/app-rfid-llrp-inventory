@@ -43,5 +43,6 @@ SubscribeTopic="events"
 PublishTopic=""
 
 [ApplicationSettings]
-GetDevicesApi = "http://edgex-core-metadata:48081/api/v1/device"
-IssueCommandApi = "http://edgex-core-command:48082/api/v1/device/name"
+DeviceServiceName = "edgex-device-llrp"
+DeviceServiceURL = "http://edgex-device-llrp:51992/"
+MetadataServiceURL = "http://edgex-core-metadata:48081/"
