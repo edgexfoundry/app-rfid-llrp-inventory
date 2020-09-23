@@ -26,10 +26,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -159,6 +161,7 @@ func main() {
 
 	app := inventoryApp{
 		lgr:          lgr,
+		edgexSdk:     edgexSdk,
 		defaultGrp:   defaultGrp,
 		devService:   devService,
 		snapshotReqs: make(chan snapshotDest),
@@ -284,13 +287,26 @@ func main() {
 		lgr.Info("Done processing.")
 	}()
 
+	// todo: We are doing this because of an issue with running app-functions-sdk inside
+	//       of docker-compose where something is hanging and not relinquishing control
+	//       back to our code.
+	//       see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
+	go func() {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		s := <-signals
+
+		lgr.Info(fmt.Sprintf("Received %s signal from OS.", s.String()))
+		close(done)
+	}()
+
 	// Subscribe to events.
 	lgr.exitIfErr(edgexSdk.SetFunctionsPipeline(app.processEdgeXEvent), "Failed to build pipeline.")
 	lgr.exitIfErr(edgexSdk.MakeItRun(), "Failed to run pipeline.")
 
 	// let task loop complete
-	close(done)
 	wg.Wait()
+	lgr.Info("Exiting.")
 }
 
 // getConfigClient returns a configuration client based on the command line args,
@@ -414,7 +430,7 @@ func (app *inventoryApp) processEdgeXEvent(edgeXCtx *appcontext.Context, params 
 				app.lgr.Warn("No tag report data in report.", "device", event.Device)
 			} else {
 				app.reports <- reportData{report, inventory.NewReportInfo(reading)}
-				app.lgr.Info("New ROAccessReport.",
+				app.lgr.Trace("New ROAccessReport.",
 					"device", event.Device, "tags", len(report.TagReportData))
 			}
 		}
@@ -470,9 +486,10 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 	taskCtx, taskCancel := context.WithCancel(context.Background())
 
 	defer func() {
+		aggregateDepartedTicker.Stop()
+		ageoutTicker.Stop()
 		close(confErrCh)
 		close(confUpdateCh)
-		close(eventCh)
 		taskCancel()
 	}()
 
@@ -487,13 +504,19 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 		}
 	}
 	processor := inventory.NewTagProcessor(lc, snapshot)
+	if len(snapshot) > 0 {
+		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
+	}
 
 	config := &consulConfig{
 		Aliases: make(map[string]string),
 	}
 	cc.WatchForChanges(confUpdateCh, confErrCh, config, "/"+serviceKey)
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		lc.Info("Starting event processor.")
 		for events := range eventCh {
 			if err := app.pushEventsToCoreData(taskCtx, events); err != nil {
@@ -506,29 +529,35 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 	lc.Info("Starting task loop.")
 	for {
 		var updatedSnapshot []inventory.StaticTag
+		var shouldPersist bool
+
 		select {
 		case <-done:
 			lc.Info("Stopping task loop.")
+			close(eventCh)
+			persistSnapshot(lc, snapshot)
+			wg.Wait()
+			lc.Info("Task loop stopped.")
 			return
 
 		case rd := <-app.reports:
-			lc.Info("New report")
 			if !app.defaultGrp.ProcessTagReport(rd.info.DeviceName, rd.report.TagReportData) {
 				// This can only happen if the device didn't exist when we started,
 				// and we never got a Connection message for it.
-				lc.Error("Tag Report for unknown device", "device", rd.info.DeviceName)
+				lc.Error("Tag Report for unknown device.", "device", rd.info.DeviceName)
 			}
 
 			var events []inventory.Event
 			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
 			if len(events) > 0 {
+				shouldPersist = true
 				eventCh <- events
 			}
 
 		case t := <-aggregateDepartedTicker.C:
 			_, ok := app.sdkCtx.Load().(*appcontext.Context)
 			if !ok {
-				lc.Info("Delaying AggregateDeparted processor: missing app-functions-sdk context")
+				lc.Info("Delaying AggregateDeparted processor: missing app-functions-sdk context.")
 				break
 			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
@@ -536,16 +565,18 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			var events []inventory.Event
 			events, updatedSnapshot = processor.AggregateDeparted()
 			if len(events) > 0 {
+				shouldPersist = true
 				eventCh <- events
 			}
 
 		case t := <-ageoutTicker.C:
 			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
 			_, updatedSnapshot = processor.AgeOut()
+			shouldPersist = updatedSnapshot != nil
 
 		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*consulConfig); ok {
-				lc.Info("Configuration updated.")
+				lc.Info("Configuration updated from consul.")
 				lc.Debug("New configuration.", "raw", fmt.Sprintf("%+v", newConfig))
 				config = newConfig
 				processor.SetAliases(newConfig.Aliases)
@@ -554,7 +585,12 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			}
 
 		case req := <-app.snapshotReqs:
-			_, err := req.w.Write(snapshotData)
+			data, err := json.Marshal(snapshot)
+			if err != nil {
+				lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
+			} else {
+				_, err = req.w.Write(data)
+			}
 			req.result <- err
 
 		case err := <-confErrCh:
@@ -566,21 +602,25 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 		}
 
 		snapshot = updatedSnapshot
-
-		lc.Info("Updating inventory snapshot.")
-		data, err := json.Marshal(snapshot)
-		if err != nil {
-			lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
-			continue
+		if shouldPersist {
+			persistSnapshot(lc, snapshot)
 		}
-
-		snapshotData = data
-		if err := ioutil.WriteFile(inventory.TagCacheFile, data, 0644); err != nil {
-			lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
-			continue
-		}
-		lc.Debug("Persisted inventory snapshot.", "tags", len(snapshot))
 	}
+}
+
+func persistSnapshot(lc logger.LoggingClient, snapshot []inventory.StaticTag) {
+	lc.Debug("Persisting inventory snapshot.")
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
+		return
+	}
+
+	if err := ioutil.WriteFile(inventory.TagCacheFile, data, 0644); err != nil {
+		lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
+		return
+	}
+	lc.Info("Persisted inventory snapshot.", "tags", len(snapshot))
 }
 
 // setDefaultBehavior sets the behavior associated with the default device group.
@@ -612,7 +652,7 @@ func (app *inventoryApp) pushEventsToCoreData(parentCtx context.Context, events 
 
 		resourceName := ResourceInventoryEvent + string(event.OfType())
 		app.edgexSdk.LoggingClient.Info("Sending Inventory Event.",
-			"type", resourceName, "data", fmt.Sprintf("%+v", event))
+			"type", resourceName, "payload", string(payload))
 
 		readings = append(readings, models.Reading{
 			Value:  string(payload),
