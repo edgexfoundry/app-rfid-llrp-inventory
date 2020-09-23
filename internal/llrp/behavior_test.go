@@ -322,6 +322,18 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 		}
 	}
 
+	if d.NewConfig() == nil {
+		t.Error("expected device to provide a config")
+	}
+
+	if r, err := d.NewROSpec(Behavior{
+		ScanType: ScanFast,
+		Power:    PowerTarget{Max: 30000},
+	}, Environment{}); err != nil {
+		t.Errorf("expected an ROSpec, but got an error: %+v", err)
+	} else if r == nil {
+		t.Error("expected an ROSpec, but got nil")
+	}
 }
 
 func TestFastestAt(t *testing.T) {
