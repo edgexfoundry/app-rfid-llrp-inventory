@@ -52,7 +52,7 @@ const (
 
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
-	eventChSz           = 10
+	eventChSz           = 100
 )
 
 type inventoryApp struct {
@@ -278,26 +278,32 @@ func main() {
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		app.taskLoop(done, *cc, lgr)
-		lgr.Info("Done processing.")
+		app.taskLoop(ctx, *cc, lgr)
+		lgr.Info("Task loop has exited.")
 	}()
 
-	// todo: We are doing this because of an issue with running app-functions-sdk inside
-	//       of docker-compose where something is hanging and not relinquishing control
-	//       back to our code.
-	//       see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
+	// We are doing this because of an issue with running app-functions-sdk inside
+	// of docker-compose where something is hanging and not relinquishing control
+	// back to our code.
+	//
+	// Note that this code does not in any way attempt to "fix" the deadlock issue,
+	// but instead provides our code a way to cleanup and persist the data safely
+	// when the process is exiting.
+	//
+	// see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
 	go func() {
 		signals := make(chan os.Signal)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		s := <-signals
 
-		lgr.Info(fmt.Sprintf("Received %s signal from OS.", s.String()))
-		close(done)
+		lgr.Info(fmt.Sprintf("Received %q signal from OS.", s.String()))
+		cancel() // signal the taskLoop to finish
 	}()
 
 	// Subscribe to events.
@@ -477,20 +483,18 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // Since nearly every round through this loop must read or write the inventory,
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
-func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, lc logger.LoggingClient) {
+func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, lc logger.LoggingClient) {
 	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrCh := make(chan error)
 	confUpdateCh := make(chan interface{})
 	eventCh := make(chan []inventory.Event, eventChSz)
-	taskCtx, taskCancel := context.WithCancel(context.Background())
 
 	defer func() {
 		aggregateDepartedTicker.Stop()
 		ageoutTicker.Stop()
 		close(confErrCh)
 		close(confUpdateCh)
-		taskCancel()
 	}()
 
 	// load tag data
@@ -519,7 +523,7 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 		defer wg.Done()
 		lc.Info("Starting event processor.")
 		for events := range eventCh {
-			if err := app.pushEventsToCoreData(taskCtx, events); err != nil {
+			if err := app.pushEventsToCoreData(ctx, events); err != nil {
 				lc.Error("Failed to push events to CoreData.", "error", err.Error())
 			}
 		}
@@ -532,8 +536,11 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 		var shouldPersist bool
 
 		select {
-		case <-done:
+		case <-ctx.Done():
 			lc.Info("Stopping task loop.")
+			if ctx.Err() != nil {
+				lc.Warn("Context error: " + ctx.Err().Error())
+			}
 			close(eventCh)
 			persistSnapshot(lc, snapshot)
 			wg.Wait()
@@ -586,10 +593,8 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 
 		case req := <-app.snapshotReqs:
 			data, err := json.Marshal(snapshot)
-			if err != nil {
-				lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
-			} else {
-				_, err = req.w.Write(data)
+			if err == nil {
+				_, err = req.w.Write(data) // only write if there was no error already
 			}
 			req.result <- err
 
@@ -597,11 +602,9 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			lc.Error("Configuration error.", "error", err.Error())
 		}
 
-		if updatedSnapshot == nil {
-			continue
+		if updatedSnapshot != nil {
+			snapshot = updatedSnapshot
 		}
-
-		snapshot = updatedSnapshot
 		if shouldPersist {
 			persistSnapshot(lc, snapshot)
 		}
@@ -633,7 +636,7 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
-func (app *inventoryApp) pushEventsToCoreData(parentCtx context.Context, events []inventory.Event) error {
+func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
 	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
 	if !ok {
 		return errors.New("unable to push events to core data: missing app-functions-sdk context")
@@ -668,7 +671,7 @@ func (app *inventoryApp) pushEventsToCoreData(parentCtx context.Context, events 
 		Readings: readings,
 	}
 
-	ctx, cancel := context.WithTimeout(parentCtx, coreDataPostTimeout)
+	ctx, cancel := context.WithTimeout(ctx, coreDataPostTimeout)
 	defer cancel()
 
 	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
