@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +54,11 @@ const (
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
 	eventChSz           = 100
+
+	cacheFolder  = "cache"
+	tagCacheFile = "tags.json"
+	folderPerm   = 0755 // folders require the execute flag in order to create new files
+	filePerm     = 0644
 )
 
 type inventoryApp struct {
@@ -278,6 +284,10 @@ func main() {
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
 	}
 
+	if err := os.MkdirAll(cacheFolder, folderPerm); err != nil {
+		lgr.Error(fmt.Sprintf("Failed to create cache folder %q.", cacheFolder), "error", err.Error())
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
@@ -499,7 +509,7 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 
 	// load tag data
 	var snapshot []inventory.StaticTag
-	snapshotData, err := ioutil.ReadFile(inventory.TagCacheFile)
+	snapshotData, err := ioutil.ReadFile(filepath.Join(cacheFolder, tagCacheFile))
 	if err != nil {
 		lc.Warn("Failed to load inventory snapshot.", "error", err.Error())
 	} else {
@@ -532,9 +542,6 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 
 	lc.Info("Starting task loop.")
 	for {
-		var updatedSnapshot []inventory.StaticTag
-		var shouldPersist bool
-
 		select {
 		case <-ctx.Done():
 			lc.Info("Stopping task loop.")
@@ -554,10 +561,12 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 				lc.Error("Tag Report for unknown device.", "device", rd.info.DeviceName)
 			}
 
-			var events []inventory.Event
-			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
+			events, updatedSnapshot := processor.ProcessReport(rd.report, rd.info)
+			if updatedSnapshot != nil {
+				snapshot = updatedSnapshot // always update the snapshot if available
+			}
 			if len(events) > 0 {
-				shouldPersist = true
+				persistSnapshot(lc, snapshot) // only persist when there are inventory events
 				eventCh <- events
 			}
 
@@ -569,17 +578,20 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
 
-			var events []inventory.Event
-			events, updatedSnapshot = processor.AggregateDeparted()
-			if len(events) > 0 {
-				shouldPersist = true
+			if events, updatedSnapshot := processor.AggregateDeparted(); len(events) > 0 {
+				if updatedSnapshot != nil { // should always be true if there are events
+					snapshot = updatedSnapshot
+					persistSnapshot(lc, snapshot)
+				}
 				eventCh <- events
 			}
 
 		case t := <-ageoutTicker.C:
 			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
-			_, updatedSnapshot = processor.AgeOut()
-			shouldPersist = updatedSnapshot != nil
+			if _, updatedSnapshot := processor.AgeOut(); updatedSnapshot != nil {
+				snapshot = updatedSnapshot
+				persistSnapshot(lc, snapshot)
+			}
 
 		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*consulConfig); ok {
@@ -601,13 +613,6 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 		case err := <-confErrCh:
 			lc.Error("Configuration error.", "error", err.Error())
 		}
-
-		if updatedSnapshot != nil {
-			snapshot = updatedSnapshot
-		}
-		if shouldPersist {
-			persistSnapshot(lc, snapshot)
-		}
 	}
 }
 
@@ -619,7 +624,7 @@ func persistSnapshot(lc logger.LoggingClient, snapshot []inventory.StaticTag) {
 		return
 	}
 
-	if err := ioutil.WriteFile(inventory.TagCacheFile, data, 0644); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(cacheFolder, tagCacheFile), data, filePerm); err != nil {
 		lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
 		return
 	}

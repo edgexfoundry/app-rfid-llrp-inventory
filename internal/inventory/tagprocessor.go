@@ -15,10 +15,6 @@ import (
 	"time"
 )
 
-const (
-	TagCacheFile = "./cache/tags.json"
-)
-
 type TagProcessor struct {
 	lc              logger.LoggingClient
 	inventory       map[string]*Tag
@@ -248,6 +244,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 
 func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, existingMean float64, offset float64) {
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("tag stats",
 		"epc", tag.EPC,
 		"readLoc", readLocation,
@@ -263,6 +260,7 @@ func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean f
 func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, tag *Tag) {
 	now := UnixMilliNow()
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("read timing",
 		"now", now,
 		"referenceTimestamp", info.referenceTimestamp,
