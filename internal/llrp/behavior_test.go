@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"math"
 	"reflect"
 	"testing"
 	"testing/quick"
@@ -322,17 +323,133 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 		}
 	}
 
+	// Look for a power lower than the lowest power.
+	// It should yield the lowest power value.
+	lowest := d.pwrMinToMax[0]
+	pIdx, pValue := d.findPower(lowest.TransmitPowerValue - 1)
+	if lowest.Index != pIdx || lowest.TransmitPowerValue != pValue {
+		t.Errorf("expected lowest power %d at %d; got %d at %d",
+			lowest.Index, lowest.TransmitPowerValue, pValue, pIdx)
+	}
+
 	if d.NewConfig() == nil {
 		t.Error("expected device to provide a config")
 	}
+}
 
-	if r, err := d.NewROSpec(Behavior{
-		ScanType: ScanFast,
-		Power:    PowerTarget{Max: 30000},
-	}, Environment{}); err != nil {
-		t.Errorf("expected an ROSpec, but got an error: %+v", err)
-	} else if r == nil {
-		t.Error("expected an ROSpec, but got nil")
+func TestBasicDevice_NewROSpec(t *testing.T) {
+	caps := newImpinjCaps()
+	d, err := NewBasicDevice(caps)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, b := range []Behavior{
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanNormal, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanDeep, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: math.MaxInt16}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Duration: math.MaxUint16},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 1}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 2}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 3}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 4}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, ImpinjOptions: &ImpinjOptions{SuppressMonza: true}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, ImpinjOptions: &ImpinjOptions{SuppressMonza: false}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{fccFreqs[0], fccFreqs[1], fccFreqs[2]}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{}},
+	} {
+		if r, err := d.NewROSpec(b, Environment{}); err != nil {
+			t.Errorf("expected an ROSpec, but got an error for behavior %+v: %+v", b, err)
+		} else if r == nil {
+			t.Errorf("expected an ROSpec, but got nil for behavior %+v", b)
+		}
+	}
+
+	for _, b := range []Behavior{
+		{ScanType: ScanFast, Power: PowerTarget{Max: 30}},
+		{ScanType: 5, Power: PowerTarget{Max: math.MinInt16}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 0}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 5}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: math.MaxUint16}},
+	} {
+		if r, err := d.NewROSpec(b, Environment{}); err == nil {
+			t.Errorf("expected an error for behavior %+v: %+v", b, r)
+		}
+	}
+}
+
+func TestBasicDevice_NewROSpec_noHopThisTime(t *testing.T) {
+	caps := newImpinjCaps()
+	freqInfo := &caps.RegulatoryCapabilities.UHFBandCapabilities.FrequencyInformation
+	freqInfo.Hopping = false
+
+	d, err := NewBasicDevice(caps)
+	if err == nil {
+		t.Fatal("Creating a device should fail if Hopping is false " +
+			"but no FixedFrequencyTable is defined")
+	}
+
+	freqInfo.FrequencyHopTables = nil
+	freqInfo.FixedFrequencyTable = &FixedFrequencyTable{Frequencies: fccFreqs}
+	d, err = NewBasicDevice(caps)
+	if err != nil {
+		t.Fatalf("failed to create device with fixed frequencies: %+v", err)
+	}
+
+	for _, b := range []Behavior{
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{fccFreqs[2]}},
+	} {
+		r, err := d.NewROSpec(b, Environment{})
+
+		if err != nil {
+			t.Errorf("expected an ROSpec, but got an error for behavior %+v: %+v", b, err)
+			continue
+		} else if r == nil {
+			t.Errorf("expected an ROSpec, but got nil for behavior %+v", b)
+			continue
+		}
+
+		for i, ai := range r.AISpecs {
+			for j, ips := range ai.InventoryParameterSpecs {
+				for k, ac := range ips.AntennaConfigurations {
+					if ac.RFTransmitter == nil {
+						t.Errorf("missing transmitter info for (%d, %d, %d)", i, j, k)
+						continue
+					}
+
+					// 3 because index is 1-based, and above we used fccFreq[2]
+					if ac.RFTransmitter.ChannelIndex != 3 {
+						t.Errorf("invalid channel index for (%d, %d, %d): %d", i, j, k,
+							ac.RFTransmitter.ChannelIndex)
+					}
+				}
+			}
+		}
+	}
+
+	for _, b := range []Behavior{
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanNormal, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanDeep, Power: PowerTarget{Max: 3000}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: math.MaxInt16}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Duration: math.MaxUint16},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 1}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 2}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 3}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 4}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, ImpinjOptions: &ImpinjOptions{SuppressMonza: true}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, ImpinjOptions: &ImpinjOptions{SuppressMonza: false}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 30}},
+		{ScanType: 5, Power: PowerTarget{Max: math.MinInt16}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 0}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 5}},
+		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: math.MaxUint16}},
+	} {
+		if r, err := d.NewROSpec(b, Environment{}); err == nil {
+			t.Errorf("expected an error for behavior %+v: %+v", b, r)
+		}
 	}
 }
 

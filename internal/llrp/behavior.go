@@ -371,7 +371,7 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 //     Report accumulation also affects the reporting of
 //     timestamps, RSSI, the channel index, and number of observations.
 //
-func (d BasicDevice) FillAmbiguousNil(tags []TagReportData) {
+func (d BasicDevice) ProcessTagReport(tags []TagReportData) {
 	for i := range tags {
 		tag := &tags[i]
 		if d.report.EnableROSpecID {
@@ -460,7 +460,7 @@ func (d BasicDevice) FillAmbiguousNil(tags []TagReportData) {
 // FillAmbiguousNil does nothing for Impinj Readers,
 // as they say they do not use this particular aspect of LLRP.
 // Hopefully that is true.
-func (d ImpinjDevice) FillAmbiguousNil(_ []TagReportData) {}
+func (d ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
 
 // Transmit returns a legal llrp.RFTransmitter value.
 func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
@@ -486,9 +486,8 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	for _, permitted := range b.Frequencies {
 		for i, f := range d.freqInfo.FixedFrequencyTable.Frequencies {
 			if permitted == f {
-				return &RFTransmitter{
-					ChannelIndex: uint16(i),
-				}, nil
+				// +1 because channel indices are 1-based in LLRP
+				return &RFTransmitter{ChannelIndex: uint16(i + 1)}, nil
 			}
 		}
 	}
@@ -517,7 +516,9 @@ func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value
 	})
 
 	var t TransmitPowerLevelTableEntry
-	if pwrIdx < len(d.pwrMinToMax) && d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
+	if pwrIdx == 0 {
+		t = d.pwrMinToMax[0]
+	} else if pwrIdx < len(d.pwrMinToMax) && d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
 		// The power exactly matches one of the Reader's available power settings.
 		t = d.pwrMinToMax[pwrIdx]
 	} else {
@@ -938,7 +939,8 @@ func (b Behavior) StartTrigger() (t ROSpecStartTrigger) {
 		}
 	} else {
 		t.Trigger = ROStartTriggerGPI
-		t.GPITrigger = (*GPITriggerValue)(b.GPITrigger)
+		copyTrigger := GPITriggerValue(*b.GPITrigger)
+		t.GPITrigger = &copyTrigger
 	}
 	return
 }

@@ -210,9 +210,13 @@ func main() {
 			func(w http.ResponseWriter, req *http.Request) {
 				rv := mux.Vars(req)
 				bName := rv["name"]
+				// Currently, only "default" is supported.
 				if bName != "default" {
 					lgr.Error("Request to GET unknown behavior.", "name", bName)
-					w.WriteHeader(http.StatusBadRequest)
+					if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
+						lgr.Error("Error writing failure response.", "error", err)
+					}
+					w.WriteHeader(http.StatusNotFound)
 					return
 				}
 
@@ -233,6 +237,7 @@ func main() {
 			func(w http.ResponseWriter, req *http.Request) {
 				rv := mux.Vars(req)
 				bName := rv["name"]
+				// Currently, only "default" is supported.
 				if bName != "default" {
 					lgr.Error("Attempt to PUT unknown behavior.", "name", bName)
 					if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
@@ -253,16 +258,17 @@ func main() {
 				if err := json.Unmarshal(data, &b); err != nil {
 					lgr.Error("Failed to unmarshal behavior body.", "error", err,
 						"body", string(data))
-					w.WriteHeader(http.StatusInternalServerError)
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(err.Error())) // best effort
 					return
 				}
 
 				if err := app.defaultGrp.SetBehavior(devService, b); err != nil {
 					lgr.Error("Failed to set new behavior.", "error", err)
+					w.WriteHeader(http.StatusBadRequest)
 					if _, err := w.Write([]byte(err.Error())); err != nil {
 						lgr.Error("Error writing failure response.", "error", err)
 					}
-					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
 
@@ -498,6 +504,10 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 
 		case rd := <-app.reports:
 			lc.Info("New report")
+			// TODO: we should refactor the ReaderGroup/TagReader
+			//   to unite its tag processing with the TagProcessor code;
+			//   the biggest goal is to perform only a single pass on the TagReportData.
+			//   Secondarily, it would allow us to eliminate the ReaderGroup mutex.
 			if !app.defaultGrp.ProcessTagReport(rd.info.DeviceName, rd.report.TagReportData) {
 				// This can only happen if the device didn't exist when we started,
 				// and we never got a Connection message for it.
