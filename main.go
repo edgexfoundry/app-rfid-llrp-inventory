@@ -285,7 +285,7 @@ func main() {
 	}
 
 	if err := os.MkdirAll(cacheFolder, folderPerm); err != nil {
-		lgr.Error(fmt.Sprintf("Failed to create cache folder %q.", cacheFolder), "error", err.Error())
+		lgr.Error("Failed to create cache directory.", "directory", cacheFolder, "error", err.Error())
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -545,9 +545,6 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 		select {
 		case <-ctx.Done():
 			lc.Info("Stopping task loop.")
-			if ctx.Err() != nil {
-				lc.Warn("Context error: " + ctx.Err().Error())
-			}
 			close(eventCh)
 			persistSnapshot(lc, snapshot)
 			wg.Wait()
