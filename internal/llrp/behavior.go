@@ -295,7 +295,7 @@ func (d BasicDevice) NewConfig() *SetReaderConfig {
 func (d ImpinjDevice) NewConfig() *SetReaderConfig {
 	conf := d.BasicDevice.NewConfig()
 
-	conf.ROReportSpec.Custom = append(conf.Custom, Custom{
+	conf.ROReportSpec.Custom = append(conf.ROReportSpec.Custom, Custom{
 		VendorID: uint32(PENImpinj),
 		Subtype:  ImpinjTagReportContentSelector,
 		Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
@@ -517,7 +517,7 @@ func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value
 	})
 
 	var t TransmitPowerLevelTableEntry
-	if d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
+	if pwrIdx < len(d.pwrMinToMax) && d.pwrMinToMax[pwrIdx].TransmitPowerValue == target {
 		// The power exactly matches one of the Reader's available power settings.
 		t = d.pwrMinToMax[pwrIdx]
 	} else {

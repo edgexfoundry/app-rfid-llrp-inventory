@@ -46,6 +46,9 @@ func NewReaderGroup() *ReaderGroup {
 }
 
 func (rg *ReaderGroup) Behavior() Behavior {
+	rg.mu.RLock()
+	defer rg.mu.RUnlock()
+
 	return rg.behavior
 }
 

@@ -41,16 +41,13 @@ type testDataset struct {
 	tp   *TagProcessor
 	lc   logger.LoggingClient
 	epcs []string
-
-	events []Event
 }
 
 func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
 	ds := testDataset{
-		tp:     NewTagProcessor(lc, ApplicationSettings{}, nil),
-		lc:     lc,
-		epcs:   make([]string, tagCount),
-		events: make([]Event, 0),
+		tp:   NewTagProcessor(lc, ApplicationSettings{}, nil),
+		lc:   lc,
+		epcs: make([]string, tagCount),
 	}
 
 	for i := 0; i < tagCount; i++ {
@@ -69,6 +66,8 @@ type readParams struct {
 	origin     time.Time
 }
 
+// sanitize modifies the readParams receiver to set default values if they were not
+// defined during struct initialization
 func (params *readParams) sanitize() {
 	if params.lastSeen.Equal(time.Time{}) {
 		params.lastSeen = time.Now()
@@ -84,7 +83,13 @@ func (params *readParams) sanitize() {
 	}
 }
 
-func (ds *testDataset) readTag(epc string, params readParams) {
+// findAlias is a helper method to make the default alias for a device and antenna and lookup any
+// associated alias
+func (ds *testDataset) findAlias(deviceID string, antID uint16) string {
+	return ds.tp.getAlias(NewLocation(deviceID, antID).String())
+}
+
+func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
 	params.sanitize()
 
 	rss := llrp.PeakRSSI(params.rssi)
@@ -109,21 +114,24 @@ func (ds *testDataset) readTag(epc string, params readParams) {
 			},
 		}
 
-		events, _ := ds.tp.ProcessReport(r, ReportInfo{
+		e, _ := ds.tp.ProcessReport(r, ReportInfo{
 			DeviceName:         params.deviceName,
 			OriginNanos:        params.origin.UnixNano(),
 			offsetMicros:       0,
-			referenceTimestamp: params.origin.UnixNano() / int64(time.Millisecond),
+			referenceTimestamp: params.origin.UnixNano() / 1e6,
 		})
-
-		ds.events = append(ds.events, events...)
+		events = append(events, e...)
 	}
+
+	return events
 }
 
-func (ds *testDataset) readAll(params readParams) {
+func (ds *testDataset) readAll(params readParams) (events []Event) {
 	for _, epc := range ds.epcs {
-		ds.readTag(epc, params)
+		e := ds.readTag(epc, params)
+		events = append(events, e...)
 	}
+	return events
 }
 
 func (ds *testDataset) size() int {
@@ -156,7 +164,7 @@ func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLoc
 	}
 
 	// if expectedLocation is empty string, we do not care to validate that field
-	if expectedLocation != "" && tag.Location != expectedLocation {
+	if expectedLocation != "" && ds.tp.getAlias(tag.Location.String()) != expectedLocation {
 		return fmt.Errorf("tag %s: location %v does not match expected location %v\n\t%#v", epc, tag.Location, expectedLocation, tag)
 	}
 
@@ -175,32 +183,32 @@ func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, "")
 }
 
-func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...EventType) error {
+func (ds *testDataset) verifyEventPattern(events []Event, expectedCount int, expectedEvents ...EventType) error {
 	if expectedCount%len(expectedEvents) != 0 {
 		return fmt.Errorf("invalid event pattern specified. pattern length of %d is not evenly divisible by expected event count of %d", len(expectedEvents), expectedCount)
 	}
 
-	dataLen := len(ds.events)
+	dataLen := len(events)
 	if dataLen != expectedCount {
 		return fmt.Errorf("excpected %d %v event pattern to be generated, but %d were generated. events:\n%#v",
-			expectedCount, expectedEvents, dataLen, ds.events)
+			expectedCount, expectedEvents, dataLen, events)
 	}
 
-	for i, evt := range ds.events {
+	for i, evt := range events {
 		expected := expectedEvents[i%len(expectedEvents)]
 		if evt.OfType() != expected {
 			return fmt.Errorf("excpected %s event but was %s. events:\n%#v",
-				expected, evt.OfType(), ds.events)
+				expected, evt.OfType(), events)
 		}
 	}
 
 	return nil
 }
 
-func (ds *testDataset) verifyNoEvents() error {
-	if len(ds.events) != 0 {
+func (ds *testDataset) verifyNoEvents(events []Event) error {
+	if len(events) != 0 {
 		return fmt.Errorf("excpected no events to be generated, but %d were generated. events:\n%#v",
-			len(ds.events), ds.events)
+			len(events), events)
 	}
 
 	return nil

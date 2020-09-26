@@ -11,13 +11,8 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
-	"strconv"
 	"sync"
 	"time"
-)
-
-const (
-	TagCacheFile = "./cache/tags.json"
 )
 
 type TagProcessor struct {
@@ -48,30 +43,23 @@ func NewTagProcessor(lc logger.LoggingClient, cfg ApplicationSettings, tags []St
 	return tp
 }
 
-func makeDefaultAlias(deviceID string, antID uint16) string {
-	return deviceID + "_" + strconv.FormatUint(uint64(antID), 10)
-}
+// getAlias returns the alias associated with a location if one has been defined,
+// otherwise it returns back the original location.
+func (tp *TagProcessor) getAlias(location string) string {
+	tp.aliasMu.RLock()
+	defer tp.aliasMu.RUnlock()
 
-// getAlias gets the string alias of a reader based on the antenna port
-// Format is DeviceID_AntennaID,  e.g. Reader-EF-10_1
-// If there is an alias defined for that antenna port, use that instead
-func (tp *TagProcessor) getAlias(deviceID string, antennaID uint16) string {
-	defaultAlias := makeDefaultAlias(deviceID, antennaID)
-
-	tp.aliasMu.Lock()
-	defer tp.aliasMu.Unlock()
-
-	if alias, exists := tp.aliases[defaultAlias]; exists && alias != "" {
+	if alias, exists := tp.aliases[location]; exists && alias != "" {
 		return alias
 	}
-	return defaultAlias
+	return location
 }
 
 func (tp *TagProcessor) SetAliases(aliases map[string]string) {
 	tp.aliasMu.Lock()
 	defer tp.aliasMu.Unlock()
 
-	// aliases configuration map from Consul includes an empty key too for some reason, so is deleted if it exists
+	// delete empty key/value pair returned from Consul if it exists
 	delete(aliases, "")
 
 	tp.aliases = aliases
@@ -135,7 +123,7 @@ func NewReportInfo(reading *contract.Reading) ReportInfo {
 func (tp *TagProcessor) snapshot() []StaticTag {
 	res := make([]StaticTag, 0, len(tp.inventory))
 	for _, tag := range tp.inventory {
-		res = append(res, newStaticTag(tag))
+		res = append(res, tp.newStaticTag(tag))
 	}
 	return res
 }
@@ -164,18 +152,27 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 			tag.setState(Present)
 			event = ArrivedEvent{
 				EPC:       tag.EPC,
+				TID:       tag.TID,
 				Timestamp: tag.LastRead,
-				Location:  tag.Location,
+				Location:  tp.getAlias(tag.Location.String()),
 			}
 
 		case Present:
-			if prevLoc != "" && prevLoc != tag.Location {
-				event = MovedEvent{
-					EPC:          tag.EPC,
-					Timestamp:    tag.LastRead,
-					PrevLocation: prevLoc,
-					Location:     tag.Location,
-				}
+			if prevLoc.IsEmpty() || prevLoc.Equals(tag.Location) {
+				break
+			}
+
+			prevAlias := tp.getAlias(prevLoc.String())
+			curAlias := tp.getAlias(tag.Location.String())
+			if prevAlias == curAlias {
+				break // do not send event if the two locations share the same alias
+			}
+			event = MovedEvent{
+				EPC:         tag.EPC,
+				TID:         tag.TID,
+				Timestamp:   tag.LastRead,
+				OldLocation: prevAlias,
+				NewLocation: curAlias,
 			}
 		}
 	}()
@@ -203,8 +200,8 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		return
 	}
 
-	readLocation := tp.getAlias(info.DeviceName, uint16(*rt.AntennaID))
-	statsAtReadLoc := tag.getStats(readLocation)
+	readLocation := NewLocation(info.DeviceName, uint16(*rt.AntennaID))
+	statsAtReadLoc := tag.getStats(readLocation.String())
 
 	if rssi, hasRSSI := rt.ExtractRSSI(); hasRSSI {
 		statsAtReadLoc.updateRSSI(rssi)
@@ -214,12 +211,12 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		statsAtReadLoc.updateLastRead(lastRead)
 	}
 
-	if prevLoc == "" || tag.Location == readLocation {
+	if prevLoc.IsEmpty() || tag.Location.Equals(readLocation) {
 		tag.Location = readLocation
 		return
 	}
 
-	statsAtPrevLoc := tag.getStats(tag.Location)
+	statsAtPrevLoc := tag.getStats(tag.Location.String())
 	if statsAtPrevLoc.rssiCount() == 0 {
 		// Its stats have been cleared; update location.
 		tag.Location = readLocation
@@ -230,16 +227,16 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	if statsAtReadLoc.rssiCount() >= 2 {
 		logReadTiming(tp, info, statsAtPrevLoc, tag)
 
-		locationMean := statsAtPrevLoc.rssiDbm.GetMean()
-		incomingMean := statsAtReadLoc.rssiDbm.GetMean()
+		locationMean := statsAtPrevLoc.rssiDbm.Mean()
+		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
-		weight := tp.mobilityProfile.ComputeWeight(info.referenceTimestamp, statsAtPrevLoc.LastRead)
-		logTagStats(tp, tag, readLocation, incomingMean, locationMean, weight)
+		offset := tp.mobilityProfile.ComputeOffset(info.referenceTimestamp, statsAtPrevLoc.LastRead)
+		logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
 
 		// Update the location if the mean RSSI at the new location
 		// is greater than the adjusted mean RSSI of the existing location.
 		// Note: This will generate a moved event.
-		if incomingMean > (locationMean + weight) {
+		if incomingMean > (locationMean + offset) {
 			tag.Location = readLocation
 		}
 	}
@@ -247,23 +244,25 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	return
 }
 
-func logTagStats(tp *TagProcessor, tag *Tag, srcAlias string, incomingMean float64, locationMean float64, weight float64) {
+func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, existingMean float64, offset float64) {
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("tag stats",
 		"epc", tag.EPC,
-		"incomingLoc", srcAlias,
-		"existingLoc", tag.Location,
+		"readLoc", readLocation,
+		"prevLoc", tag.Location,
 		"incomingAvg", fmt.Sprintf("%.2f", incomingMean),
-		"existingAvg", fmt.Sprintf("%.2f", locationMean),
-		"weight", fmt.Sprintf("%.2f", weight),
-		"existingAdjusted", fmt.Sprintf("%.2f", locationMean+weight),
+		"existingAvg", fmt.Sprintf("%.2f", existingMean),
+		"offset", fmt.Sprintf("%.2f", offset),
+		"existingAdjusted", fmt.Sprintf("%.2f", existingMean+offset),
 		// if stayFactor is positive, tag will stay, if negative, generates a moved event
-		"stayFactor", fmt.Sprintf("%.2f", (locationMean+weight)-incomingMean))
+		"stayFactor", fmt.Sprintf("%.2f", (existingMean+offset)-incomingMean))
 }
 
 func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, tag *Tag) {
 	now := UnixMilliNow()
 	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
+	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("read timing",
 		"now", now,
 		"referenceTimestamp", info.referenceTimestamp,
@@ -308,10 +307,11 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 		if tag.state == Present && tag.LastRead < expiration {
 			tag.setStateAt(Departed, nowMs)
 			e := DepartedEvent{
-				EPC:          tag.EPC,
-				Timestamp:    nowMs,
-				LastRead:     tag.LastRead,
-				LastLocation: tag.Location,
+				EPC:               tag.EPC,
+				TID:               tag.TID,
+				Timestamp:         nowMs,
+				LastRead:          tag.LastRead,
+				LastKnownLocation: tp.getAlias(tag.Location.String()),
 			}
 
 			// reset the read stats so if it arrives again it will start with fresh data
