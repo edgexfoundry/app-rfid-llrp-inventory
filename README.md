@@ -57,7 +57,7 @@ OK
 
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
-Here are some example `EdgeX Readings`.
+Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 
 - **`InventoryEventArrived`**
 ```json
@@ -73,7 +73,7 @@ Here are some example `EdgeX Readings`.
       "origin": 1598043284109799400,
       "device": "rfid-inventory",
       "name": "InventoryEventArrived",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
     }
   ]
 }
@@ -93,7 +93,7 @@ Here are some example `EdgeX Readings`.
       "origin": 1598401259697580500,
       "device": "rfid-inventory",
       "name": "InventoryEventMoved",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"timestamp\":1598401259691,\"prev_location\":\"SpeedwayR-10-EF-18_1\",\"location\":\"SpeedwayR-10-EF-18_3\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
   ]
 }
@@ -113,11 +113,22 @@ Here are some example `EdgeX Readings`.
       "origin": 1598062424894043600,
       "device": "rfid-inventory",
       "name": "InventoryEventDeparted",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-18_1\"}"
+    },
+    {
+      "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
+      "created": 1598062424895,
+      "origin": 1598062424894043600,
+      "device": "rfid-inventory",
+      "name": "InventoryEventDeparted",
+      "value": "{\"epc\":\"30340bb6884cb101a13bc688\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392512,\"last_known_location\":\"POS Terminals\"}"
     }
   ]
 }
 ```
+
+> **Note:** The `readings` field of the `EdgeX Event` is an array and multiple Inventory Events may
+> be sent via a single `EdgeX Event`. Each `EdgeX Reading` corresponds to a single Inventory Event.
 
 
 ### Arrived
@@ -132,7 +143,7 @@ Moved events are generated when _**ALL**_ of the following conditions are met:
 - The `Incoming Antenna`'s Alias does not match the current Location's Alias
 - The `Incoming Antenna` has read that tag at least `2` times total (including this one)
 - The moving average of RSSI values from the `Incoming Antenna` are greater than the 
-  current Location's _**weighted**_ moving average _([See: Mobility Profile](#Mobility-profile))_
+  current Location's _**adjusted**_ moving average _([See: Mobility Profile](#Mobility-profile))_
 
 ### Departed
 Departed events are generated when:
@@ -158,7 +169,7 @@ that this tag is closest to.
 
 The location algorithm is based upon comparing moving averages of various RSSI values from each RFID Antenna. Over time
 these values will be decayed based on the configurable [Mobility Profile](#Mobility-profile). Once the
-algorithm computes a higher weighted value for a new location, a Moved event is generated.
+algorithm computes a higher adjusted value for a new location, a Moved event is generated.
 
 > **RSSI** stands for Received Signal Strength Indicator. It is an estimated measure of power (in dBm) that the RFID reader
 > receives from the RFID tag's backscatter. 
@@ -208,9 +219,11 @@ The following configuration options affect how the tag location algorithm works 
 ### Mobility Profile
 
 The following configuration options define the `Mobility Profile` values.
-These values are used in the Location algorithm as a weighting function which
-will decay RSSI values over time. This weight is then applied to the existing Tag's Location
-and compared to the non-weighted average.
+These values are used in the Location algorithm as an adjustment function which
+will decay RSSI values over time. This offset value is then applied to the existing Tag's Location
+and compared to the non-adjusted average. Positive `offset` values will increase the likelihood of a tag
+staying in the same location, whereas negative `offset` values will increase the likelihood that the tag
+will move to the new location it was just read at.
 
 The main goal of the Mobility Profile is to provide a way to customize the various tradeoffs when
 dealing with erratic data such as RSSI values. In general there is a tradeoff between responsiveness
@@ -220,10 +233,10 @@ By tweaking these values you will be able to find the balance that is right for 
 Suppose the following variables:
 - **`incomingRSSI`** Mean RSSI of last `windowSize` reads by incoming read's location 
 - **`existingRSSI`** Mean RSSI of last `windowSize` reads by tag's existing location
-- **`weight`** Result of Mobility Profile's computations
+- **`offset`** Result of Mobility Profile's computations
 
 The location will change when the following equation is true:
-- `incomingRSSI > (existingRSSI * weight)`
+- `incomingRSSI > (existingRSSI + offset)`
 
 ![Mobility Profile Diagram](docs/images/mobility-profile.png)
 
@@ -231,7 +244,7 @@ The location will change when the following equation is true:
   - default: `'default'` *(which is currently the same as `'asset_tracking'`)*
   - available options: `'default'`, `'asset_tracking'`, `'retail_garment'`
 
-- **`MobilityProfileSlope`** *`[float]`*: Used to determine the weight applied to older RSSI values (aka rate of decay)
+- **`MobilityProfileSlope`** *`[float]`*: Used to determine the offset applied to older RSSI values (aka rate of decay)
   - default: *(none, inherit from base profile)*
   - units: `dBm per millisecond`
 
@@ -239,7 +252,7 @@ The location will change when the following equation is true:
   - default: *(none, inherit from base profile)*
   - units: `dBm`
 
-- **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the weight used is just the threshold, effectively the slope is not used
+- **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the offset used is equal to the threshold, effectively the slope is not used
   - default: *(none, inherit from base profile)*
   - units: `milliseconds`
   
