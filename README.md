@@ -398,7 +398,7 @@ you'll receive an error response, and the Behavior won't change:
   - `Max` is the 100x the maximum desired dBm output from the Reader to its antennas;
     actual radiated power depends on the gains and losses 
     associated with the antenna and cabling. 
-    The service accepts values between 0 and 65,535 (2^16-1),
+    The service accepts values between -32,768 and 32,767 (the space of an int16),
     but it configures the Reader with its highest available power 
     less than or equal to the given target. 
     The service rejects the Behavior if its `Power.Max` is less than 
