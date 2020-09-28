@@ -108,7 +108,7 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 		return nil, errors.Errorf("missing general capabilities for %q", device)
 	}
 
-	var tp TagReader
+	var tr TagReader
 	switch VendorPEN(devCap.GeneralDeviceCapabilities.DeviceManufacturer) {
 	case PENImpinj:
 		impDev, err := NewImpinjDevice(devCap)
@@ -124,7 +124,7 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 			return nil, err
 		}
 
-		tp = impDev
+		tr = impDev
 	default:
 		basic, err := NewBasicDevice(devCap)
 		if err != nil {
@@ -135,10 +135,10 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 			return nil, err
 		}
 
-		tp = basic
+		tr = basic
 	}
 
-	return tp, nil
+	return tr, nil
 }
 
 // GetCapabilities queries the device service for a device's capabilities.

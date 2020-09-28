@@ -322,7 +322,20 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 	}
 }
 
-// FillAmbiguousNil handles the worst feature of LLRP: ambiguous nil parameters.
+// ProcessTagReport processes what it expects is the most recent TagReportData.
+//
+// Currently, it fills in ambiguous nil values in the report data,
+// according to LLRP's rules for "efficient" tag reporting.
+func (d BasicDevice) ProcessTagReport(tags []TagReportData) {
+	d.fillAmbiguousNil(tags)
+}
+
+// ProcessTagReport does nothing for Impinj Readers,
+// as they say they always send all parameters in every report.
+// Hopefully that is true.
+func (d ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
+
+// fillAmbiguousNil handles the worst feature of LLRP: ambiguous nil parameters.
 //
 // Specifically, it fills in tag data parameters that weren't reported
 // because they match the last reported value of the same type.
@@ -352,6 +365,7 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 //   such that it is impossible to disambiguate nil parameters.
 //
 // Here's a direct quote from the LLRP Spec explaining how it works:
+//
 //		This report parameter is generated per tag per accumulation scope[*].
 //		The only mandatory portion of this parameter is the EPCData parameter.
 //		If there was an access operation performed on the tag,
@@ -371,7 +385,7 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 //     Report accumulation also affects the reporting of
 //     timestamps, RSSI, the channel index, and number of observations.
 //
-func (d BasicDevice) ProcessTagReport(tags []TagReportData) {
+func (d BasicDevice) fillAmbiguousNil(tags []TagReportData) {
 	for i := range tags {
 		tag := &tags[i]
 		if d.report.EnableROSpecID {
@@ -456,11 +470,6 @@ func (d BasicDevice) ProcessTagReport(tags []TagReportData) {
 		}
 	}
 }
-
-// FillAmbiguousNil does nothing for Impinj Readers,
-// as they say they do not use this particular aspect of LLRP.
-// Hopefully that is true.
-func (d ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
 
 // Transmit returns a legal llrp.RFTransmitter value.
 func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
@@ -828,6 +837,7 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	}
 
 	spec := &ROSpec{
+		ROSpecID:       1, // May be overridden, but better to ensure it's not 0.
 		ROBoundarySpec: b.Boundary(),
 		AISpecs:        aiSpecs,
 	}
@@ -890,7 +900,7 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	}
 
 	return &ROSpec{
-		ROSpecID:       1,
+		ROSpecID:       1, // May be overridden, but better to ensure it's not 0.
 		ROBoundarySpec: b.Boundary(),
 		AISpecs: []AISpec{{
 			AntennaIDs: []AntennaID{0},
