@@ -53,3 +53,5 @@ logs/
 
 # keep the important stuff
 !res/html/*
+
+cache/
