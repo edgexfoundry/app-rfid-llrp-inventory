@@ -201,7 +201,6 @@ func NewBasicDevice(c *GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 	}
 
 	llrpCap := c.LLRPCapabilities
-	// c1g2Cap := c.C1G2LLRPCapabilities
 
 	// Copy & sort the power level entries by power level, min to max;
 	// We make a copy of the list because:
@@ -268,7 +267,7 @@ func NewImpinjDevice(c *GetReaderCapabilitiesResponse) (*ImpinjDevice, error) {
 		}
 
 		// They're reporting BLF (in Hz) instead of BDR (in bps).
-		m.BackscatterDataRate = m.BackscatterDataRate >> m.Modulation
+		m.BackscatterDataRate >>= m.Modulation
 		fixed = append(fixed, m)
 	}
 	bd.modes = fixed
@@ -276,7 +275,7 @@ func NewImpinjDevice(c *GetReaderCapabilitiesResponse) (*ImpinjDevice, error) {
 	return &ImpinjDevice{BasicDevice: *bd}, nil
 }
 
-func (d BasicDevice) NewConfig() *SetReaderConfig {
+func (d *BasicDevice) NewConfig() *SetReaderConfig {
 	return &SetReaderConfig{
 		ResetToFactoryDefaults: true,
 		ROReportSpec: &ROReportSpec{
@@ -292,7 +291,7 @@ func (d BasicDevice) NewConfig() *SetReaderConfig {
 	}
 }
 
-func (d ImpinjDevice) NewConfig() *SetReaderConfig {
+func (d *ImpinjDevice) NewConfig() *SetReaderConfig {
 	conf := d.BasicDevice.NewConfig()
 
 	conf.ROReportSpec.Custom = append(conf.ROReportSpec.Custom, Custom{
@@ -326,14 +325,14 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 //
 // Currently, it fills in ambiguous nil values in the report data,
 // according to LLRP's rules for "efficient" tag reporting.
-func (d BasicDevice) ProcessTagReport(tags []TagReportData) {
+func (d *BasicDevice) ProcessTagReport(tags []TagReportData) {
 	d.fillAmbiguousNil(tags)
 }
 
 // ProcessTagReport does nothing for Impinj Readers,
 // as they say they always send all parameters in every report.
 // Hopefully that is true.
-func (d ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
+func (d *ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
 
 // fillAmbiguousNil handles the worst feature of LLRP: ambiguous nil parameters.
 //
@@ -385,7 +384,7 @@ func (d ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
 //     Report accumulation also affects the reporting of
 //     timestamps, RSSI, the channel index, and number of observations.
 //
-func (d BasicDevice) fillAmbiguousNil(tags []TagReportData) {
+func (d *BasicDevice) fillAmbiguousNil(tags []TagReportData) {
 	for i := range tags {
 		tag := &tags[i]
 		if d.report.EnableROSpecID {
@@ -472,7 +471,7 @@ func (d BasicDevice) fillAmbiguousNil(tags []TagReportData) {
 }
 
 // Transmit returns a legal llrp.RFTransmitter value.
-func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
+func (d *BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	// First, find the highest power at or below the Target.
 	pwrIdx, pwr := d.findPower(b.Power.Max)
 	if pwr > b.Power.Max {
@@ -516,7 +515,7 @@ func (d BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 // so you should check the value upon return if a higher level is never suitable.
 //
 // This panics if there is not at least one power value.
-func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value MillibelMilliwatt) {
+func (d *BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value MillibelMilliwatt) {
 	// sort.Search returns the smallest index i at which f(i) is true,
 	// or the list len if the result is always false.
 	// This requires the list is sorted (in our case, in ascending order).
@@ -547,7 +546,7 @@ func (d BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value
 //
 // If the number of nearby Readers is unknown, use 0.
 // This returns both the best RF Mode entry as well as its 0-index within the slice.
-func (d BasicDevice) findBestMode(nReaders uint) (bestIdx int, mode UHFC1G2RFModeTableEntry) {
+func (d *BasicDevice) findBestMode(nReaders uint) (bestIdx int, mode UHFC1G2RFModeTableEntry) {
 	const dense = 0.5 // EPC spec implies >50% is about where "multi" becomes "dense"
 	var maskTarget SpectralMaskType
 	switch nReaders {
@@ -605,7 +604,7 @@ func (d BasicDevice) findBestMode(nReaders uint) (bestIdx int, mode UHFC1G2RFMod
 // that permit guardbands between the carrier waves and backscattered sidebands.
 // More information can be found in Appendix G of the
 // EPC Radio-Frequency Identity Protocols Generation-2 UHF RFID Standard.
-func (d BasicDevice) fastestAt(mask SpectralMaskType) (bestIdx int, ok bool) {
+func (d *BasicDevice) fastestAt(mask SpectralMaskType) (bestIdx int, ok bool) {
 	// During singulation, tags only backscatter about 150 bits.
 	// At low BDRs, the backscatter time indeed dominates singulation,
 	// but at higher BDRs, the forward link can make up to a 3x difference.
@@ -640,7 +639,7 @@ func (d BasicDevice) fastestAt(mask SpectralMaskType) (bestIdx int, ok bool) {
 		ok = true
 	}
 
-	return
+	return bestIdx, ok
 }
 
 type TagMobility uint16
@@ -661,7 +660,7 @@ type Environment struct {
 }
 
 // NewROSpec returns a new llrp.ROSpec to achieve the Behavior within the Environment.
-func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
+func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	if b.GPITrigger != nil && (b.GPITrigger.Port == 0 ||
 		d.nGPIs == 0 || b.GPITrigger.Port > d.nGPIs) {
 		return nil, errors.Wrapf(ErrUnsatisfiable,
@@ -847,7 +846,7 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 
 // NewROSpec returns a new llrp.ROSpec to achieve the Behavior within the Environment
 // with some aid of Impinj-specific LLRP vendor extensions.
-func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
+func (d *ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	if b.GPITrigger != nil && (b.GPITrigger.Port == 0 ||
 		d.nGPIs == 0 || b.GPITrigger.Port > d.nGPIs) {
 		return nil, errors.Wrapf(ErrUnsatisfiable,
@@ -861,7 +860,6 @@ func (d ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	}
 
 	_, best := d.findBestMode(e.NumNearbyReaders)
-	// tari := d.modes[mIdx].MinTariTime
 
 	// Impinj doesn't support state aware filtering via standard LLRP messages,
 	// but does support the concept via a custom parameter they call "Search modes".

@@ -15,6 +15,34 @@ import (
 	"testing/quick"
 )
 
+// testROSpecProperties is a helper function
+// that validates various properties on an ROSpec
+// that should always be true (of an ROSpec to be sent to a Reader),
+// regardless of how that ROSpec is generated.
+func testROSpecProperties(t *testing.T, spec *ROSpec) {
+	t.Helper()
+
+	// These assume we're creating a new spec
+
+	if spec.ROSpecID == 0 {
+		t.Error("spec ID should not be 0")
+	}
+
+	if spec.ROSpecCurrentState != ROSpecStateDisabled {
+		t.Error("spec should be created in the Disabled state")
+	}
+
+	// We're currently controlling reporting at the ReaderConfig level,
+	// so we don't want to override it in the ROSpec itself.
+	if spec.ROReportSpec != nil {
+		t.Error("spec should not use an ROReportSpec")
+	}
+
+	if len(spec.AISpecs) == 0 {
+		t.Error("spec should have at least one AI Spec")
+	}
+}
+
 func TestImpinjEnableBool16(t *testing.T) {
 	if err := quick.Check(func(subtype uint32) bool {
 		data := impinjEnableBool16(subtype)
@@ -363,6 +391,8 @@ func TestBasicDevice_NewROSpec(t *testing.T) {
 			t.Errorf("expected an ROSpec, but got an error for behavior %+v: %+v", b, err)
 		} else if r == nil {
 			t.Errorf("expected an ROSpec, but got nil for behavior %+v", b)
+		} else {
+			testROSpecProperties(t, r)
 		}
 	}
 
@@ -384,15 +414,14 @@ func TestBasicDevice_NewROSpec_noHopThisTime(t *testing.T) {
 	freqInfo := &caps.RegulatoryCapabilities.UHFBandCapabilities.FrequencyInformation
 	freqInfo.Hopping = false
 
-	d, err := NewBasicDevice(caps)
-	if err == nil {
+	if _, err := NewBasicDevice(caps); err == nil {
 		t.Fatal("Creating a device should fail if Hopping is false " +
 			"but no FixedFrequencyTable is defined")
 	}
 
 	freqInfo.FrequencyHopTables = nil
 	freqInfo.FixedFrequencyTable = &FixedFrequencyTable{Frequencies: fccFreqs}
-	d, err = NewBasicDevice(caps)
+	d, err := NewBasicDevice(caps)
 	if err != nil {
 		t.Fatalf("failed to create device with fixed frequencies: %+v", err)
 	}
