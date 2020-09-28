@@ -316,11 +316,11 @@ Here's how the service works with Behaviors:
     your devices must be registered with the LLRP device service
     using device profiles with names matching 
     the `deviceCommands` and `deviceResources` it needs. 
-    The full list can be found below.
-- In particular, Impinj devices should be registered with device service
+    The full list [can be found below](#device-profile-requirements).
+- In particular, Impinj devices must be registered with the device service
     using a profile that has an `enableImpinjExt` `deviceCommand`,
-    which is expected to `set` to a `deviceResource`
-    representing a `CustomMessage` that enables Impinj's custom extensions.
+    to `set` to a `deviceResource` representing a `CustomMessage` 
+    that enables Impinj's custom extensions.
     An example profile that meets these conditions
     is available in the LLRP Device Service. 
 - You can modify a Behavior at any time, 
@@ -454,5 +454,68 @@ you'll receive an error response, and the Behavior won't change:
     other readers are not configured with this option,
     and other tag types will act as they do under a `Normal` scan. 
           
+
+### Device Profile Requirements
+As [mentioned above](#important-limitations), this service calls the Device Service 
+with specific and `deviceCommands` and expects specific `deviceResources`.
+Thus, those `deviceCommands` and `deviceResources` 
+must be defined in the `deviceProfile`s
+for which devices are registered with the LLRP Device Service.
+
+#### All Devices
+All devices must be registered with a `deviceProfile` that provides the following:
+ 
+- The following `deviceResources` must be available:
+    - EdgeX `"String"` types, the values of which 
+    encode json-representations of LLRP messages and/or parameters
+    that can be marshaled by Go's standard `json` package
+    into [the Go structs defined in the LLRP package](internal/llrp/llrp_structs.go):
+        - `ReaderCapabilities` with a `readWrite` of `"R"` or `"RW"`
+            encoding an LLRP `GetReaderCapabilitiesResponse` message.
+        - `ReaderConfig` with a `readWrite` of `"W"` or `"RW"`
+            encoding an LLRP `GetReaderCapabilitiesResponse` message.
+        - `ROSpec` with a `readWrite` of `"W"` or `"RW"`
+            encoding an LLRP `ROSpec` parameter.
+    - An EdgeX `"uint32"` type with `readWrite` of `"W"` or `"RW"` named `ROSpecID`,
+        the string value of which encodes an LLRP `ROSpecID` 
+        as a base-10 unsigned integer.
+    - An EdgeX `"String"` type with `readWrite` of `"W"` or `"RW"` named `"Action"`,
+        which the device service uses to determine which `deviceCommand` was called.
+- The following `deviceCommands` must be available:
+    - `capabilities` must have a `get` for `ReaderCapabilities`.
+    - `config` must have a `set` that accepts `ReaderConfig`.
+    - `roSpec` must have a `set` that accepts `ROSpec`.
+    - The following `deviceCommands` must have two `set`s -- 
+        the first must accept `ROSpecID` 
+        and the second must `set` `Action` with the appropriate `parameter` value:
+        - `enableROSpec` must `set` `Action` with the `parameter` value `"Enable"`
+        - `startROSpec` must `set` `Action` with the `parameter` value `"Start"`
+        - `stopROSpec` must `set` `Action` with the `parameter` value `"Stop"`
+        - `disableROSpec` must `set` `Action` with the `parameter` value `"Disable"`
+        - `deleteROSpec` must `set` `Action` with the `parameter` value `"Delete"`
+
+#### Impinj Devices
+In addition to the above, 
+Impinj Readers must be registered with a profile 
+that has a `deviceResource` named `ImpinjCustomExtensionMessage`
+with the `attributes` `vendor: "25882"` and `subtype: "21"`
+and a `deviceCommand` named `enableImpinjExt`
+with a `set` that targets that `deviceResource`.
+
+When this service sees an Impinj device, 
+it sends a `PUT` request with `{"ImpinjCustomExtensionMessage": "AAAAAA=="}` 
+to `{deviceService}/api/v1/commands/{deviceName}/enableImpinjExt`;
+if that `deviceCommand` and `deviceResource` exist,
+the Device Service will send a `CustomMessage` to the reader,
+enabling this service to send Impinj's `CustomParameter`s.
+This is required because Impinj Readers reject LLRP `CustomParameter`s
+unless a `Client` sends the afore-described `CustomMessage`
+at some earlier point in their communication.
+If that resource or command doesn't exist for the device,
+this service will receive a 404 from the Device Service,
+preventing it from operating as designed. 
+
+[device_service_profiles]: https://github.impcloud.net/RSP-Inventory-Suite/device-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
+
 ## License
 [Apache-2.0](LICENSE)
