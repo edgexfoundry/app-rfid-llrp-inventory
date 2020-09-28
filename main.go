@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
@@ -25,10 +26,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -47,7 +51,14 @@ const (
 	sKeyDeviceServiceURL = "DeviceServiceURL"
 	sKeyMetaServiceURL   = "MetadataServiceURL"
 
-	maxBodyBytes = 100 * 1024
+	maxBodyBytes        = 100 * 1024
+	coreDataPostTimeout = 3 * time.Minute
+	eventChSz           = 100
+
+	cacheFolder  = "cache"
+	tagCacheFile = "tags.json"
+	folderPerm   = 0755 // folders require the execute flag in order to create new files
+	filePerm     = 0644
 )
 
 type inventoryApp struct {
@@ -114,8 +125,6 @@ func (lgr logWrap) exitIfErr(err error, msg string, params ...lg) {
 	lgr.exitIf(err != nil, msg, append(params, lg{"error", err})...)
 }
 
-var roSpecID0 = []byte(`{"ROSpecID":"0"}`)
-
 func main() {
 	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := edgexSdk.Initialize(); err != nil {
@@ -158,6 +167,7 @@ func main() {
 
 	app := inventoryApp{
 		lgr:          lgr,
+		edgexSdk:     edgexSdk,
 		defaultGrp:   defaultGrp,
 		devService:   devService,
 		snapshotReqs: make(chan snapshotDest),
@@ -274,13 +284,36 @@ func main() {
 			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
 	}
 
+	if err := os.MkdirAll(cacheFolder, folderPerm); err != nil {
+		lgr.Error("Failed to create cache directory.", "directory", cacheFolder, "error", err.Error())
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-	done := make(chan struct{})
 	go func() {
 		defer wg.Done()
-		app.taskLoop(done, cc, lgr)
-		lgr.Info("Done processing.")
+		app.taskLoop(ctx, *cc, lgr)
+		lgr.Info("Task loop has exited.")
+	}()
+
+	// We are doing this because of an issue with running app-functions-sdk inside
+	// of docker-compose where something is hanging and not relinquishing control
+	// back to our code.
+	//
+	// Note that this code does not in any way attempt to "fix" the deadlock issue,
+	// but instead provides our code a way to cleanup and persist the data safely
+	// when the process is exiting.
+	//
+	// see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
+	go func() {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		s := <-signals
+
+		lgr.Info(fmt.Sprintf("Received %q signal from OS.", s.String()))
+		cancel() // signal the taskLoop to finish
 	}()
 
 	// Subscribe to events.
@@ -288,8 +321,8 @@ func main() {
 	lgr.exitIfErr(edgexSdk.MakeItRun(), "Failed to run pipeline.")
 
 	// let task loop complete
-	close(done)
 	wg.Wait()
+	lgr.Info("Exiting.")
 }
 
 // getConfigClient returns a configuration client based on the command line args,
@@ -413,7 +446,7 @@ func (app *inventoryApp) processEdgeXEvent(edgeXCtx *appcontext.Context, params 
 				app.lgr.Warn("No tag report data in report.", "device", event.Device)
 			} else {
 				app.reports <- reportData{report, inventory.NewReportInfo(reading)}
-				app.lgr.Info("New ROAccessReport.",
+				app.lgr.Trace("New ROAccessReport.",
 					"device", event.Device, "tags", len(report.TagReportData))
 			}
 		}
@@ -460,20 +493,23 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // Since nearly every round through this loop must read or write the inventory,
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
-func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, lc logger.LoggingClient) {
+func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, lc logger.LoggingClient) {
 	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
-	confErrs := make(chan error)
-	confUpdates := make(chan interface{})
+	confErrCh := make(chan error)
+	confUpdateCh := make(chan interface{})
+	eventCh := make(chan []inventory.Event, eventChSz)
 
 	defer func() {
-		close(confErrs)
-		close(confUpdates)
+		aggregateDepartedTicker.Stop()
+		ageoutTicker.Stop()
+		close(confErrCh)
+		close(confUpdateCh)
 	}()
 
 	// load tag data
 	var snapshot []inventory.StaticTag
-	snapshotData, err := ioutil.ReadFile(inventory.TagCacheFile)
+	snapshotData, err := ioutil.ReadFile(filepath.Join(cacheFolder, tagCacheFile))
 	if err != nil {
 		lc.Warn("Failed to load inventory snapshot.", "error", err.Error())
 	} else {
@@ -482,56 +518,82 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 		}
 	}
 	processor := inventory.NewTagProcessor(lc, snapshot)
+	if len(snapshot) > 0 {
+		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
+	}
 
 	config := &consulConfig{
 		Aliases: make(map[string]string),
 	}
-	cc.WatchForChanges(confUpdates, confErrs, config, "/"+serviceKey)
+	cc.WatchForChanges(confUpdateCh, confErrCh, config, "/"+serviceKey)
 
-	lc.Info("Starting event loop.")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		lc.Info("Starting event processor.")
+		for events := range eventCh {
+			if err := app.pushEventsToCoreData(ctx, events); err != nil {
+				lc.Error("Failed to push events to CoreData.", "error", err.Error())
+			}
+		}
+		lc.Info("Event processor stopped.")
+	}()
 
+	lc.Info("Starting task loop.")
 	for {
-		var updatedSnapshot []inventory.StaticTag
 		select {
-		case <-done:
+		case <-ctx.Done():
+			lc.Info("Stopping task loop.")
+			close(eventCh)
+			persistSnapshot(lc, snapshot)
+			wg.Wait()
+			lc.Info("Task loop stopped.")
 			return
 
 		case rd := <-app.reports:
-			lc.Info("New report")
 			if !app.defaultGrp.ProcessTagReport(rd.info.DeviceName, rd.report.TagReportData) {
 				// This can only happen if the device didn't exist when we started,
 				// and we never got a Connection message for it.
-				lc.Error("Tag Report for unknown device", "device", rd.info.DeviceName)
+				lc.Error("Tag Report for unknown device.", "device", rd.info.DeviceName)
 			}
 
-			var events []inventory.Event
-			events, updatedSnapshot = processor.ProcessReport(rd.report, rd.info)
-			for _, e := range events {
-				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-				if err := app.pushEventToCoreData(e); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
-				}
+			events, updatedSnapshot := processor.ProcessReport(rd.report, rd.info)
+			if updatedSnapshot != nil {
+				snapshot = updatedSnapshot // always update the snapshot if available
+			}
+			if len(events) > 0 {
+				persistSnapshot(lc, snapshot) // only persist when there are inventory events
+				eventCh <- events
 			}
 
 		case t := <-aggregateDepartedTicker.C:
+			_, ok := app.sdkCtx.Load().(*appcontext.Context)
+			if !ok {
+				lc.Info("Delaying AggregateDeparted processor: missing app-functions-sdk context.")
+				break
+			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
-			var events []inventory.Event
-			events, updatedSnapshot = processor.AggregateDeparted()
-			for _, e := range events {
-				lc.Info(fmt.Sprintf("processing %s event: %+v", e.OfType(), e))
-				if err := app.pushEventToCoreData(e); err != nil {
-					lc.Error("Failed to push events to CoreData", "error", err.Error())
+
+			if events, updatedSnapshot := processor.AggregateDeparted(); len(events) > 0 {
+				if updatedSnapshot != nil { // should always be true if there are events
+					snapshot = updatedSnapshot
+					persistSnapshot(lc, snapshot)
 				}
+				eventCh <- events
 			}
 
 		case t := <-ageoutTicker.C:
 			lc.Debug("Running AgeOut.", "time", fmt.Sprintf("%v", t))
-			_, updatedSnapshot = processor.AgeOut()
+			if _, updatedSnapshot := processor.AgeOut(); updatedSnapshot != nil {
+				snapshot = updatedSnapshot
+				persistSnapshot(lc, snapshot)
+			}
 
-		case rawConfig := <-confUpdates:
+		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*consulConfig); ok {
-				lc.Info("Configuration updated.")
-				lc.Debug("New configuration", "raw", fmt.Sprintf("%+v", newConfig))
+				lc.Info("Configuration updated from consul.")
+				lc.Debug("New configuration.", "raw", fmt.Sprintf("%+v", newConfig))
 				config = newConfig
 				processor.SetAliases(newConfig.Aliases)
 			} else {
@@ -539,33 +601,31 @@ func (app *inventoryApp) taskLoop(done chan struct{}, cc configuration.Client, l
 			}
 
 		case req := <-app.snapshotReqs:
-			_, err := req.w.Write(snapshotData)
+			data, err := json.Marshal(snapshot)
+			if err == nil {
+				_, err = req.w.Write(data) // only write if there was no error already
+			}
 			req.result <- err
 
-		case err := <-confErrs:
+		case err := <-confErrCh:
 			lc.Error("Configuration error.", "error", err.Error())
 		}
-
-		if updatedSnapshot == nil {
-			continue
-		}
-
-		snapshot = updatedSnapshot
-
-		lc.Info("Updating inventory snapshot.")
-		data, err := json.Marshal(snapshot)
-		if err != nil {
-			lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
-			continue
-		}
-
-		snapshotData = data
-		if err := ioutil.WriteFile(inventory.TagCacheFile, data, 0644); err != nil {
-			lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
-			continue
-		}
-		lc.Debug("Persisted inventory snapshot.", "tags", len(snapshot))
 	}
+}
+
+func persistSnapshot(lc logger.LoggingClient, snapshot []inventory.StaticTag) {
+	lc.Debug("Persisting inventory snapshot.")
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		lc.Warn("Failed to marshal inventory snapshot.", "error", err.Error())
+		return
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(cacheFolder, tagCacheFile), data, filePerm); err != nil {
+		lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
+		return
+	}
+	lc.Info("Persisted inventory snapshot.", "tags", len(snapshot))
 }
 
 // setDefaultBehavior sets the behavior associated with the default device group.
@@ -576,24 +636,55 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 	return err
 }
 
-// pushEventToCoreData pushes an event to EdgeX's core data service
-// provided that the inventoryApp has an instance of the SDK context,
-// which unfortunately isn't available until after starting the execution pipeline.
-func (app *inventoryApp) pushEventToCoreData(event inventory.Event) error {
+// pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
+// an EdgeX Reading for each Inventory Event
+func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
 	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
 	if !ok {
-		return errors.New("unable to push event to core data: missing app-functions-sdk context")
+		return errors.New("unable to push events to core data: missing app-functions-sdk context")
 	}
 
-	payload, err := json.Marshal(event)
-	if err != nil {
-		return errors.Wrap(err, "error marshalling event")
+	now := time.Now().UnixNano()
+	readings := make([]models.Reading, 0, len(events))
+
+	var errs []error
+	for _, event := range events {
+		payload, err := json.Marshal(event)
+		if err != nil {
+			errs = append(errs, errors.Wrap(err, "error marshalling event"))
+			continue
+		}
+
+		resourceName := ResourceInventoryEvent + string(event.OfType())
+		app.edgexSdk.LoggingClient.Info("Sending Inventory Event.",
+			"type", resourceName, "payload", string(payload))
+
+		readings = append(readings, models.Reading{
+			Value:  string(payload),
+			Origin: now,
+			Device: eventDeviceName,
+			Name:   resourceName,
+		})
 	}
 
-	eventName := ResourceInventoryEvent + string(event.OfType())
-	if _, err = sdkCtx.PushToCoreData(eventDeviceName, eventName, string(payload)); err != nil {
-		return errors.Wrap(err, "unable to push inventory event to core-data")
+	edgeXEvent := &models.Event{
+		Device:   eventDeviceName,
+		Origin:   now,
+		Readings: readings,
 	}
 
-	return err
+	ctx, cancel := context.WithTimeout(ctx, coreDataPostTimeout)
+	defer cancel()
+
+	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
+	//       resolved, we can use the appsdk.AppFunctionsSDK EventClient directly without the need
+	//       for the appcontext.Context.
+	if _, err := sdkCtx.EventClient.Add(ctx, edgeXEvent); err != nil {
+		errs = append(errs, errors.Wrap(err, "unable to push inventory event(s) to core-data"))
+	}
+
+	if errs != nil {
+		return llrp.MultiErr(errs)
+	}
+	return nil
 }
