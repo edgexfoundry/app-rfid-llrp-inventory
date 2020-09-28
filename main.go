@@ -294,7 +294,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		app.taskLoop(ctx, *cc, lgr)
+		app.taskLoop(ctx, cc, lgr)
 		lgr.Info("Task loop has exited.")
 	}()
 
@@ -329,7 +329,7 @@ func main() {
 // or a default one if those lack a config provider URL.
 // Ideally, a future version of the EdgeX SDKs will give us something like this
 // without parsing the args again, but for now, this will do.
-func getConfigClient() (*configuration.Client, error) {
+func getConfigClient() (configuration.Client, error) {
 	sdkFlags := flags.New()
 	sdkFlags.Parse(os.Args[1:])
 	cpUrl, err := url.Parse(sdkFlags.ConfigProviderUrl())
@@ -353,7 +353,7 @@ func getConfigClient() (*configuration.Client, error) {
 		Type:     cpUrl.Scheme,
 	})
 
-	return &configClient, errors.Wrap(err, "failed to get config client")
+	return configClient, errors.Wrap(err, "failed to get config client")
 }
 
 // processEdgeXEvent is used as the sole member of our pipeline.
