@@ -457,7 +457,7 @@ you'll receive an error response, and the Behavior won't change:
 
 ### Device Profile Requirements
 As [mentioned above](#important-limitations), this service calls the Device Service 
-with specific and `deviceCommands` and expects specific `deviceResources`.
+with specific `deviceCommands` and expects specific `deviceResources`.
 Thus, those `deviceCommands` and `deviceResources` 
 must be defined in the `deviceProfile`s
 for which devices are registered with the LLRP Device Service.
@@ -473,7 +473,7 @@ All devices must be registered with a `deviceProfile` that provides the followin
         - `ReaderCapabilities` with a `readWrite` of `"R"` or `"RW"`
             encoding an LLRP `GetReaderCapabilitiesResponse` message.
         - `ReaderConfig` with a `readWrite` of `"W"` or `"RW"`
-            encoding an LLRP `GetReaderCapabilitiesResponse` message.
+            encoding an LLRP `GetReaderConfigResponse` message.
         - `ROSpec` with a `readWrite` of `"W"` or `"RW"`
             encoding an LLRP `ROSpec` parameter.
     - An EdgeX `"uint32"` type with `readWrite` of `"W"` or `"RW"` named `ROSpecID`,

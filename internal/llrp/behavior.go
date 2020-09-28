@@ -706,7 +706,7 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 
 		// For a Fast scan, search for tags with S0 in State A.
 		// S0 reverts on its own when not powered.
-		query = &C1G2SingulationControl{
+		*query = C1G2SingulationControl{
 			Session:        0,
 			TagPopulation:  500,
 			TagTransitTime: 500,
@@ -723,7 +723,7 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 		// If the population is smaller than (S1 persistence) * (read rate),
 		// then eventually each round only one tag is eligible for singulation
 		// (i.e., only a single tag's S1 will have fallen back to A).
-		query = &C1G2SingulationControl{
+		*query = C1G2SingulationControl{
 			Session:        1,
 			TagPopulation:  1000,
 			TagTransitTime: 5000,
@@ -758,7 +758,7 @@ func (d BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 				UnawareFilterAction: &action,
 			}}
 
-			query = &C1G2SingulationControl{
+			*query = C1G2SingulationControl{
 				Session:        2,
 				TagPopulation:  3000,
 				TagTransitTime: 10000,

@@ -13,8 +13,10 @@ import (
 	"sync"
 )
 
+const defaultROSpecID = 1
+
 // ROGenerator generates a new ROSpec from a Behavior and Environment,
-// or returns a an error if it cannot produce an ROSpec to satisfy the constraints.
+// or returns an error if it cannot produce an ROSpec to satisfy the constraints.
 type ROGenerator interface {
 	NewROSpec(b Behavior, e Environment) (*ROSpec, error)
 }
@@ -80,7 +82,7 @@ func (rg *ReaderGroup) ListReaders(w io.Writer) error {
 	return json.NewEncoder(w).Encode(s)
 }
 
-// ProcessTagReport retrieves uses the named TagReader
+// ProcessTagReport uses the named TagReader
 // to process the list of TagReportData.
 //
 // If no Reader in the ReaderGroup matches the given name,
@@ -139,6 +141,7 @@ func (rg *ReaderGroup) AddReader(ds DSClient, name string) error {
 		return err
 	}
 
+	s.ROSpecID = defaultROSpecID
 	if err := replaceRO(ds, name, s); err != nil {
 		return err
 	}
@@ -195,6 +198,8 @@ func (rg *ReaderGroup) SetBehavior(ds DSClient, b Behavior) error {
 		if err != nil {
 			return errors.WithMessagef(err, "new behavior is invalid for %q", name)
 		}
+
+		s.ROSpecID = defaultROSpecID
 		specs[name] = s
 	}
 
