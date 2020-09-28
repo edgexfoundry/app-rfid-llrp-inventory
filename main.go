@@ -294,7 +294,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		app.taskLoop(ctx, *cc, lgr)
+		app.taskLoop(ctx, cc, lgr)
 		lgr.Info("Task loop has exited.")
 	}()
 
