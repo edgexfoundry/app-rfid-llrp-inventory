@@ -160,7 +160,7 @@ Throughout the lifecycle of the tag, events will be generated that will cause it
 `Present` and `Departed`. Eventually once a tag has been in the `Departed` state for long enough
 it will "Age Out" which removes it from memory, effectively putting it back into the `Unknown` state.
 
-![Tag State Diagram](docs/images/tag-state-diagram.png)
+![Tag State Diagram](images/tag-state-diagram.png)
 
 ## Tag Location Algorithm
 
@@ -238,7 +238,7 @@ Suppose the following variables:
 The location will change when the following equation is true:
 - `incomingRSSI > (existingRSSI + offset)`
 
-![Mobility Profile Diagram](docs/images/mobility-profile.png)
+![Mobility Profile Diagram](images/mobility-profile.png)
 
 - **`MobilityProfileBaseProfile`** *`[enum]`*: Name of the parent mobility profile to inherit from. Any values which are not explicitly overridden will be inherited from this base profile selected.
   - default: `'default'` *(which is currently the same as `'asset_tracking'`)*

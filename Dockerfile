@@ -17,7 +17,7 @@ FROM golang:1.15-alpine AS builder
 
 # add git for go modules
 RUN apk update && apk add --no-cache make git gcc libc-dev libsodium-dev zeromq-dev
-WORKDIR /rfid-inventory-service
+WORKDIR /rfid-llrp-inventory-service
 
 COPY go.mod .
 RUN go mod download
@@ -36,9 +36,9 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
 
 RUN apk --no-cache add zeromq
 
-COPY --from=builder /rfid-inventory-service/res /res
-COPY --from=builder /rfid-inventory-service/rfid-inventory /
-COPY --from=builder /rfid-inventory-service/LICENSE /
-COPY --from=builder /rfid-inventory-service/Attribution.txt /
+COPY --from=builder /rfid-llrp-inventory-service/res /res
+COPY --from=builder /rfid-llrp-inventory-service/rfid-inventory /
+COPY --from=builder /rfid-llrp-inventory-service/LICENSE /
+COPY --from=builder /rfid-llrp-inventory-service/Attribution.txt /
 ENTRYPOINT ["/rfid-inventory"]
 CMD ["-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res","-profile=docker"]
