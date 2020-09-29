@@ -14,7 +14,6 @@ import (
 	"math"
 	"strings"
 	"sync/atomic"
-	"testing"
 	"time"
 )
 
@@ -44,14 +43,9 @@ type testDataset struct {
 	epcs []string
 }
 
-func newTestDataset(t *testing.T, lc logger.LoggingClient, tagCount int) *testDataset {
-	config, err := NewConfigurator(lc).Parse(map[string]string{})
-	if err != nil {
-		t.Fatalf("Error parsing config: %v", err)
-	}
-
+func newTestDataset(cfg ApplicationSettings, lc logger.LoggingClient, tagCount int) *testDataset {
 	ds := testDataset{
-		tp:   NewTagProcessor(lc, config.ApplicationSettings, nil),
+		tp:   NewTagProcessor(lc, cfg, nil),
 		lc:   lc,
 		epcs: make([]string, tagCount),
 	}

@@ -8,6 +8,7 @@ package inventory
 import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -18,23 +19,26 @@ const (
 )
 
 var (
-	lc logger.LoggingClient
+	lc           logger.LoggingClient
+	consulConfig ConsulConfig
 )
 
 func TestMain(m *testing.M) {
-	// todo: when config is implemented again
-
-	//if err := config.InitConfig(); err != nil {
-	//	log.Fatal(err)
-	//}
 	lc = logger.NewClient("test", false, "", "DEBUG")
+
+	cc, err := NewConfigurator(lc).Parse(map[string]string{})
+	if err != nil {
+		log.Fatalf("Error parsing config: %v", err)
+	}
+	consulConfig = *cc
+
 	os.Exit(m.Run())
 }
 
 func TestBasicArrival(t *testing.T) {
 	front := nextSensor()
 
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 
 	events := ds.readAll(readParams{
 		deviceName: front,
@@ -53,7 +57,7 @@ func TestBasicArrival(t *testing.T) {
 }
 
 func TestTagMoveWeakRssi(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -117,7 +121,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
-			ds := newTestDataset(t, lc, 1)
+			ds := newTestDataset(consulConfig.ApplicationSettings, lc, 1)
 
 			// start all tags at initialAntenna
 			events := ds.readAll(readParams{
@@ -155,7 +159,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 }
 
 func TestMoveBetweenSensors(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -195,7 +199,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 }
 
 func TestAgeOutTask_RequireDepartedState(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 	sensor := nextSensor()
 
 	// read past ageout threshold
@@ -232,11 +236,6 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 }
 
 func TestAgeOutThreshold(t *testing.T) {
-	config, err := NewConfigurator(lc).Parse(map[string]string{})
-	if err != nil {
-		t.Fatalf("Error parsing config: %v", err)
-	}
-
 	tests := []struct {
 		name         string
 		lastSeen     time.Time
@@ -245,7 +244,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	}{
 		{
 			name:         "Basic age out",
-			lastSeen:     time.Now().Add(-1 * time.Duration(2*config.ApplicationSettings.AgeOutHours) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(2*consulConfig.ApplicationSettings.AgeOutHours) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: true,
 		},
@@ -258,7 +257,7 @@ func TestAgeOutThreshold(t *testing.T) {
 		{
 			name: "Departed but not aged out",
 			// 1 hour less than the ageout timeout
-			lastSeen:     time.Now().Add(-1 * time.Duration(config.ApplicationSettings.AgeOutHours-1) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(consulConfig.ApplicationSettings.AgeOutHours-1) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: false,
 		},
@@ -266,7 +265,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			ds := newTestDataset(t, lc, 5)
+			ds := newTestDataset(consulConfig.ApplicationSettings, lc, 5)
 			sensor := nextSensor()
 
 			_ = ds.readAll(readParams{
@@ -299,7 +298,7 @@ func TestAgeOutThreshold(t *testing.T) {
 }
 
 func TestAggregateDepartedTask(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 	sensor := nextSensor()
 
 	// read past departed threshold
@@ -345,7 +344,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 }
 
 func TestLastRead_AlwaysIncreasing(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 	sensor := nextSensor()
 
 	current := time.Now()
@@ -391,7 +390,7 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 }
 
 func TestAdjustLastReadOnByOrigin(t *testing.T) {
-	ds := newTestDataset(t, lc, 2)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 2)
 	sensor := nextSensor()
 	origState := ds.tp.config.AdjustLastReadOnByOrigin
 
@@ -436,7 +435,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 }
 
 func TestReaderAntennaAliasDefault(t *testing.T) {
-	ds := newTestDataset(t, lc, 0)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 0)
 
 	tests := []struct {
 		deviceID  string
@@ -471,7 +470,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 }
 
 func TestReaderAntennaAliasExisting(t *testing.T) {
-	ds := newTestDataset(t, lc, 0)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 0)
 	aliasesMap := map[string]string{
 		"Reader-3F7DAC_1":  "Freezer",
 		"Reader-150000_10": "BackRoom",
@@ -512,7 +511,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 }
 
 func TestEventLocationMatchesAlias(t *testing.T) {
-	ds := newTestDataset(t, lc, 10)
+	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
 	sensor1 := nextSensor()
 	sensor2 := nextSensor()
 	alias1 := "Freezer"

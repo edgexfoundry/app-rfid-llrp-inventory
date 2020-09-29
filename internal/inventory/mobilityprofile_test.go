@@ -11,11 +11,6 @@ import (
 
 func TestNewMobilityProfile(t *testing.T) {
 	// test sane values
-	cr := NewConfigurator(lc)
-	consulConfig, err := cr.Parse(cr.defaultAppSettings)
-	if err != nil {
-		t.Fatalf("Error parsding default config: %v", err)
-	}
 	mp := loadMobilityProfile(consulConfig.ApplicationSettings)
 	if mp.Slope >= 0.0 {
 		t.Errorf("mobility profile: Slope is %v, but should be a negative number.\n\t%#v", mp.Slope, mp)
