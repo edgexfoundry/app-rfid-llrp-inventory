@@ -411,7 +411,7 @@ you'll receive an error response, and the Behavior won't change:
   - `Max` is the 100x the maximum desired dBm output from the Reader to its antennas;
     actual radiated power depends on the gains and losses 
     associated with the antenna and cabling. 
-    The service accepts values between 0 and 65,535 (2^16-1),
+    The service accepts values between -32,768 and 32,767 (the space of an int16),
     but it configures the Reader with its highest available power 
     less than or equal to the given target. 
     The service rejects the Behavior if its `Power.Max` is less than 
@@ -457,7 +457,7 @@ you'll receive an error response, and the Behavior won't change:
 
 ### Device Profile Requirements
 As [mentioned above](#important-limitations), this service calls the Device Service 
-with specific and `deviceCommands` and expects specific `deviceResources`.
+with specific `deviceCommands` and expects specific `deviceResources`.
 Thus, those `deviceCommands` and `deviceResources` 
 must be defined in the `deviceProfile`s
 for which devices are registered with the LLRP Device Service.
@@ -473,7 +473,7 @@ All devices must be registered with a `deviceProfile` that provides the followin
         - `ReaderCapabilities` with a `readWrite` of `"R"` or `"RW"`
             encoding an LLRP `GetReaderCapabilitiesResponse` message.
         - `ReaderConfig` with a `readWrite` of `"W"` or `"RW"`
-            encoding an LLRP `GetReaderCapabilitiesResponse` message.
+            encoding an LLRP `GetReaderConfigResponse` message.
         - `ROSpec` with a `readWrite` of `"W"` or `"RW"`
             encoding an LLRP `ROSpec` parameter.
     - An EdgeX `"uint32"` type with `readWrite` of `"W"` or `"RW"` named `ROSpecID`,

@@ -98,7 +98,7 @@ func GetDevices(metadataDevicesURL string, client *http.Client) ([]string, error
 //
 // If the Device Service isn't tracking a device with the given name,
 // then this returns an error.
-func (ds DSClient) NewReader(device string) (*TagReader, error) {
+func (ds DSClient) NewReader(device string) (TagReader, error) {
 	devCap, err := ds.GetCapabilities(device)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (ds DSClient) NewReader(device string) (*TagReader, error) {
 		return nil, errors.Errorf("missing general capabilities for %q", device)
 	}
 
-	var tp TProc
+	var tr TagReader
 	switch VendorPEN(devCap.GeneralDeviceCapabilities.DeviceManufacturer) {
 	case PENImpinj:
 		impDev, err := NewImpinjDevice(devCap)
@@ -124,7 +124,7 @@ func (ds DSClient) NewReader(device string) (*TagReader, error) {
 			return nil, err
 		}
 
-		tp = impDev
+		tr = impDev
 	default:
 		basic, err := NewBasicDevice(devCap)
 		if err != nil {
@@ -135,15 +135,10 @@ func (ds DSClient) NewReader(device string) (*TagReader, error) {
 			return nil, err
 		}
 
-		tp = basic
+		tr = basic
 	}
 
-	r := &TagReader{
-		name:  device,
-		TProc: tp,
-	}
-
-	return r, nil
+	return tr, nil
 }
 
 // GetCapabilities queries the device service for a device's capabilities.
