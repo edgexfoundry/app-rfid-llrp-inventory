@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -27,6 +26,7 @@ func TestCircularBuffer_AddValue(t *testing.T) {
 	windowSizes := []int{1, 5, 10, 20, 100, 999}
 
 	for _, window := range windowSizes {
+		window := window
 		t.Run(fmt.Sprintf("WindowOf%d", window), func(t *testing.T) {
 			buff := NewCircularBuffer(window)
 
@@ -81,13 +81,14 @@ func TestCircularBuffer_GetMean(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(test.name, func(t *testing.T) {
 			buff := NewCircularBuffer(test.window)
 			for _, val := range test.data {
 				buff.AddValue(val)
 			}
 
-			mean := buff.GetMean()
+			mean := buff.Mean()
 			if math.Abs(mean-test.expected) > epsilon {
 				t.Errorf("expected mean of %v, but got %v", test.expected, mean)
 			}

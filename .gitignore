@@ -39,7 +39,6 @@ DEVNULL
 test.txt
 **/go.sum
 .vscode/*# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
 logs/*
 logs/
 
@@ -51,3 +50,8 @@ logs/
 **/reports
 **/*.xml
 **/*.html
+
+# keep the important stuff
+!res/html/*
+
+cache/

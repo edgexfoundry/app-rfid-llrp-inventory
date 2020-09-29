@@ -1,10 +1,9 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
-package helper
+package inventory
 
 import (
 	"fmt"
@@ -13,7 +12,6 @@ import (
 )
 
 func TestUnixMilli(t *testing.T) {
-
 	var target time.Time
 
 	ms := UnixMilli(target)
@@ -28,12 +26,12 @@ func TestUnixMilli(t *testing.T) {
 	}
 
 	target = time.Now()
-	time.Sleep(1 * time.Second)
+	time.Sleep(30 * time.Millisecond)
+	ms = UnixMilli(target)
 	ms2 := UnixMilliNow()
 
-	ms = UnixMilli(target)
 	fmt.Printf("Time delta: %d\n", ms2-ms)
-	if ms2-ms < 900 || ms2-ms > 1100 {
+	if ms2-ms < 25 || ms2-ms > 35 {
 		t.Error("Time calculation bad")
 	}
 }

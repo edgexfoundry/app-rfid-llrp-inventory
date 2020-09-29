@@ -37,7 +37,9 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
 
 RUN apk --no-cache add zeromq
 
-COPY --from=builder /rfid-inventory-service/cmd /
+COPY --from=builder /rfid-inventory-service/res /res
+COPY --from=builder /rfid-inventory-service/rfid-inventory /
 COPY --from=builder /rfid-inventory-service/LICENSE /
 COPY --from=builder /rfid-inventory-service/Attribution.txt /
-CMD [ "/rfid-inventory","-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res/docker"]
+ENTRYPOINT ["/rfid-inventory"]
+CMD ["-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res","-profile=docker"]

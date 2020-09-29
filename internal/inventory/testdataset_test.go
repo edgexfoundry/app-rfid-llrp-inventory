@@ -1,8 +1,7 @@
-/* Apache v2 license
-*  Copyright (C) <2020> Intel Corporation
-*
-*  SPDX-License-Identifier: Apache-2.0
- */
+//
+// Copyright (C) 2020 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
 
 package inventory
 
@@ -14,7 +13,6 @@ import (
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
 	"math"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -43,22 +41,13 @@ type testDataset struct {
 	tp   *TagProcessor
 	lc   logger.LoggingClient
 	epcs []string
-
-	eventCh chan Event
-	events  []Event
-	eventMu sync.RWMutex
 }
 
 func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
-	// buffer the channel enough that we wont ever get blocked
-	eventCh := make(chan Event, tagCount)
-
 	ds := testDataset{
-		tp:      NewTagProcessor(lc, eventCh),
-		lc:      lc,
-		epcs:    make([]string, tagCount),
-		eventCh: eventCh,
-		events:  make([]Event, 0),
+		tp:   NewTagProcessor(lc, nil),
+		lc:   lc,
+		epcs: make([]string, tagCount),
 	}
 
 	for i := 0; i < tagCount; i++ {
@@ -77,6 +66,8 @@ type readParams struct {
 	origin     time.Time
 }
 
+// sanitize modifies the readParams receiver to set default values if they were not
+// defined during struct initialization
 func (params *readParams) sanitize() {
 	if params.lastSeen.Equal(time.Time{}) {
 		params.lastSeen = time.Now()
@@ -92,7 +83,13 @@ func (params *readParams) sanitize() {
 	}
 }
 
-func (ds *testDataset) readTag(epc string, params readParams) {
+// findAlias is a helper method to make the default alias for a device and antenna and lookup any
+// associated alias
+func (ds *testDataset) findAlias(deviceID string, antID uint16) string {
+	return ds.tp.getAlias(NewLocation(deviceID, antID).String())
+}
+
+func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
 	params.sanitize()
 
 	rss := llrp.PeakRSSI(params.rssi)
@@ -117,39 +114,24 @@ func (ds *testDataset) readTag(epc string, params readParams) {
 			},
 		}
 
-		ds.tp.ProcessReport(r, ReportInfo{
+		e, _ := ds.tp.ProcessReport(r, ReportInfo{
 			DeviceName:         params.deviceName,
 			OriginNanos:        params.origin.UnixNano(),
 			offsetMicros:       0,
-			referenceTimestamp: params.origin.UnixNano() / int64(time.Millisecond),
+			referenceTimestamp: params.origin.UnixNano() / 1e6,
 		})
+		events = append(events, e...)
 	}
+
+	return events
 }
 
-func (ds *testDataset) readAll(params readParams) {
+func (ds *testDataset) readAll(params readParams) (events []Event) {
 	for _, epc := range ds.epcs {
-		ds.readTag(epc, params)
+		e := ds.readTag(epc, params)
+		events = append(events, e...)
 	}
-}
-
-func (ds *testDataset) sniffEvents() {
-	ds.eventMu.Lock()
-	defer ds.eventMu.Unlock()
-
-	ds.events = make([]Event, 0)
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for e := range ds.eventCh {
-			ds.events = append(ds.events, e)
-		}
-	}()
-
-	close(ds.tp.eventCh)
-	wg.Wait()
-	ds.eventCh = make(chan Event, ds.size())
-	ds.tp.eventCh = ds.eventCh
+	return events
 }
 
 func (ds *testDataset) size() int {
@@ -157,9 +139,6 @@ func (ds *testDataset) size() int {
 }
 
 func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string) error {
-	ds.tp.inventoryMu.RLock()
-	defer ds.tp.inventoryMu.RUnlock()
-
 	var errs []string
 	for _, epc := range ds.epcs {
 		if err := ds.verifyTag(epc, expectedState, expectedLocation); err != nil {
@@ -174,9 +153,6 @@ func (ds *testDataset) verifyAll(expectedState TagState, expectedLocation string
 }
 
 func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLocation string) error {
-	ds.tp.inventoryMu.RLock()
-	defer ds.tp.inventoryMu.RUnlock()
-
 	tag := ds.tp.inventory[epc]
 
 	if tag == nil {
@@ -188,7 +164,7 @@ func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLoc
 	}
 
 	// if expectedLocation is empty string, we do not care to validate that field
-	if expectedLocation != "" && tag.Location != expectedLocation {
+	if expectedLocation != "" && ds.tp.getAlias(tag.Location.String()) != expectedLocation {
 		return fmt.Errorf("tag %s: location %v does not match expected location %v\n\t%#v", epc, tag.Location, expectedLocation, tag)
 	}
 
@@ -207,47 +183,38 @@ func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, "")
 }
 
-func (ds *testDataset) verifyEventPattern(expectedCount int, expectedEvents ...EventType) error {
+func (ds *testDataset) verifyEventPattern(events []Event, expectedCount int, expectedEvents ...EventType) error {
 	if expectedCount%len(expectedEvents) != 0 {
 		return fmt.Errorf("invalid event pattern specified. pattern length of %d is not evenly divisible by expected event count of %d", len(expectedEvents), expectedCount)
 	}
 
-	ds.eventMu.RLock()
-	defer ds.eventMu.RUnlock()
-
-	dataLen := len(ds.events)
+	dataLen := len(events)
 	if dataLen != expectedCount {
 		return fmt.Errorf("excpected %d %v event pattern to be generated, but %d were generated. events:\n%#v",
-			expectedCount, expectedEvents, dataLen, ds.events)
+			expectedCount, expectedEvents, dataLen, events)
 	}
 
-	for i, evt := range ds.events {
+	for i, evt := range events {
 		expected := expectedEvents[i%len(expectedEvents)]
 		if evt.OfType() != expected {
 			return fmt.Errorf("excpected %s event but was %s. events:\n%#v",
-				expected, evt.OfType(), ds.events)
+				expected, evt.OfType(), events)
 		}
 	}
 
 	return nil
 }
 
-func (ds *testDataset) verifyNoEvents() error {
-	ds.eventMu.RLock()
-	defer ds.eventMu.RUnlock()
-
-	if len(ds.events) != 0 {
+func (ds *testDataset) verifyNoEvents(events []Event) error {
+	if len(events) != 0 {
 		return fmt.Errorf("excpected no events to be generated, but %d were generated. events:\n%#v",
-			len(ds.events), ds.events)
+			len(events), events)
 	}
 
 	return nil
 }
 
 func (ds *testDataset) verifyLastReadOf(epc string, lastRead int64) error {
-	ds.tp.inventoryMu.RLock()
-	defer ds.tp.inventoryMu.RUnlock()
-
 	tag := ds.tp.inventory[epc]
 
 	if tag == nil {
@@ -262,9 +229,6 @@ func (ds *testDataset) verifyLastReadOf(epc string, lastRead int64) error {
 }
 
 func (ds *testDataset) verifyLastReadAll(lastRead int64) error {
-	ds.tp.inventoryMu.RLock()
-	defer ds.tp.inventoryMu.RUnlock()
-
 	var errs []string
 	for _, epc := range ds.epcs {
 		if err := ds.verifyLastReadOf(epc, lastRead); err != nil {
@@ -279,9 +243,6 @@ func (ds *testDataset) verifyLastReadAll(lastRead int64) error {
 }
 
 func (ds *testDataset) verifyInventoryCount(count int) error {
-	ds.tp.inventoryMu.RLock()
-	defer ds.tp.inventoryMu.RUnlock()
-
 	if len(ds.tp.inventory) != count {
 		return fmt.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
 			count, len(ds.tp.inventory), ds.tp.inventory)
