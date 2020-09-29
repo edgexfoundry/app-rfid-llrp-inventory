@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 func TestBasicArrival(t *testing.T) {
 	front := nextSensor()
 
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 
 	events := ds.readAll(readParams{
 		deviceName: front,
@@ -53,7 +53,7 @@ func TestBasicArrival(t *testing.T) {
 }
 
 func TestTagMoveWeakRssi(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -117,7 +117,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
-			ds := newTestDataset(lc, 1)
+			ds := newTestDataset(t, lc, 1)
 
 			// start all tags at initialAntenna
 			events := ds.readAll(readParams{
@@ -155,7 +155,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 }
 
 func TestMoveBetweenSensors(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -195,14 +195,14 @@ func TestMoveBetweenSensors(t *testing.T) {
 }
 
 func TestAgeOutTask_RequireDepartedState(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 	sensor := nextSensor()
 
 	// read past ageout threshold
 	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		lastSeen:   time.Now().Add(time.Duration(-3*AgeOutHours) * time.Hour),
+		lastSeen:   time.Now().Add(time.Duration(-3*ds.tp.config.AgeOutHours) * time.Hour),
 	})
 
 	// make sure all tags are marked as Present and are NOT aged out, because the algorithm
@@ -232,6 +232,11 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 }
 
 func TestAgeOutThreshold(t *testing.T) {
+	config, err := NewConfigurator(lc).Parse(map[string]string{})
+	if err != nil {
+		t.Fatalf("Error parsing config: %v", err)
+	}
+
 	tests := []struct {
 		name         string
 		lastSeen     time.Time
@@ -240,7 +245,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	}{
 		{
 			name:         "Basic age out",
-			lastSeen:     time.Now().Add(-1 * time.Duration(2*AgeOutHours) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(2*config.ApplicationSettings.AgeOutHours) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: true,
 		},
@@ -253,7 +258,7 @@ func TestAgeOutThreshold(t *testing.T) {
 		{
 			name: "Departed but not aged out",
 			// 1 hour less than the ageout timeout
-			lastSeen:     time.Now().Add(-1 * time.Duration(AgeOutHours-1) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(config.ApplicationSettings.AgeOutHours-1) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: false,
 		},
@@ -261,7 +266,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			ds := newTestDataset(lc, 5)
+			ds := newTestDataset(t, lc, 5)
 			sensor := nextSensor()
 
 			_ = ds.readAll(readParams{
@@ -294,7 +299,7 @@ func TestAgeOutThreshold(t *testing.T) {
 }
 
 func TestAggregateDepartedTask(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 	sensor := nextSensor()
 
 	// read past departed threshold
@@ -302,7 +307,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-2 * (time.Duration(DepartedThresholdSeconds) * time.Second)),
+		lastSeen:   time.Now().Add(-2 * (time.Duration(ds.tp.config.DepartedThresholdSeconds) * time.Second)),
 	})
 
 	// expect all tags to depart, and their stats to be set to Departed
@@ -321,7 +326,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-(time.Duration(DepartedThresholdSeconds) * time.Second) / 2),
+		lastSeen:   time.Now().Add(-(time.Duration(ds.tp.config.DepartedThresholdSeconds) * time.Second) / 2),
 	})
 
 	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
@@ -340,7 +345,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 }
 
 func TestLastRead_AlwaysIncreasing(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 	sensor := nextSensor()
 
 	current := time.Now()
@@ -386,12 +391,12 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 }
 
 func TestAdjustLastReadOnByOrigin(t *testing.T) {
-	origState := AdjustLastReadOnByOrigin
-	ds := newTestDataset(lc, 2)
+	ds := newTestDataset(t, lc, 2)
 	sensor := nextSensor()
+	origState := ds.tp.config.AdjustLastReadOnByOrigin
 
 	// turn ON the timestamp adjuster
-	AdjustLastReadOnByOrigin = true
+	ds.tp.config.AdjustLastReadOnByOrigin = true
 	epc0 := ds.epcs[0]
 	origin := time.Now()
 	lastSeen := origin.Add(-53 * time.Minute)
@@ -409,7 +414,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 	}
 
 	// turn OFF the timestamp adjuster
-	AdjustLastReadOnByOrigin = false
+	ds.tp.config.AdjustLastReadOnByOrigin = false
 	epc1 := ds.epcs[1]
 	origin = time.Now()
 	lastSeen = origin.Add(-19 * time.Second)
@@ -427,11 +432,11 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 	}
 
 	// put it back to what it was before
-	AdjustLastReadOnByOrigin = origState
+	ds.tp.config.AdjustLastReadOnByOrigin = origState
 }
 
 func TestReaderAntennaAliasDefault(t *testing.T) {
-	ds := newTestDataset(lc, 0)
+	ds := newTestDataset(t, lc, 0)
 
 	tests := []struct {
 		deviceID  string
@@ -466,7 +471,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 }
 
 func TestReaderAntennaAliasExisting(t *testing.T) {
-	ds := newTestDataset(lc, 0)
+	ds := newTestDataset(t, lc, 0)
 	aliasesMap := map[string]string{
 		"Reader-3F7DAC_1":  "Freezer",
 		"Reader-150000_10": "BackRoom",
@@ -507,7 +512,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 }
 
 func TestEventLocationMatchesAlias(t *testing.T) {
-	ds := newTestDataset(lc, 10)
+	ds := newTestDataset(t, lc, 10)
 	sensor1 := nextSensor()
 	sensor2 := nextSensor()
 	alias1 := "Freezer"

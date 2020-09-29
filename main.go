@@ -113,8 +113,7 @@ func (lgr logWrap) errIf(cond bool, msg string, params ...lg) bool {
 
 func (lgr logWrap) exitIf(cond bool, msg string, params ...lg) {
 	if lgr.errIf(cond, msg, params...) {
-		// todo: re-enable
-		//os.Exit(1)
+		os.Exit(1)
 	}
 }
 
@@ -516,9 +515,12 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 		}
 	}
 
-	config := &inventory.ConsulConfig{
-		Aliases: make(map[string]string),
+	cr := inventory.NewConfigurator(lc)
+	config, err := cr.Parse(app.edgexSdk.ApplicationSettings())
+	if !errors.Is(err, inventory.ErrUnexpectedConfigItems) {
+		lc.Error("Config parse error.", "error", err)
 	}
+
 	processor := inventory.NewTagProcessor(lc, config.ApplicationSettings, snapshot)
 	if len(snapshot) > 0 {
 		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
@@ -591,12 +593,11 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 
 		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*inventory.ConsulConfig); ok {
-				lc.Info("Configuration updated from consul.")
-				lc.Debug("New configuration.", "raw", fmt.Sprintf("%+v", newConfig))
+				lc.Debug("Configuration updated from consul.", "config", fmt.Sprintf("%+v", newConfig))
 				config = newConfig
 				processor.SetAliases(newConfig.Aliases)
 			} else {
-				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%+v", rawConfig))
+				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%#v", rawConfig))
 			}
 
 		case req := <-app.snapshotReqs:
