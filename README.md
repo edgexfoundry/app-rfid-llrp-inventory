@@ -213,6 +213,14 @@ The location will change when the following equation is true:
    `GET` to the `/api/v1/readers` endpoint:   
                                                            
         curl -o- localhost:48086/api/v1/readers
+        
+    ```json
+        {
+          "Readers": [
+            "SpeedwayR-10-EF-25"
+          ]
+        }
+    ```
     
 - User needs to configure the alias using Consul. This can be achieved via Consul’s UI or CLI
   - **Setting Alias via Consul UI**
@@ -228,14 +236,40 @@ The location will change when the following equation is true:
       
       ![Aliases created](images/aliases.png)   
            
-    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location -
+    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
+      
       `GET` to the `/api/v1/inventory/snapshot` endpoint:   
                                                                
             curl -o- localhost:48086/api/v1/inventory/snapshot
+            
+      ```json
+         [
+           {
+             "epc": "30143639f8419145db602154",
+             "tid": "",
+             "location": {
+               "device_name": "SpeedwayR-10-EF-25",
+               "antenna_id": 1
+             },
+             "location_alias": "Backstock",
+             "last_read": 1601441311411,
+             "last_arrived": 1601441265669,
+             "last_departed": 0,
+             "state": "Present",
+             "stats_map": {
+               "SpeedwayR-10-EF-25_1": {
+                 "last_read": 1601441311411,
+                 "mean_rssi": -54.25
+               }
+             }
+           }
+         ]     
+      ```
+            
+            
     
   - **Setting Alias via Consul CLI**
-    - Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv).  
-     Ex:
+    - Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). Ex:
      
             curl \
               --request PUT \
