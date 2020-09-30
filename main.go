@@ -180,7 +180,7 @@ func main() {
 		f            http.HandlerFunc // of course the EdgeX SDK doesn't take a http.Handler...
 	}{
 		{"/", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "res/html/index.html")
+			http.ServeFile(w, r, "internal/html/index.html")
 		}},
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
