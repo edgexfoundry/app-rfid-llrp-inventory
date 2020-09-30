@@ -41,4 +41,4 @@ COPY --from=builder /rfid-llrp-inventory-service/rfid-inventory /
 COPY --from=builder /rfid-llrp-inventory-service/LICENSE /
 COPY --from=builder /rfid-llrp-inventory-service/Attribution.txt /
 ENTRYPOINT ["/rfid-inventory"]
-CMD ["-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res","-profile=docker"]
+CMD ["-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res"]

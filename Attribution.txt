@@ -147,6 +147,3 @@ https://github.com/go-playground/validator/blob/master/LICENSE
 leodido/go-urn (MIT) https://github.com/leodido/go-urn
 https://github.com/leodido/go-urn
 
-stretchr/testify (MIT) https://github.com/stretchr/testify
-https://github.com/stretchr/testify/blob/master/LICENSE
-
