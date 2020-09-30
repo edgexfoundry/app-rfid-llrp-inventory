@@ -251,7 +251,7 @@ The location will change when the following equation is true:
                "device_name": "SpeedwayR-10-EF-25",
                "antenna_id": 1
              },
-             "location_alias": "Backstock",
+             "location_alias": "Freezer",
              "last_read": 1601441311411,
              "last_arrived": 1601441265669,
              "last_departed": 0,
