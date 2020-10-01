@@ -5,28 +5,19 @@
 
 package inventory
 
-var (
-	assetTracking = MobilityProfile{
-		Slope:         -0.008,
-		Threshold:     6.0,
-		HoldoffMillis: 500.0,
-	}
-
-	retailGarment = MobilityProfile{
-		Slope:         -0.0005,
-		Threshold:     6.0,
-		HoldoffMillis: 60000.0,
-	}
-
-	// this will clone it
-	defaultProfile = assetTracking
-
-	mobilityProfiles = map[string]MobilityProfile{
-		"default":        defaultProfile,
-		"asset_tracking": assetTracking,
-		"retail_garment": retailGarment,
-	}
-)
+//var (
+//	assetTracking = MobilityProfile{
+//		Slope:         -0.008,
+//		Threshold:     6.0,
+//		HoldoffMillis: 500.0,
+//	}
+//
+//	retailGarment = MobilityProfile{
+//		Slope:         -0.0005,
+//		Threshold:     6.0,
+//		HoldoffMillis: 60000.0,
+//	}
+//)
 
 // MobilityProfile defines the parameters of the weighted slope formula used in calculating a tag's location.
 // Tag location is determined based on the quality of tag reads associated with a sensor/antenna averaged over time.
@@ -47,8 +38,8 @@ func (profile *MobilityProfile) calculateYIntercept() {
 	profile.yIntercept = profile.Threshold - (profile.Slope * profile.HoldoffMillis)
 }
 
-// loadMobilityProfile will attempt to load a mobility profile based on defaults and user's configuration
-func loadMobilityProfile(cfg ApplicationSettings) MobilityProfile {
+// NewMobilityProfile will attempt to load a mobility profile based on defaults and user's configuration
+func NewMobilityProfile(cfg ApplicationSettings) MobilityProfile {
 	profile := MobilityProfile{
 		Slope:         cfg.MobilityProfileSlope,
 		Threshold:     cfg.MobilityProfileThreshold,

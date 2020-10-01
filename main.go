@@ -46,11 +46,6 @@ const (
 	ResourceReaderNotification = "ReaderEventNotification"
 	ResourceInventoryEvent     = "InventoryEvent"
 
-	// keys into the application settings map
-	sKeyDevServiceName   = "DeviceServiceName"
-	sKeyDeviceServiceURL = "DeviceServiceURL"
-	sKeyMetaServiceURL   = "MetadataServiceURL"
-
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
 	eventChSz           = 100
@@ -68,6 +63,9 @@ type inventoryApp struct {
 	devMu      sync.RWMutex
 	devService llrp.DSClient
 	defaultGrp *llrp.ReaderGroup
+
+	config   inventory.ConsulConfig
+	configMu sync.RWMutex
 
 	snapshotReqs chan snapshotDest
 	reports      chan reportData
@@ -135,12 +133,16 @@ func main() {
 	cc, err := getConfigClient()
 	lgr.exitIfErr(err, "Failed to create config client.")
 
-	metadataURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyMetaServiceURL]))
+	cr := inventory.NewConfigurator(edgexSdk.LoggingClient)
+	config, err := cr.Parse(edgexSdk.ApplicationSettings())
+	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
+
+	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
 		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
 
-	devServURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyDeviceServiceURL]))
+	devServURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.DeviceServiceURL))
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(devServURI.Scheme == "" || devServURI.Host == "",
 		"Invalid device service URL.", lg{"endpoint", devServURI.String()})
@@ -151,8 +153,8 @@ func main() {
 		Host:   devServURI.Host,
 	}, http.DefaultClient)
 
-	dsName := strings.TrimSpace(appSettings[sKeyDevServiceName])
-	lgr.exitIf(dsName == "", "Missing device service name.", lg{"key", sKeyDevServiceName})
+	dsName := config.ApplicationSettings.DeviceServiceName
+	lgr.exitIf(dsName == "", "Missing device service name.")
 	metadataURI.Path = "/api/v1/device/servicename/" + dsName
 	deviceNames, err := llrp.GetDevices(metadataURI.String(), http.DefaultClient)
 	lgr.exitIfErr(err, "Failed to get existing device names.", lg{"path", metadataURI.String()})
@@ -168,6 +170,7 @@ func main() {
 		devService:   devService,
 		snapshotReqs: make(chan snapshotDest),
 		reports:      make(chan reportData),
+		config:       *config,
 	}
 
 	// routes
@@ -496,8 +499,7 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
 func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, lc logger.LoggingClient) {
-	// todo: check inventory.DepartedCheckIntervalSeconds
-	aggregateDepartedTicker := time.NewTicker(time.Duration(30) * time.Second)
+	aggregateDepartedTicker := time.NewTicker(time.Duration(app.config.ApplicationSettings.DepartedCheckIntervalSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrCh := make(chan error)
 	confUpdateCh := make(chan interface{})
@@ -521,18 +523,14 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 		}
 	}
 
-	cr := inventory.NewConfigurator(lc)
-	config, err := cr.Parse(app.edgexSdk.ApplicationSettings())
-	if !errors.Is(err, inventory.ErrUnexpectedConfigItems) {
-		lc.Error("Config parse error.", "error", err)
-	}
+	cfg := app.config
 
-	processor := inventory.NewTagProcessor(lc, config.ApplicationSettings, snapshot)
+	processor := inventory.NewTagProcessor(lc, cfg.ApplicationSettings, snapshot)
 	if len(snapshot) > 0 {
 		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
 
-	cc.WatchForChanges(confUpdateCh, confErrCh, config, "/"+serviceKey)
+	cc.WatchForChanges(confUpdateCh, confErrCh, &cfg, "/"+serviceKey)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -603,8 +601,21 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 
 		case rawConfig := <-confUpdateCh:
 			if newConfig, ok := rawConfig.(*inventory.ConsulConfig); ok {
-				lc.Debug("Configuration updated from consul.", "config", fmt.Sprintf("%+v", newConfig))
-				config = newConfig
+				lc.Info("Configuration updated from consul.")
+				lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
+				app.configMu.Lock()
+
+				seconds := newConfig.ApplicationSettings.DepartedCheckIntervalSeconds
+				if app.config.ApplicationSettings.DepartedCheckIntervalSeconds != seconds {
+					aggregateDepartedTicker.Stop()
+					aggregateDepartedTicker = time.NewTicker(time.Duration(seconds) * time.Second)
+					lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", seconds))
+				}
+
+				app.config = *newConfig
+				app.configMu.Unlock()
+
+				processor.SetAppSettings(newConfig.ApplicationSettings)
 				processor.SetAliases(newConfig.Aliases)
 			} else {
 				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%#v", rawConfig))

@@ -18,8 +18,10 @@ import (
 type TagProcessor struct {
 	lc              logger.LoggingClient
 	inventory       map[string]*Tag
-	mobilityProfile *MobilityProfile
-	config          ApplicationSettings
+	mobilityProfile MobilityProfile
+
+	config   ApplicationSettings
+	configMu sync.RWMutex
 
 	aliases map[string]string
 	aliasMu sync.RWMutex
@@ -27,11 +29,11 @@ type TagProcessor struct {
 
 // NewTagProcessor creates a tag processor and pre-loads its mobility profile
 func NewTagProcessor(lc logger.LoggingClient, cfg ApplicationSettings, tags []StaticTag) *TagProcessor {
-	profile := loadMobilityProfile(cfg)
+	profile := NewMobilityProfile(cfg)
 	tp := &TagProcessor{
 		lc:              lc,
 		inventory:       make(map[string]*Tag),
-		mobilityProfile: &profile,
+		mobilityProfile: profile,
 		config:          cfg,
 		aliases:         make(map[string]string),
 	}
@@ -53,6 +55,14 @@ func (tp *TagProcessor) getAlias(location string) string {
 		return alias
 	}
 	return location
+}
+
+func (tp *TagProcessor) SetAppSettings(settings ApplicationSettings) {
+	tp.configMu.Lock()
+	defer tp.configMu.Unlock()
+
+	tp.mobilityProfile = NewMobilityProfile(settings)
+	tp.config = settings
 }
 
 func (tp *TagProcessor) SetAliases(aliases map[string]string) {
@@ -299,9 +309,13 @@ func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 // AggregateDeparted loops through all tags and sees if any of them should be Departed
 // due to not being read in a long enough time.
 func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTag) {
+	tp.configMu.RLock()
+	seconds := tp.config.DepartedThresholdSeconds
+	tp.configMu.RUnlock()
+
 	now := time.Now()
 	nowMs := now.UnixNano() / 1e6
-	expiration := now.Add(-time.Duration(tp.config.DepartedThresholdSeconds)*time.Second).UnixNano() / 1e6
+	expiration := now.Add(-time.Duration(seconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {
@@ -326,4 +340,8 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 	}
 
 	return events, tp.snapshot()
+}
+
+func (tp *TagProcessor) SetMobilityProfile(profile MobilityProfile) {
+	tp.mobilityProfile = profile
 }

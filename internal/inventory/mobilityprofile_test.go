@@ -11,7 +11,7 @@ import (
 
 func TestNewMobilityProfile(t *testing.T) {
 	// test sane values
-	mp := loadMobilityProfile(consulConfig.ApplicationSettings)
+	mp := NewMobilityProfile(consulConfig.ApplicationSettings)
 	if mp.Slope >= 0.0 {
 		t.Errorf("mobility profile: Slope is %v, but should be a negative number.\n\t%#v", mp.Slope, mp)
 	}
