@@ -31,11 +31,6 @@ File = ''
   Host = 'localhost'
   Port = 48080
 
-  [Clients.DeviceLLRP]
-  Protocol = 'http'
-  Host = 'localhost'
-  Port = 48086
-
 [MessageBus]
 Type = 'zero'
     [MessageBus.PublishHost]
