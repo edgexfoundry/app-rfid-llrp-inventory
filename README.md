@@ -11,7 +11,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "6def8859-5a12-4c83-b68c-256303146682",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598043284110,
   "origin": 1598043284109799400,
   "readings": [
@@ -19,7 +19,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "8d15d035-402f-4abc-85fc-a7ed7213122a",
       "created": 1598043284110,
       "origin": 1598043284109799400,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventArrived",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
     }
@@ -31,7 +31,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "c78c304e-1906-4d17-bf26-5075756a231f",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598401259699,
   "origin": 1598401259697580500,
   "readings": [
@@ -39,7 +39,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "323694d9-1a48-417a-9f43-25998536ae8f",
       "created": 1598401259699,
       "origin": 1598401259697580500,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventMoved",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
@@ -51,7 +51,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "4d042708-c5de-41fa-827a-3f24b364c6de",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598062424895,
   "origin": 1598062424894043600,
   "readings": [
@@ -59,7 +59,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "928ff90d-02d1-43be-81a6-a0d75886b0e4",
       "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-18_1\"}"
     },
@@ -67,7 +67,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
       "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
       "value": "{\"epc\":\"30340bb6884cb101a13bc688\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392512,\"last_known_location\":\"POS Terminals\"}"
     }
@@ -224,7 +224,7 @@ The location will change when the following equation is true:
     
 - User needs to configure the alias using Consul. This can be achieved via Consul’s UI or CLI
   - **Setting Alias via Consul UI**
-    - Create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-inventory/) and
+    - Create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/) and
       add Key Value pairs.
         
       ![Creating Aliases folder](images/consul_alias_folder.png)
@@ -274,7 +274,7 @@ The location will change when the following equation is true:
             curl \
               --request PUT \
               --data "Freezer" \
-              http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-inventory/Aliases/SpeedwayR-10-EF-18_1
+              http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-18_1
           
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,
