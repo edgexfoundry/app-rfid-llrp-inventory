@@ -494,7 +494,8 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
 func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, cfg inventory.ConsulConfig, lc logger.LoggingClient) {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(cfg.ApplicationSettings.DepartedCheckIntervalSeconds) * time.Second)
+	departedCheckSeconds := cfg.ApplicationSettings.DepartedCheckIntervalSeconds
+	aggregateDepartedTicker := time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrCh := make(chan error)
 	confUpdateCh := make(chan interface{})
@@ -601,6 +602,14 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			lc.Info("Configuration updated from consul.")
 			lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
 			processor.UpdateConfig(*newConfig)
+
+			// check if we need to change the ticker interval
+			if departedCheckSeconds != newConfig.ApplicationSettings.DepartedCheckIntervalSeconds {
+				aggregateDepartedTicker.Stop()
+				departedCheckSeconds = newConfig.ApplicationSettings.DepartedCheckIntervalSeconds
+				aggregateDepartedTicker = time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
+				lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", departedCheckSeconds))
+			}
 
 		case req := <-app.snapshotReqs:
 			data, err := json.Marshal(snapshot)
