@@ -16,6 +16,7 @@
 .idea/
 vendor/
 rfid-inventory
+rfid-llrp-inventory
 glide.lock
 go.sum
 
@@ -52,6 +53,6 @@ logs/
 **/*.html
 
 # keep the important stuff
-!internal/html/*
+!static/html/*
 
 cache/

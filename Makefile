@@ -2,7 +2,7 @@
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
-MICROSERVICE=rfid-inventory
+MICROSERVICE=rfid-llrp-inventory
 
 .PHONY: build test clean fmt docker run
 
@@ -35,8 +35,8 @@ docker:
 		--build-arg http_proxy \
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
-			-t edgexfoundry/docker-rfid-inventory:$(GIT_SHA) \
-			-t edgexfoundry/docker-rfid-inventory:$(VERSION)-dev \
+			-t edgexfoundry/docker-rfid-llrp-inventory:$(GIT_SHA) \
+			-t edgexfoundry/docker-rfid-llrp-inventory:$(VERSION)-dev \
 			.
 
 run: build

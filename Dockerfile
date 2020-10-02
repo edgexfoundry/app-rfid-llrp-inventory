@@ -13,32 +13,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.15-alpine AS builder
+# build stage
+ARG BASE=golang:1.15-alpine
+FROM ${BASE} AS builder
 
-# add git for go modules
-RUN apk update && apk add --no-cache make git gcc libc-dev libsodium-dev zeromq-dev
-WORKDIR /rfid-llrp-inventory-service
+ARG ALPINE_PKG_BASE="make git gcc libc-dev libsodium-dev zeromq-dev"
+ARG ALPINE_PKG_EXTRA=""
+
+LABEL license='SPDX-License-Identifier: Apache-2.0' \
+  copyright='Copyright (c) 2020: Intel'
+RUN sed -e 's/dl-cdn[.]alpinelinux.org/nl.alpinelinux.org/g' -i~ /etc/apk/repositories
+RUN apk add --no-cache ${ALPINE_PKG_BASE} ${ALPINE_PKG_EXTRA}
+WORKDIR /app
 
 COPY go.mod .
 RUN go mod download
 
 COPY . .
 
-# To run tests in the build container:
-#   docker build --build-arg 'MAKE=build test' .
-ARG MAKE='build'
-RUN make $MAKE
+ARG MAKE="make build"
+RUN $MAKE
 
-FROM alpine
-
+# final stage
+FROM alpine:latest
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2020: Intel'
+LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
 
-RUN apk --no-cache add zeromq
+RUN apk --no-cache add ca-certificates zeromq
 
-COPY --from=builder /rfid-llrp-inventory-service/res /res
-COPY --from=builder /rfid-llrp-inventory-service/rfid-inventory /
-COPY --from=builder /rfid-llrp-inventory-service/LICENSE /
-COPY --from=builder /rfid-llrp-inventory-service/Attribution.txt /
-ENTRYPOINT ["/rfid-inventory"]
-CMD ["-cp=consul://edgex-core-consul:8500","-registry","-confdir=/res"]
+COPY --from=builder /app/Attribution.txt /Attribution.txt
+COPY --from=builder /app/LICENSE /LICENSE
+COPY --from=builder /app/res/ /res/
+COPY --from=builder /app/static/ /static/
+COPY --from=builder /app/rfid-llrp-inventory /rfid-llrp-inventory
+
+EXPOSE 48086
+
+ENTRYPOINT ["/rfid-llrp-inventory"]
+CMD ["-cp=consul://edgex-core-consul:8500", "-registry", "-confdir=/res"]
