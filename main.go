@@ -19,8 +19,8 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/inventory"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/inventory"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -37,8 +37,8 @@ import (
 )
 
 const (
-	serviceKey      = "rfid-inventory"
-	eventDeviceName = "rfid-inventory"
+	serviceKey      = "rfid-llrp-inventory"
+	eventDeviceName = "rfid-llrp-inventory"
 
 	BaseConsulPath = "edgex/appservices/1.0/"
 
@@ -180,7 +180,7 @@ func main() {
 		f            http.HandlerFunc // of course the EdgeX SDK doesn't take a http.Handler...
 	}{
 		{"/", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, "res/html/index.html")
+			http.ServeFile(w, r, "/static/html/index.html")
 		}},
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -318,7 +318,7 @@ func main() {
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		s := <-signals
 
-		lgr.Info(fmt.Sprintf("Received %q signal from OS.", s.String()))
+		lgr.Info(fmt.Sprintf("Received '%s' signal from OS.", s.String()))
 		cancel() // signal the taskLoop to finish
 	}()
 

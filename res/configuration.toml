@@ -9,7 +9,7 @@ Host = 'localhost'
 Port = 48086
 Protocol = 'http'
 ReadMaxLimit = 100
-StartupMsg = 'RFID Inventory Service: http://localhost:48086'
+StartupMsg = 'RFID LLRP Inventory Service: http://localhost:48086'
 Timeout = '30s'
 
 [Registry]
@@ -31,11 +31,6 @@ File = ''
   Host = 'localhost'
   Port = 48080
 
-  [Clients.Logging]
-  Protocol = "http"
-  Host = "localhost"
-  Port = 48061
-
 [MessageBus]
 Type = 'zero'
     [MessageBus.PublishHost]
@@ -55,7 +50,7 @@ Type = 'zero'
 [Binding]
 Type="messagebus"
 SubscribeTopic="events"
-PublishTopic="somewhere"
+PublishTopic="events"
 
 [ApplicationSettings]
 DeviceServiceName = "edgex-device-llrp"

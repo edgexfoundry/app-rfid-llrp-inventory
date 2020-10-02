@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"math"
 	"strings"
 	"sync/atomic"

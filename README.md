@@ -3,58 +3,6 @@
 RFID Inventory Service - Edgex application service for processing tag reads,
 producing events [`Arrived`, `Moved`, `Departed`], configure and manage the LLRP readers via commands
 
-## Installation and Execution ##
-
-#### Prerequisites ####
-
- - Go language
- - GNU Make
- - Docker
- - Docker-compose
-
-##### Build #####
-```
-$ make build
-```
-##### Execute unit tests with coverage #####
-```
-$ make test
-```
-##### Format #####
-```
-$ make fmt
-```
-##### Build Docker image #####
-```
-$ make docker
-```
-
-#### Commands Available
-- Ping command to see if the service is up and running.
-```
-GET http://localhost:48086/ping
-
-pong
-```
-- Command to get all the list of LLRP readers registered in edgex.
-```
-GET http://localhost:48086/command/readers
-
-{"ReaderList":["192.168.1.78_5084"]}
-```
-- Command to make the LLRP reader start reading tags
-```
-POST http://localhost:48086/command/readings/StartReading
-
-OK
-```
-- Command to make the LLRP reader stop reading tags
-```
-POST http://localhost:48086/command/readings/StopReading
-
-OK
-```
-
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
 Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
@@ -63,7 +11,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "6def8859-5a12-4c83-b68c-256303146682",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598043284110,
   "origin": 1598043284109799400,
   "readings": [
@@ -71,7 +19,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "8d15d035-402f-4abc-85fc-a7ed7213122a",
       "created": 1598043284110,
       "origin": 1598043284109799400,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventArrived",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
     }
@@ -83,7 +31,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "c78c304e-1906-4d17-bf26-5075756a231f",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598401259699,
   "origin": 1598401259697580500,
   "readings": [
@@ -91,7 +39,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "323694d9-1a48-417a-9f43-25998536ae8f",
       "created": 1598401259699,
       "origin": 1598401259697580500,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventMoved",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
@@ -103,7 +51,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 ```json
 {
   "id": "4d042708-c5de-41fa-827a-3f24b364c6de",
-  "device": "rfid-inventory",
+  "device": "rfid-llrp-inventory",
   "created": 1598062424895,
   "origin": 1598062424894043600,
   "readings": [
@@ -111,7 +59,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "928ff90d-02d1-43be-81a6-a0d75886b0e4",
       "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-18_1\"}"
     },
@@ -119,7 +67,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
       "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-inventory",
+      "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
       "value": "{\"epc\":\"30340bb6884cb101a13bc688\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392512,\"last_known_location\":\"POS Terminals\"}"
     }
@@ -160,7 +108,7 @@ Throughout the lifecycle of the tag, events will be generated that will cause it
 `Present` and `Departed`. Eventually once a tag has been in the `Departed` state for long enough
 it will "Age Out" which removes it from memory, effectively putting it back into the `Unknown` state.
 
-![Tag State Diagram](docs/images/tag-state-diagram.png)
+![Tag State Diagram](images/tag-state-diagram.png)
 
 ## Tag Location Algorithm
 
@@ -238,7 +186,7 @@ Suppose the following variables:
 The location will change when the following equation is true:
 - `incomingRSSI > (existingRSSI + offset)`
 
-![Mobility Profile Diagram](docs/images/mobility-profile.png)
+![Mobility Profile Diagram](images/mobility-profile.png)
 
 - **`MobilityProfileBaseProfile`** *`[enum]`*: Name of the parent mobility profile to inherit from. Any values which are not explicitly overridden will be inherited from this base profile selected.
   - default: `'default'` *(which is currently the same as `'asset_tracking'`)*
@@ -258,29 +206,75 @@ The location will change when the following equation is true:
   
 ## Setting the Aliases
 
-- Every device(or reader)+antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<deviceName>_<antennaId>` e.g.
-   `LLRP-3F7DAC_1` where `LLRP-357DAC` is the deviceName and `1` is the antennaId  
-   *NOTE: The device names must match with the names generated by the LLRP device service. README of LLRP device service can be referred to understand more on generation of device names or also can query device service to get the list of devices connected:
-   [Edgex device service api](https://app.swaggerhub.com/apis-docs/EdgeXFoundry1/device-sdk/1.2.1#/device/get_v1_device_all__command_)*
-
-- User needs to configure the actual alias using Consul
-  - **Using UI**
-    - Create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-inventory/) and
+- Every device(reader) + antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<deviceName>_<antennaId>` e.g.
+   `Reader-10-EF-25_1` where `Reader-10-EF-25` is the deviceName and `1` is the antennaId
+     
+   To get the list of LLRP devices or readers connected,
+   `GET` to the `/api/v1/readers` endpoint:   
+                                                           
+        curl -o- localhost:48086/api/v1/readers
+        
+    ```json
+        {
+          "Readers": [
+            "SpeedwayR-10-EF-25"
+          ]
+        }
+    ```
+    
+- User needs to configure the alias using Consul. This can be achieved via Consul’s UI or CLI
+  - **Setting Alias via Consul UI**
+    - Create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/) and
       add Key Value pairs.
-    - Each key represents a single antenna on a specific reader/device. The key must have the default alias format (explained as above). 
-      The value must be the alias value.  
-        - Examples of KV pairs:
-            - LLRP-357DAC_3: Freezer
-            - LLRP-359JGD_1: Backroom        
-           *NOTE: Please do not add colons as shown above when adding the keys in Consul*
-    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location.
-  - **Using CLI**
-    - Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv).  
-     E.g.
-      `curl \
-          --request PUT \
-          --data "Freezer" \
-          http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-inventory/Aliases/LLRP-10-EF-18_1`
+        
+      ![Creating Aliases folder](images/consul_alias_folder.png)
+    - Key is the default alias which is `<deviceName>_<antennaId>`. The value must be the alias value. Examples of KV pairs:
+         - Speedway-10-EF-25_1: Freezer
+         - Speedway-10-EF-25_2: Backstock
+         
+      ![Adding KV pairs](images/consul_kv_pairs.png)
+      
+      ![Aliases created](images/aliases.png)   
+           
+    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
+      
+      `GET` to the `/api/v1/inventory/snapshot` endpoint:   
+                                                               
+            curl -o- localhost:48086/api/v1/inventory/snapshot
+            
+      ```json
+         [
+           {
+             "epc": "30143639f8419145db602154",
+             "tid": "",
+             "location": {
+               "device_name": "SpeedwayR-10-EF-25",
+               "antenna_id": 1
+             },
+             "location_alias": "Freezer",
+             "last_read": 1601441311411,
+             "last_arrived": 1601441265669,
+             "last_departed": 0,
+             "state": "Present",
+             "stats_map": {
+               "SpeedwayR-10-EF-25_1": {
+                 "last_read": 1601441311411,
+                 "mean_rssi": -54.25
+               }
+             }
+           }
+         ]     
+      ```
+            
+            
+    
+  - **Setting Alias via Consul CLI**
+    - Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). Ex:
+     
+            curl \
+              --request PUT \
+              --data "Freezer" \
+              http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-18_1
           
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,
