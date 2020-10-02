@@ -9,7 +9,7 @@ MICROSERVICE=rfid-llrp-inventory
 VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
 GIT_SHA=$(shell git rev-parse HEAD)
 
-GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-inventory.Version=$(VERSION)"
+GOFLAGS=-ldflags "-X github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory.Version=$(VERSION)"
 
 build:
 	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
