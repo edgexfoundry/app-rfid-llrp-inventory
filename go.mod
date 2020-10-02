@@ -1,6 +1,6 @@
-module github.impcloud.net/RSP-Inventory-Suite/rfid-inventory
+module github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory
 
-go 1.14
+go 1.15
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go v1.2.0

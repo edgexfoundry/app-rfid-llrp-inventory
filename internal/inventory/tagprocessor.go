@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-inventory/internal/llrp"
+	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"sync"
 	"time"
 )
