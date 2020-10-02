@@ -204,6 +204,24 @@ The location will change when the following equation is true:
   - default: *(none, inherit from base profile)*
   - units: `milliseconds`
   
+#### Sample Mobility Profiles
+
+Here are some sample mobility profiles based on our previous testing to help get you started.
+
+**Default:** `Asset Tracking`
+
+| **Asset Tracking** |        |
+|--------------------|--------|
+| Slope              | -0.008 |
+| Threshold          | 6.0    |
+| Holdoff Millis     | 500.0  |
+
+| **Retail Garment** |         |
+|--------------------|---------|
+| Slope              | -0.0005 |
+| Threshold          | 6.0     |
+| Holdoff Millis     | 60000.0 |
+  
 ## Setting the Aliases
 
 - Every device(reader) + antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<deviceName>_<antennaId>` e.g.
@@ -234,7 +252,7 @@ The location will change when the following equation is true:
          
       ![Adding KV pairs](images/consul_kv_pairs.png)
       
-      ![Aliases created](images/aliases.png)   
+      ![Aliases created](images/aliases.png)
            
     - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
       

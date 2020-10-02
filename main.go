@@ -57,16 +57,12 @@ const (
 )
 
 type inventoryApp struct {
-	edgexSdk   *appsdk.AppFunctionsSDK
-	sdkCtx     atomic.Value
-	lgr        logWrap
-	devMu      sync.RWMutex
-	devService llrp.DSClient
-	defaultGrp *llrp.ReaderGroup
-
-	config   inventory.ConsulConfig
-	configMu sync.RWMutex
-
+	edgexSdk     *appsdk.AppFunctionsSDK
+	sdkCtx       atomic.Value // *appcontext.Context
+	lgr          logWrap
+	devMu        sync.RWMutex
+	devService   llrp.DSClient
+	defaultGrp   *llrp.ReaderGroup
 	snapshotReqs chan snapshotDest
 	reports      chan reportData
 }
@@ -170,7 +166,6 @@ func main() {
 		devService:   devService,
 		snapshotReqs: make(chan snapshotDest),
 		reports:      make(chan reportData),
-		config:       *config,
 	}
 
 	// routes
@@ -184,7 +179,7 @@ func main() {
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if err := app.defaultGrp.ListReaders(w); err != nil {
-				app.lgr.Error("Failed to write readers list.", "error", err.Error())
+				lgr.Error("Failed to write readers list.", "error", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}},
@@ -299,7 +294,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		app.taskLoop(ctx, cc, lgr)
+		app.taskLoop(ctx, cc, config, lgr)
 		lgr.Info("Task loop has exited.")
 	}()
 
@@ -498,8 +493,8 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // Since nearly every round through this loop must read or write the inventory,
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
-func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, lc logger.LoggingClient) {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(app.config.ApplicationSettings.DepartedCheckIntervalSeconds) * time.Second)
+func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, cfg inventory.ConsulConfig, lc logger.LoggingClient) {
+	aggregateDepartedTicker := time.NewTicker(time.Duration(cfg.ApplicationSettings.DepartedCheckIntervalSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrCh := make(chan error)
 	confUpdateCh := make(chan interface{})
@@ -523,9 +518,7 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 		}
 	}
 
-	cfg := app.config
-
-	processor := inventory.NewTagProcessor(lc, cfg.ApplicationSettings, snapshot)
+	processor := inventory.NewTagProcessor(lc, cfg, snapshot)
 	if len(snapshot) > 0 {
 		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
@@ -600,26 +593,14 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			}
 
 		case rawConfig := <-confUpdateCh:
-			if newConfig, ok := rawConfig.(*inventory.ConsulConfig); ok {
-				lc.Info("Configuration updated from consul.")
-				lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
-				app.configMu.Lock()
-
-				seconds := newConfig.ApplicationSettings.DepartedCheckIntervalSeconds
-				if app.config.ApplicationSettings.DepartedCheckIntervalSeconds != seconds {
-					aggregateDepartedTicker.Stop()
-					aggregateDepartedTicker = time.NewTicker(time.Duration(seconds) * time.Second)
-					lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", seconds))
-				}
-
-				app.config = *newConfig
-				app.configMu.Unlock()
-
-				processor.SetAppSettings(newConfig.ApplicationSettings)
-				processor.SetAliases(newConfig.Aliases)
-			} else {
-				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%#v", rawConfig))
+			newConfig, ok := rawConfig.(*inventory.ConsulConfig)
+			if !ok {
+				lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
+				continue
 			}
+			lc.Info("Configuration updated from consul.")
+			lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
+			processor.UpdateConfig(*newConfig)
 
 		case req := <-app.snapshotReqs:
 			data, err := json.Marshal(snapshot)

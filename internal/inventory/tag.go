@@ -115,38 +115,6 @@ func (tag *Tag) getStats(location string) *TagStats {
 	return stats
 }
 
-// newStaticTag constructs a StaticTag object from an existing Tag pointer
-func (tp *TagProcessor) newStaticTag(tag *Tag) StaticTag {
-	s := StaticTag{
-		EPC:           tag.EPC,
-		TID:           tag.TID,
-		Location:      tag.Location,
-		LocationAlias: tp.getAlias(tag.Location.String()),
-		LastRead:      tag.LastRead,
-		LastArrived:   tag.LastArrived,
-		LastDeparted:  tag.LastDeparted,
-		State:         tag.state,
-		StatsMap:      make(map[string]StaticTagStats, len(tag.statsMap)),
-	}
-
-	for k, v := range tag.statsMap {
-		if v.rssiCount() == 0 {
-			continue // skip empty
-		}
-		s.StatsMap[k] = newStaticTagStats(v)
-	}
-
-	return s
-}
-
-// newStaticTagStats constructs a StaticTagStats object from an existing TagStats pointer
-func newStaticTagStats(stats *TagStats) StaticTagStats {
-	return StaticTagStats{
-		LastRead: stats.LastRead,
-		MeanRSSI: stats.rssiDbm.Mean(),
-	}
-}
-
 // asTagPtr converts a StaticTag back to a Tag pointer for use in restoring inventory.
 // It will also restore a basic view of the per-location stats by setting the last read
 // timestamp and a single RSSI value which was the previously computed rolling average.

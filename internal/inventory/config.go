@@ -85,7 +85,7 @@ func NewConfigurator(lc logger.LoggingClient) *Configurator {
 // values after parsing is complete. This error can be safely ignored using:
 // `!errors.Is(err, ErrUnexpectedConfigItems)`
 // It may also return an error wrapping ErrParsingConfigValue or ErrMissingRequiredKey.
-func (cr *Configurator) Parse(appSettings map[string]string) (*ConsulConfig, error) {
+func (cr *Configurator) Parse(appSettings map[string]string) (ConsulConfig, error) {
 	cfg := ConsulConfig{
 		Writable: WriteableConfig{
 			LogLevel: "INFO",
@@ -93,7 +93,7 @@ func (cr *Configurator) Parse(appSettings map[string]string) (*ConsulConfig, err
 		Aliases: make(map[string]string),
 	}
 	err := cr.loadAppSettings(appSettings, &cfg.ApplicationSettings)
-	return &cfg, err
+	return cfg, err
 }
 
 // loadAppSettings is the internal function that takes the incoming strings map and parses it to fill

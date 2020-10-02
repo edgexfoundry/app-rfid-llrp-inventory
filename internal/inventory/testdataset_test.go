@@ -43,7 +43,7 @@ type testDataset struct {
 	epcs []string
 }
 
-func newTestDataset(cfg ApplicationSettings, lc logger.LoggingClient, tagCount int) *testDataset {
+func newTestDataset(cfg ConsulConfig, lc logger.LoggingClient, tagCount int) *testDataset {
 	ds := testDataset{
 		tp:   NewTagProcessor(lc, cfg, nil),
 		lc:   lc,

@@ -26,11 +26,11 @@ var (
 func TestMain(m *testing.M) {
 	lc = logger.NewClient("test", false, "", "DEBUG")
 
-	cc, err := NewConfigurator(lc).Parse(map[string]string{})
+	var err error
+	consulConfig, err = NewConfigurator(lc).Parse(map[string]string{})
 	if err != nil {
 		log.Fatalf("Error parsing config: %v", err)
 	}
-	consulConfig = *cc
 
 	os.Exit(m.Run())
 }
@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 func TestBasicArrival(t *testing.T) {
 	front := nextSensor()
 
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 
 	events := ds.readAll(readParams{
 		deviceName: front,
@@ -57,7 +57,7 @@ func TestBasicArrival(t *testing.T) {
 }
 
 func TestTagMoveWeakRssi(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -121,7 +121,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
-			ds := newTestDataset(consulConfig.ApplicationSettings, lc, 1)
+			ds := newTestDataset(consulConfig, lc, 1)
 
 			// start all tags at initialAntenna
 			events := ds.readAll(readParams{
@@ -159,7 +159,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 }
 
 func TestMoveBetweenSensors(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -199,14 +199,14 @@ func TestMoveBetweenSensors(t *testing.T) {
 }
 
 func TestAgeOutTask_RequireDepartedState(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 	sensor := nextSensor()
 
 	// read past ageout threshold
 	_ = ds.readAll(readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		lastSeen:   time.Now().Add(time.Duration(-3*ds.tp.config.AgeOutHours) * time.Hour),
+		lastSeen:   time.Now().Add(time.Duration(-3*ds.tp.config.ageOutHours) * time.Hour),
 	})
 
 	// make sure all tags are marked as Present and are NOT aged out, because the algorithm
@@ -265,7 +265,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			ds := newTestDataset(consulConfig.ApplicationSettings, lc, 5)
+			ds := newTestDataset(consulConfig, lc, 5)
 			sensor := nextSensor()
 
 			_ = ds.readAll(readParams{
@@ -298,7 +298,7 @@ func TestAgeOutThreshold(t *testing.T) {
 }
 
 func TestAggregateDepartedTask(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 	sensor := nextSensor()
 
 	// read past departed threshold
@@ -306,7 +306,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-2 * (time.Duration(ds.tp.config.DepartedThresholdSeconds) * time.Second)),
+		lastSeen:   time.Now().Add(-2 * (time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second)),
 	})
 
 	// expect all tags to depart, and their stats to be set to Departed
@@ -325,7 +325,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-(time.Duration(ds.tp.config.DepartedThresholdSeconds) * time.Second) / 2),
+		lastSeen:   time.Now().Add(-(time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second) / 2),
 	})
 
 	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {
@@ -344,7 +344,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 }
 
 func TestLastRead_AlwaysIncreasing(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 	sensor := nextSensor()
 
 	current := time.Now()
@@ -390,12 +390,12 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 }
 
 func TestAdjustLastReadOnByOrigin(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 2)
+	ds := newTestDataset(consulConfig, lc, 2)
 	sensor := nextSensor()
-	origState := ds.tp.config.AdjustLastReadOnByOrigin
+	origState := ds.tp.config.adjustLastReadOnByOrigin
 
 	// turn ON the timestamp adjuster
-	ds.tp.config.AdjustLastReadOnByOrigin = true
+	ds.tp.config.adjustLastReadOnByOrigin = true
 	epc0 := ds.epcs[0]
 	origin := time.Now()
 	lastSeen := origin.Add(-53 * time.Minute)
@@ -413,7 +413,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 	}
 
 	// turn OFF the timestamp adjuster
-	ds.tp.config.AdjustLastReadOnByOrigin = false
+	ds.tp.config.adjustLastReadOnByOrigin = false
 	epc1 := ds.epcs[1]
 	origin = time.Now()
 	lastSeen = origin.Add(-19 * time.Second)
@@ -431,11 +431,11 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 	}
 
 	// put it back to what it was before
-	ds.tp.config.AdjustLastReadOnByOrigin = origState
+	ds.tp.config.adjustLastReadOnByOrigin = origState
 }
 
 func TestReaderAntennaAliasDefault(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 0)
+	ds := newTestDataset(consulConfig, lc, 0)
 
 	tests := []struct {
 		deviceID  string
@@ -470,13 +470,13 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 }
 
 func TestReaderAntennaAliasExisting(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 0)
+	ds := newTestDataset(consulConfig, lc, 0)
 	aliasesMap := map[string]string{
 		"Reader-3F7DAC_1":  "Freezer",
 		"Reader-150000_10": "BackRoom",
 		"Reader-999999_3":  "",
 	}
-	ds.tp.SetAliases(aliasesMap)
+	ds.tp.config.aliases = aliasesMap
 
 	tests := []struct {
 		deviceID  string
@@ -511,7 +511,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 }
 
 func TestEventLocationMatchesAlias(t *testing.T) {
-	ds := newTestDataset(consulConfig.ApplicationSettings, lc, 10)
+	ds := newTestDataset(consulConfig, lc, 10)
 	sensor1 := nextSensor()
 	sensor2 := nextSensor()
 	alias1 := "Freezer"
@@ -524,7 +524,7 @@ func TestEventLocationMatchesAlias(t *testing.T) {
 		NewLocation(sensor1, defaultAntenna).String(): alias1,
 		NewLocation(sensor2, defaultAntenna).String(): alias2,
 	}
-	ds.tp.SetAliases(aliasesMap)
+	ds.tp.config.aliases = aliasesMap
 
 	// Generate arrived events at alias1
 	events := ds.readAll(readParams{
