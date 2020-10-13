@@ -16,18 +16,18 @@ import (
 )
 
 type processorConfig struct {
+	profile mobilityProfile
+	aliases map[string]string
+
+	departedThresholdSeconds uint
+	ageOutHours              uint
 	adjustLastReadOnByOrigin bool
-	departedThresholdSeconds int
-	ageOutHours              int
 
 	// debugLogEnabled is used to be able to only log things when Debug logging is enabled
 	// note: this should be something that is able to be determined via the logger.LoggingClient,
 	// however currently EdgeX does not support querying the log level
 	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	debugLogEnabled bool
-
-	profile mobilityProfile
-	aliases map[string]string
 }
 
 type TagProcessor struct {

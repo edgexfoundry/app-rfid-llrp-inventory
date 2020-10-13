@@ -129,8 +129,7 @@ func main() {
 	cc, err := getConfigClient()
 	lgr.exitIfErr(err, "Failed to create config client.")
 
-	cr := inventory.NewConfigurator(edgexSdk.LoggingClient)
-	config, err := cr.Parse(edgexSdk.ApplicationSettings())
+	config, err := inventory.ParseConsulConfig(edgexSdk.LoggingClient, edgexSdk.ApplicationSettings())
 	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
 
 	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
