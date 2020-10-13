@@ -135,10 +135,6 @@ especially useful when using a dual-linear antenna and mapping both polarities t
 
 The following configuration options affect how the tag location algorithm works under the hood.
 
-- **`TagStatsWindowSize`** *`[int]`*: How many reads to keep track of *per alias* for each RFID tag. 
-        This effects how many tag reads will be used when computing the rolling average for tag stats.
-  - default: `20`
-
 - **`AdjustLastReadOnByOrigin`** *`[bool]`*: If `true`, this will override the tag read timestamps sent from the sensor
         with an adjusted one based on the UTC time the `LLRP Device Service` received the message from the device (aka `Origin`). 
         Essentially all timestamps will be shifted by the difference in time from when the sensor says it was read versus when it
@@ -149,14 +145,14 @@ The following configuration options affect how the tag location algorithm works 
 
 - **`DepartedThresholdSeconds`** *`[int]`*: How long in seconds a tag should not be read before 
         it will generate a `Departed` event.
-  - default: `30`
+  - default: `600`
 
 - **`DepartedCheckIntervalSeconds`** *`[int]`*: How often to run the background task that checks if a Tag needs
         to be marked `Departed`. Smaller intervals will cause more frequent checks and less variability at the expense of
         CPU utilization and lock contention. Larger intervals on the other hand may cause greater latency
         between when a tag passes the `DepartedThresholdSeconds` and when the `Departed` event is actually
         generated (waiting for the next check to occur).
-  - default: `10`
+  - default: `30`
   
 - **`AgeOutHours`** *`[int]`*: How long in hours to keep `Departed` tags in our in-memory inventory before they 
         are aged-out (purged). This is done for CPU and RAM conservation in deployments with a large
