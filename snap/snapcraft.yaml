@@ -33,8 +33,6 @@ apps:
       CONFIG_PRO_ARG: "--cp=consul://localhost:8500"
       CONF_ARG: "--confdir=$SNAP_DATA/config/rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
-      Binding_PublishTopic: events
-      EDGEX_SECURITY_SECRET_STORE: "false"
     plugs: [network, network-bind]
 
 parts:
