@@ -1,6 +1,6 @@
 .PHONY: build test clean update fmt docker run
 
-GO=CGO_ENABLED=1 go
+GO=CGO_ENABLED=1 GO111MODULE=on go
 
 MICROSERVICE=rfid-llrp-inventory
 
