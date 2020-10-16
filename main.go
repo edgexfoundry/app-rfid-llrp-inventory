@@ -8,6 +8,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory"
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
@@ -19,8 +21,6 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/inventory"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"io"
 	"io/ioutil"
 	"net/http"

@@ -53,6 +53,6 @@ SubscribeTopic="events"
 PublishTopic="events"
 
 [ApplicationSettings]
-DeviceServiceName = "edgex-device-llrp"
+DeviceServiceName = "edgex-device-rfid-llrp"
 DeviceServiceURL = "http://localhost:51992/"
 MetadataServiceURL = "http://localhost:48081/"
