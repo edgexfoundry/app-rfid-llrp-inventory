@@ -172,5 +172,4 @@ func TestParseConsulConfig(t *testing.T) {
 			t.Error(err)
 		}
 	})
-
 }

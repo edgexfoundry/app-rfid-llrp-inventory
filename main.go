@@ -598,6 +598,12 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 				lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
 				continue
 			}
+
+			if err := newConfig.ApplicationSettings.Validate(); err != nil {
+				lc.Error("Invalid Consul configuration.", "error", err.Error())
+				continue
+			}
+
 			lc.Info("Configuration updated from consul.")
 			lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
 			processor.UpdateConfig(*newConfig)

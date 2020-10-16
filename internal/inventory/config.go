@@ -71,60 +71,22 @@ func NewConsulConfig() ConsulConfig {
 	}
 }
 
-// confItem is used when parsing a config map.
-type confItem struct {
-	target   interface{}  // target is a pointer to the variable to set
-	check    func() error // check is an optional validation function, called after setting target.
-	required bool         // required indicates whether the config item is required or optional.
-}
-
-// uintBounds parameterizes bounds checks on uint values.
-type uintBounds struct {
-	min, max       uint
-	chkMin, chkMax bool
-}
-
-// validate returns a validation function bound to the given pointer.
-// When the returned function is called, it returns nil
-// if the pointer's value is within the uintBounds,
-// or an error indicating the correct bounds for the variable.
-func (ub uintBounds) validate(u *uint) func() error {
-	if u == nil {
-		panic("missing pointer to value to check")
+// Validate returns nil if the ApplicationSettings are valid,
+// or the first validation error it encounters.
+func (as ApplicationSettings) Validate() error {
+	if as.DepartedThresholdSeconds == 0 {
+		return errors.Wrap(ErrOutOfRange, "DepartedThresholdSeconds must be >0")
 	}
 
-	return func() error {
-		valid := true
-		if ub.chkMin {
-			valid = valid && *u >= ub.min
-		}
-
-		if ub.chkMax {
-			valid = valid && *u <= ub.max
-		}
-
-		if valid {
-			return nil
-		}
-
-		msg := "value is %d, but must be "
-		switch {
-		case ub.chkMin && ub.chkMax:
-			return errors.Wrapf(ErrOutOfRange, msg+">= %d and <= %d", *u, ub.min, ub.max)
-		case ub.chkMin:
-			return errors.Wrapf(ErrOutOfRange, msg+">= %d", *u, ub.min)
-		default:
-			return errors.Wrapf(ErrOutOfRange, msg+"<= %d", *u, ub.max)
-		}
+	if as.DepartedCheckIntervalSeconds == 0 {
+		return errors.Wrap(ErrOutOfRange, "DepartedCheckIntervalSeconds must be >0")
 	}
-}
 
-// opt returns an optional confItem for target u and validation from these bounds.
-func (ub uintBounds) opt(u *uint) confItem {
-	return confItem{
-		target: u,
-		check:  ub.validate(u),
+	if as.AgeOutHours == 0 {
+		return errors.Wrap(ErrOutOfRange, "AgeOutHours must be >0")
 	}
+
+	return nil
 }
 
 // ParseConsulConfig returns a new ConsulConfig
@@ -141,15 +103,17 @@ func ParseConsulConfig(lc logger.LoggingClient, configMap map[string]string) (Co
 	cfg := NewConsulConfig()
 	settings := &cfg.ApplicationSettings
 
-	// gtZero is used to generate config items for optional uints that must be >0.
-	gtZero := uintBounds{chkMin: true, min: 1}
+	type confItem struct {
+		target   interface{} // pointer to the variable to set
+		required bool        // if true, return an error if not in the map
+	}
 
 	used := make(map[string]bool, len(configMap))
 	for key, ci := range map[string]confItem{
 		"AdjustLastReadOnByOrigin":     {target: &settings.AdjustLastReadOnByOrigin},
-		"DepartedThresholdSeconds":     gtZero.opt(&settings.DepartedThresholdSeconds),
-		"DepartedCheckIntervalSeconds": gtZero.opt(&settings.DepartedCheckIntervalSeconds),
-		"AgeOutHours":                  gtZero.opt(&settings.AgeOutHours),
+		"DepartedThresholdSeconds":     {target: &settings.DepartedThresholdSeconds},
+		"DepartedCheckIntervalSeconds": {target: &settings.DepartedCheckIntervalSeconds},
+		"AgeOutHours":                  {target: &settings.AgeOutHours},
 		"MobilityProfileThreshold":     {target: &settings.MobilityProfileThreshold},
 		"MobilityProfileHoldoffMillis": {target: &settings.MobilityProfileHoldoffMillis},
 		"MobilityProfileSlope":         {target: &settings.MobilityProfileSlope},
@@ -196,13 +160,11 @@ func ParseConsulConfig(lc logger.LoggingClient, configMap map[string]string) (Co
 			return cfg, errors.Wrapf(err, "failed to parse config item %q, %q", key, val)
 		}
 
-		if ci.check != nil {
-			if err := ci.check(); err != nil {
-				return cfg, errors.WithMessagef(err, "invalid config for %q, %q", key, val)
-			}
-		}
-
 		used[key] = true
+	}
+
+	if err := settings.Validate(); err != nil {
+		return cfg, err
 	}
 
 	var missed []string
