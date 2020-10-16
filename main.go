@@ -129,8 +129,7 @@ func main() {
 	cc, err := getConfigClient()
 	lgr.exitIfErr(err, "Failed to create config client.")
 
-	cr := inventory.NewConfigurator(edgexSdk.LoggingClient)
-	config, err := cr.Parse(edgexSdk.ApplicationSettings())
+	config, err := inventory.ParseConsulConfig(edgexSdk.LoggingClient, edgexSdk.ApplicationSettings())
 	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
 
 	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
@@ -599,6 +598,12 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 				lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
 				continue
 			}
+
+			if err := newConfig.ApplicationSettings.Validate(); err != nil {
+				lc.Error("Invalid Consul configuration.", "error", err.Error())
+				continue
+			}
+
 			lc.Info("Configuration updated from consul.")
 			lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
 			processor.UpdateConfig(*newConfig)

@@ -7,82 +7,169 @@ package inventory
 
 import (
 	"errors"
-	"fmt"
+	"math"
 	"reflect"
-	"strings"
+	"strconv"
 	"testing"
+	"testing/quick"
 )
 
-func testAppSettings() map[string]string {
-	// NOTE: If you change this, you MUST update `TestConfigurator_Parse`!
-	return map[string]string{
-		"AdjustLastReadOnByOrigin":     "FALSE",
-		"DepartedThresholdSeconds":     "1000",
-		"DepartedCheckIntervalSeconds": "5",
-		"AgeOutHours":                  "600",
-
-		"MobilityProfileThreshold":     "5.0",
-		"MobilityProfileHoldoffMillis": "1250.0",
-		"MobilityProfileSlope":         "-0.0055",
-
-		"DeviceServiceName":  "testing",
-		"DeviceServiceURL":   "http://testing:51992/",
-		"MetadataServiceURL": "http://testing:48081/",
-	}
-}
-
-func TestConfigurator_Parse(t *testing.T) {
-	settings := testAppSettings()
-	cr := NewConfigurator(lc)
-
-	consulConfig, err := cr.Parse(settings)
-	if err != nil {
-		t.Fatalf("got err: %s", err.Error())
-	}
-
-	c := consulConfig.ApplicationSettings
-	if c.AdjustLastReadOnByOrigin != false ||
-		c.DepartedThresholdSeconds != 1000 ||
-		c.DepartedCheckIntervalSeconds != 5 ||
-		c.AgeOutHours != 600 ||
-		c.MobilityProfileThreshold != 5.0 ||
-		c.MobilityProfileHoldoffMillis != 1250.0 ||
-		c.MobilityProfileSlope != -0.0055 ||
-		c.DeviceServiceName != "testing" ||
-		c.DeviceServiceURL != "http://testing:51992/" ||
-		c.MetadataServiceURL != "http://testing:48081/" {
-
-		t.Errorf("One of the value fields is incorrect.\nOriginal: %+v\nParsed: %+v", settings, c)
-	}
-}
-
 func TestEmptyConfigDefaults(t *testing.T) {
-	cr := NewConfigurator(lc)
-	consolConfig, err := cr.Parse(map[string]string{})
+	conf, err := ParseConsulConfig(getTestingLogger(), map[string]string{})
 	if err != nil {
-		t.Fatalf("got err: %s", err.Error())
+		t.Fatalf("unexpected err: %+v", err.Error())
 	}
 
-	configValue := reflect.ValueOf(&consolConfig.ApplicationSettings).Elem()
-	for i := 0; i < configValue.NumField(); i++ {
-		typeField := configValue.Type().Field(i)
-		valueField := configValue.Field(i)
-		valueStr := fmt.Sprintf("%v", valueField.Interface())
-		valueStr = strings.ReplaceAll(valueStr, "[", "")
-		valueStr = strings.ReplaceAll(valueStr, "]", "")
-		if valueStr != cr.defaultAppSettings[typeField.Name] {
-			t.Errorf("Field %s, expected value %q, but got %q",
-				typeField.Name, cr.defaultAppSettings[typeField.Name], valueStr)
-		}
+	expected := NewConsulConfig()
+	if !reflect.DeepEqual(expected, conf) {
+		t.Errorf("expected defaults, but got %+v; defaults: %+v",
+			expected, conf)
 	}
 }
 
-func TestErrUnexpectedConfigItems(t *testing.T) {
-	cfg := map[string]string{
-		"foo": "bar",
+func TestParseConsulConfig(t *testing.T) {
+	type testCase struct {
+		key, val string
+		err      error
+		exp      interface{}
 	}
-	cr := NewConfigurator(lc)
-	if _, err := cr.Parse(cfg); !errors.Is(err, ErrUnexpectedConfigItems) {
-		t.Fatalf("expected ErrUnexpectedConfigItems, but got: %v", err)
+
+	cases := []testCase{
+		{key: "", val: "600", err: ErrUnexpectedConfigItems},
+		{key: "foo", val: "bar", err: ErrUnexpectedConfigItems},
+
+		{key: "AdjustLastReadOnByOrigin", val: "TRUE", exp: true},
+		{key: "AdjustLastReadOnByOrigin", val: "true", exp: true},
+		{key: "AdjustLastReadOnByOrigin", val: "FALSE", exp: false},
+		{key: "AdjustLastReadOnByOrigin", val: "false", exp: false},
+		{key: "AdjustLastReadOnByOrigin", val: "no", err: strconv.ErrSyntax},
+		{key: "AdjustLastReadOnByOrigin", val: "yes", err: strconv.ErrSyntax},
+		{key: "AdjustLastReadOnByOrigin", val: "", err: strconv.ErrSyntax},
+		{key: "AdjustLastReadOnByOrigin", val: "", err: strconv.ErrSyntax},
+
+		{key: "DepartedThresholdSeconds", val: "600", exp: uint(600)},
+		{key: "DepartedThresholdSeconds", val: "1000", exp: uint(1000)},
+		{key: "DepartedThresholdSeconds", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "DepartedThresholdSeconds", val: "0", err: ErrOutOfRange},
+		{key: "DepartedThresholdSeconds", val: "18446744073709551616", err: strconv.ErrRange},
+		{key: "DepartedThresholdSeconds", val: "-600", err: strconv.ErrSyntax},
+		{key: "DepartedThresholdSeconds", val: "10.6", err: strconv.ErrSyntax},
+		{key: "DepartedThresholdSeconds", val: "", err: strconv.ErrSyntax},
+		{key: "DepartedThresholdSeconds", val: "  ", err: strconv.ErrSyntax},
+		{key: "DepartedThresholdSeconds", val: "asdf", err: strconv.ErrSyntax},
+
+		{key: "DepartedCheckIntervalSeconds", val: "600", exp: uint(600)},
+		{key: "DepartedCheckIntervalSeconds", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "DepartedCheckIntervalSeconds", val: "0", err: ErrOutOfRange},
+		{key: "DepartedCheckIntervalSeconds", val: "-600", err: strconv.ErrSyntax},
+		{key: "DepartedCheckIntervalSeconds", val: "6.00", err: strconv.ErrSyntax},
+		{key: "DepartedCheckIntervalSeconds", val: "99999999999999999999999", err: strconv.ErrRange},
+
+		{key: "AgeOutHours", val: "600", exp: uint(600)},
+		{key: "AgeOutHours", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "AgeOutHours", val: "0", err: ErrOutOfRange},
+		{key: "AgeOutHours", val: "-600", err: strconv.ErrSyntax},
+		{key: "AgeOutHours", val: "6.00", err: strconv.ErrSyntax},
+		{key: "AgeOutHours", val: "99999999999999999999999", err: strconv.ErrRange},
+
+		{key: "MobilityProfileThreshold", val: "5.0", exp: float64(5.0)},
+		{key: "MobilityProfileThreshold", val: "600", exp: float64(600)},
+		{key: "MobilityProfileThreshold", val: "-600", exp: float64(-600)},
+
+		{key: "MobilityProfileHoldoffMillis", val: "1250.0", exp: float64(1250.0)},
+		{key: "MobilityProfileHoldoffMillis", val: "600", exp: float64(600)},
+		{key: "MobilityProfileHoldoffMillis", val: "-600", exp: float64(-600)},
+
+		{key: "MobilityProfileSlope", val: "-0.0055", exp: float64(-0.0055)},
+
+		{key: "DeviceServiceName", val: "testing", exp: "testing"},
+		{key: "DeviceServiceName", val: "", exp: ""},
+		{key: "DeviceServiceName", val: " ", exp: " "},
+
+		{key: "DeviceServiceURL", val: "http://testing:51992/", exp: "http://testing:51992/"},
+		{key: "DeviceServiceURL", val: "", exp: ""},
+		{key: "MetadataServiceURL", val: "", exp: ""},
 	}
+
+	rt := reflect.TypeOf(ApplicationSettings{})
+	for _, c := range cases {
+		c := c
+		t.Run(c.key+":"+c.val, func(tt *testing.T) {
+			cfgMap := map[string]string{c.key: c.val}
+			ccfg, err := ParseConsulConfig(getTestingLogger(), cfgMap)
+			if !errors.Is(err, c.err) {
+				tt.Fatalf("expected %v, but got %+v", c.err, err)
+			}
+
+			if c.err != nil {
+				return
+			}
+
+			ft, ok := rt.FieldByName(c.key)
+			if !ok {
+				tt.Fatalf("no field %q", c.key)
+			}
+
+			rv := reflect.ValueOf(ccfg.ApplicationSettings)
+			fv := rv.FieldByIndex(ft.Index)
+
+			if !fv.IsValid() || !fv.CanInterface() {
+				tt.Errorf("value of %q is not valid", c.key)
+				return
+			}
+
+			if !reflect.DeepEqual(fv.Interface(), c.exp) {
+				tt.Errorf("invalid value for %q: expected %+v, got %+v",
+					c.key, c.exp, fv.Interface())
+			}
+		})
+	}
+
+	// quick.Check that we return an error (and don't panic) on arbitrary strings.
+	t.Run("quickCheckStr", func(tt *testing.T) {
+		tt.Parallel()
+		if err := quick.Check(func(val string) bool {
+			conf, parseErr := ParseConsulConfig(nil, map[string]string{
+				"DeviceServiceName": val})
+			return parseErr == nil && conf.ApplicationSettings.DeviceServiceName == val
+		}, nil); err != nil {
+			tt.Error(err)
+		}
+	})
+
+	// quick.Check that we can round-trip arbitrary uints.
+	t.Run("quickCheckUint", func(tt *testing.T) {
+		tt.Parallel()
+		if err := quick.Check(func(u uint) bool {
+			if u == 0 {
+				return true
+			}
+			iStr := strconv.FormatUint(uint64(u), 10)
+			conf, parseErr := ParseConsulConfig(nil, map[string]string{"AgeOutHours": iStr})
+			return parseErr == nil && conf.ApplicationSettings.AgeOutHours == u
+		}, nil); err != nil {
+			t.Error(err)
+		}
+	})
+
+	// quick.Check that we can round-trip arbitrary float64s.
+	t.Run("quickCheckFloat64", func(tt *testing.T) {
+		tt.Parallel()
+		// Note: FormatFloat can produce binary values (with 'b'),
+		// but ParseFloat can't parse them, so it's not in this list.
+		fmts := [...]byte{'e', 'E', 'f', 'g', 'G', 'x', 'X'}
+		if err := quick.Check(func(f float64, fmtByte byte) bool {
+			iStr := strconv.FormatFloat(f, fmts[fmtByte%7], -1, 64)
+			conf, parseErr := ParseConsulConfig(nil, map[string]string{
+				"MobilityProfileThreshold": iStr})
+			if parseErr != nil {
+				tt.Logf("fmt: %c (%d), f: %v, err: %+v",
+					fmts[fmtByte%8], fmtByte, f, parseErr)
+			}
+			return parseErr == nil && math.Abs(
+				conf.ApplicationSettings.MobilityProfileThreshold-f) < 0.001
+		}, nil); err != nil {
+			t.Error(err)
+		}
+	})
 }
