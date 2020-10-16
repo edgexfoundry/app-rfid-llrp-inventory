@@ -27,7 +27,7 @@ func TestEmptyConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestNewConfigurator_Parse(t *testing.T) {
+func TestParseConsulConfig(t *testing.T) {
 	type testCase struct {
 		key, val string
 		err      error
@@ -49,20 +49,25 @@ func TestNewConfigurator_Parse(t *testing.T) {
 
 		{key: "DepartedThresholdSeconds", val: "600", exp: uint(600)},
 		{key: "DepartedThresholdSeconds", val: "1000", exp: uint(1000)},
+		{key: "DepartedThresholdSeconds", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "DepartedThresholdSeconds", val: "0", err: ErrOutOfRange},
+		{key: "DepartedThresholdSeconds", val: "18446744073709551616", err: strconv.ErrRange},
 		{key: "DepartedThresholdSeconds", val: "-600", err: strconv.ErrSyntax},
-		{key: "DepartedThresholdSeconds", val: "99999999999999999999999", err: strconv.ErrRange},
 		{key: "DepartedThresholdSeconds", val: "10.6", err: strconv.ErrSyntax},
 		{key: "DepartedThresholdSeconds", val: "", err: strconv.ErrSyntax},
 		{key: "DepartedThresholdSeconds", val: "  ", err: strconv.ErrSyntax},
 		{key: "DepartedThresholdSeconds", val: "asdf", err: strconv.ErrSyntax},
 
 		{key: "DepartedCheckIntervalSeconds", val: "600", exp: uint(600)},
+		{key: "DepartedCheckIntervalSeconds", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "DepartedCheckIntervalSeconds", val: "0", err: ErrOutOfRange},
 		{key: "DepartedCheckIntervalSeconds", val: "-600", err: strconv.ErrSyntax},
 		{key: "DepartedCheckIntervalSeconds", val: "6.00", err: strconv.ErrSyntax},
 		{key: "DepartedCheckIntervalSeconds", val: "99999999999999999999999", err: strconv.ErrRange},
 
 		{key: "AgeOutHours", val: "600", exp: uint(600)},
-		{key: "AgeOutHours", val: "600", exp: uint(600)},
+		{key: "AgeOutHours", val: "18446744073709551615", exp: uint(18446744073709551615)},
+		{key: "AgeOutHours", val: "0", err: ErrOutOfRange},
 		{key: "AgeOutHours", val: "-600", err: strconv.ErrSyntax},
 		{key: "AgeOutHours", val: "6.00", err: strconv.ErrSyntax},
 		{key: "AgeOutHours", val: "99999999999999999999999", err: strconv.ErrRange},
@@ -93,7 +98,7 @@ func TestNewConfigurator_Parse(t *testing.T) {
 			cfgMap := map[string]string{c.key: c.val}
 			ccfg, err := ParseConsulConfig(getTestingLogger(), cfgMap)
 			if !errors.Is(err, c.err) {
-				tt.Fatalf("expected %+v, but got %+v", c.err, err)
+				tt.Fatalf("expected %v, but got %+v", c.err, err)
 			}
 
 			if c.err != nil {
@@ -136,6 +141,9 @@ func TestNewConfigurator_Parse(t *testing.T) {
 	t.Run("quickCheckUint", func(tt *testing.T) {
 		tt.Parallel()
 		if err := quick.Check(func(u uint) bool {
+			if u == 0 {
+				return true
+			}
 			iStr := strconv.FormatUint(uint64(u), 10)
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{"AgeOutHours": iStr})
 			return parseErr == nil && conf.ApplicationSettings.AgeOutHours == u
