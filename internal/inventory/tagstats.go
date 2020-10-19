@@ -5,6 +5,10 @@
 
 package inventory
 
+const (
+	tagStatsWindowSize = 20
+)
+
 // TagStats helps keep track of tag read rssi values over time
 type TagStats struct {
 	LastRead int64
@@ -14,7 +18,7 @@ type TagStats struct {
 // NewTagStats returns a new TagStats pointer with circular buffers initialized to the configured default window size
 func NewTagStats() *TagStats {
 	return &TagStats{
-		rssiDbm: NewCircularBuffer(TagStatsWindowSize),
+		rssiDbm: NewCircularBuffer(tagStatsWindowSize),
 	}
 }
 

@@ -11,28 +11,38 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
-	"sync"
+	"strings"
 	"time"
 )
 
-type TagProcessor struct {
-	lc              logger.LoggingClient
-	inventory       map[string]*Tag
-	mobilityProfile *MobilityProfile
-
+type processorConfig struct {
+	profile mobilityProfile
 	aliases map[string]string
-	aliasMu sync.RWMutex
+
+	departedThresholdSeconds uint
+	ageOutHours              uint
+	adjustLastReadOnByOrigin bool
+
+	// debugLogEnabled is used to be able to only log things when Debug logging is enabled
+	// note: this should be something that is able to be determined via the logger.LoggingClient,
+	// however currently EdgeX does not support querying the log level
+	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
+	debugLogEnabled bool
+}
+
+type TagProcessor struct {
+	lc        logger.LoggingClient
+	inventory map[string]*Tag
+	config    processorConfig
 }
 
 // NewTagProcessor creates a tag processor and pre-loads its mobility profile
-func NewTagProcessor(lc logger.LoggingClient, tags []StaticTag) *TagProcessor {
-	profile := loadMobilityProfile(lc)
+func NewTagProcessor(lc logger.LoggingClient, cfg ConsulConfig, tags []StaticTag) *TagProcessor {
 	tp := &TagProcessor{
-		lc:              lc,
-		inventory:       make(map[string]*Tag),
-		mobilityProfile: &profile,
-		aliases:         make(map[string]string),
+		lc:        lc,
+		inventory: make(map[string]*Tag),
 	}
+	tp.UpdateConfig(cfg)
 
 	for _, t := range tags {
 		tp.inventory[t.EPC] = t.asTagPtr()
@@ -41,33 +51,28 @@ func NewTagProcessor(lc logger.LoggingClient, tags []StaticTag) *TagProcessor {
 	return tp
 }
 
-// getAlias returns the alias associated with a location if one has been defined,
-// otherwise it returns back the original location.
-func (tp *TagProcessor) getAlias(location string) string {
-	tp.aliasMu.RLock()
-	defer tp.aliasMu.RUnlock()
-
-	if alias, exists := tp.aliases[location]; exists && alias != "" {
-		return alias
-	}
-	return location
-}
-
-func (tp *TagProcessor) SetAliases(aliases map[string]string) {
-	tp.aliasMu.Lock()
-	defer tp.aliasMu.Unlock()
-
-	// delete empty key/value pair returned from Consul if it exists
+func (tp *TagProcessor) UpdateConfig(cfg ConsulConfig) {
+	as := cfg.ApplicationSettings
+	profile := newMobilityProfile(as.MobilityProfileSlope, as.MobilityProfileThreshold, as.MobilityProfileHoldoffMillis)
+	aliases := cfg.Aliases
 	delete(aliases, "")
 
-	tp.aliases = aliases
+	logLevel := strings.ToUpper(cfg.Writable.LogLevel)
+	tp.config = processorConfig{
+		adjustLastReadOnByOrigin: as.AdjustLastReadOnByOrigin,
+		departedThresholdSeconds: as.DepartedThresholdSeconds,
+		ageOutHours:              as.AgeOutHours,
+		debugLogEnabled:          logLevel == contract.DebugLog || logLevel == contract.TraceLog,
+		profile:                  profile,
+		aliases:                  aliases,
+	}
 }
 
 // ProcessReport takes an incoming ROAccessReport and processes each TagReportData.
 // For every TagReportData it will update the corresponding tag our in-memory tag database
 // based on the latest information.
 func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (events []Event, snapshot []StaticTag) {
-	if AdjustLastReadOnByOrigin {
+	if tp.config.adjustLastReadOnByOrigin {
 		// offsetMicros is an adjustment of timestamps
 		// based on when the device service first saw the message
 		// compared to when the sensor said it sent it.
@@ -115,13 +120,45 @@ func NewReportInfo(reading *contract.Reading) ReportInfo {
 	}
 }
 
+// getAlias returns the alias associated with a location if one has been defined,
+// otherwise it returns back the original location.
+func (tp *TagProcessor) getAlias(location string) string {
+	if alias, exists := tp.config.aliases[location]; exists && alias != "" {
+		return alias
+	}
+	return location
+}
+
 // Snapshot takes a snapshot of the entire tag inventory as a slice of StaticTag objects.
 // It does this by converting the inventory map of Tag pointers into a flat slice
 // of non-pointer StaticTags.
 func (tp *TagProcessor) snapshot() []StaticTag {
 	res := make([]StaticTag, 0, len(tp.inventory))
 	for _, tag := range tp.inventory {
-		res = append(res, tp.newStaticTag(tag))
+		staticTag := StaticTag{
+			EPC:           tag.EPC,
+			TID:           tag.TID,
+			Location:      tag.Location,
+			LocationAlias: tp.getAlias(tag.Location.String()),
+			LastRead:      tag.LastRead,
+			LastArrived:   tag.LastArrived,
+			LastDeparted:  tag.LastDeparted,
+			State:         tag.state,
+			StatsMap:      make(map[string]StaticTagStats, len(tag.statsMap)),
+		}
+
+		// re-populate the stats map
+		for loc, stats := range tag.statsMap {
+			if stats.rssiCount() == 0 {
+				continue // skip empty
+			}
+			staticTag.StatsMap[loc] = StaticTagStats{
+				LastRead: stats.LastRead,
+				MeanRSSI: stats.rssiDbm.Mean(),
+			}
+		}
+
+		res = append(res, staticTag)
 	}
 	return res
 }
@@ -223,13 +260,17 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 
 	// if the incoming read's location has at least 2 data points, lets see if the tag should move
 	if statsAtReadLoc.rssiCount() >= 2 {
-		logReadTiming(tp, info, statsAtPrevLoc, tag)
+		if tp.config.debugLogEnabled {
+			logReadTiming(tp, info, statsAtPrevLoc, tag)
+		}
 
 		locationMean := statsAtPrevLoc.rssiDbm.Mean()
 		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
-		offset := tp.mobilityProfile.ComputeOffset(info.referenceTimestamp, statsAtPrevLoc.LastRead)
-		logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
+		offset := tp.config.profile.computeOffset(info.referenceTimestamp, statsAtPrevLoc.LastRead)
+		if tp.config.debugLogEnabled {
+			logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
+		}
 
 		// Update the location if the mean RSSI at the new location
 		// is greater than the adjusted mean RSSI of the existing location.
@@ -243,8 +284,6 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 }
 
 func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean float64, existingMean float64, offset float64) {
-	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
-	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("tag stats",
 		"epc", tag.EPC,
 		"readLoc", readLocation,
@@ -259,8 +298,6 @@ func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean f
 
 func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, tag *Tag) {
 	now := UnixMilliNow()
-	// todo: only log this when Debug logging is enabled (requires EdgeX to support querying the log level)
-	// see: https://github.com/edgexfoundry/go-mod-core-contracts/issues/294
 	tp.lc.Debug("read timing",
 		"now", now,
 		"referenceTimestamp", info.referenceTimestamp,
@@ -274,7 +311,7 @@ func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, t
 // structures if it has not been seen in a long enough time. Only applies to
 // tags which are already Departed.
 func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
-	expiration := UnixMilli(time.Now().Add(time.Hour * time.Duration(-AgeOutHours)))
+	expiration := UnixMilli(time.Now().Add(time.Hour * time.Duration(-tp.config.ageOutHours)))
 
 	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
@@ -299,7 +336,7 @@ func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTag) {
 	now := time.Now()
 	nowMs := now.UnixNano() / 1e6
-	expiration := now.Add(-time.Duration(DepartedThresholdSeconds)*time.Second).UnixNano() / 1e6
+	expiration := now.Add(-time.Duration(tp.config.departedThresholdSeconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {
 		if tag.state == Present && tag.LastRead < expiration {
