@@ -52,20 +52,16 @@ func NewTagProcessor(lc logger.LoggingClient, cfg ConsulConfig, tags []StaticTag
 }
 
 func (tp *TagProcessor) UpdateConfig(cfg ConsulConfig) {
-	profile := mobilityProfile{
-		slope:         cfg.ApplicationSettings.MobilityProfileSlope,
-		threshold:     cfg.ApplicationSettings.MobilityProfileThreshold,
-		holdoffMillis: cfg.ApplicationSettings.MobilityProfileHoldoffMillis,
-	}
-	profile.calculateYIntercept()
+	as := cfg.ApplicationSettings
+	profile := newMobilityProfile(as.MobilityProfileSlope, as.MobilityProfileThreshold, as.MobilityProfileHoldoffMillis)
 	aliases := cfg.Aliases
 	delete(aliases, "")
 
 	logLevel := strings.ToUpper(cfg.Writable.LogLevel)
 	tp.config = processorConfig{
-		adjustLastReadOnByOrigin: cfg.ApplicationSettings.AdjustLastReadOnByOrigin,
-		departedThresholdSeconds: cfg.ApplicationSettings.DepartedThresholdSeconds,
-		ageOutHours:              cfg.ApplicationSettings.AgeOutHours,
+		adjustLastReadOnByOrigin: as.AdjustLastReadOnByOrigin,
+		departedThresholdSeconds: as.DepartedThresholdSeconds,
+		ageOutHours:              as.AgeOutHours,
 		debugLogEnabled:          logLevel == contract.DebugLog || logLevel == contract.TraceLog,
 		profile:                  profile,
 		aliases:                  aliases,

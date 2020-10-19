@@ -19,9 +19,13 @@ type mobilityProfile struct {
 	yIntercept float64
 }
 
-// b = y - (m*x)
-func (profile *mobilityProfile) calculateYIntercept() {
-	profile.yIntercept = profile.threshold - (profile.slope * profile.holdoffMillis)
+func newMobilityProfile(slope, threshold, holdoffMillis float64) mobilityProfile {
+	return mobilityProfile{
+		slope:         slope,
+		threshold:     threshold,
+		holdoffMillis: holdoffMillis,
+		yIntercept:    threshold - (slope * holdoffMillis), // b = y - (m*x)
+	}
 }
 
 // computeOffset computes the offset to be applied to a value based on the time it was read vs the reference timestamp.
