@@ -135,10 +135,6 @@ especially useful when using a dual-linear antenna and mapping both polarities t
 
 The following configuration options affect how the tag location algorithm works under the hood.
 
-- **`TagStatsWindowSize`** *`[int]`*: How many reads to keep track of *per alias* for each RFID tag. 
-        This effects how many tag reads will be used when computing the rolling average for tag stats.
-  - default: `20`
-
 - **`AdjustLastReadOnByOrigin`** *`[bool]`*: If `true`, this will override the tag read timestamps sent from the sensor
         with an adjusted one based on the UTC time the `LLRP Device Service` received the message from the device (aka `Origin`). 
         Essentially all timestamps will be shifted by the difference in time from when the sensor says it was read versus when it
@@ -149,14 +145,14 @@ The following configuration options affect how the tag location algorithm works 
 
 - **`DepartedThresholdSeconds`** *`[int]`*: How long in seconds a tag should not be read before 
         it will generate a `Departed` event.
-  - default: `30`
+  - default: `600`
 
 - **`DepartedCheckIntervalSeconds`** *`[int]`*: How often to run the background task that checks if a Tag needs
         to be marked `Departed`. Smaller intervals will cause more frequent checks and less variability at the expense of
         CPU utilization and lock contention. Larger intervals on the other hand may cause greater latency
         between when a tag passes the `DepartedThresholdSeconds` and when the `Departed` event is actually
         generated (waiting for the next check to occur).
-  - default: `10`
+  - default: `30`
   
 - **`AgeOutHours`** *`[int]`*: How long in hours to keep `Departed` tags in our in-memory inventory before they 
         are aged-out (purged). This is done for CPU and RAM conservation in deployments with a large
@@ -188,22 +184,38 @@ The location will change when the following equation is true:
 
 ![Mobility Profile Diagram](images/mobility-profile.png)
 
-- **`MobilityProfileBaseProfile`** *`[enum]`*: Name of the parent mobility profile to inherit from. Any values which are not explicitly overridden will be inherited from this base profile selected.
-  - default: `'default'` *(which is currently the same as `'asset_tracking'`)*
-  - available options: `'default'`, `'asset_tracking'`, `'retail_garment'`
+#### Configure Mobility Profile
+_Note: All values can be modified via `ApplicationSettings` inside [Edgex Consul][consul_app_settings]._
 
 - **`MobilityProfileSlope`** *`[float]`*: Used to determine the offset applied to older RSSI values (aka rate of decay)
-  - default: *(none, inherit from base profile)*
   - units: `dBm per millisecond`
 
 - **`MobilityProfileThreshold`** *`[float]`*: RSSI threshold that must be exceeded for the tag to move from the previous sensor
-  - default: *(none, inherit from base profile)*
   - units: `dBm`
 
 - **`MobilityProfileHoldoffMillis`** *`[float]`*: Amount of time in which the offset used is equal to the threshold, effectively the slope is not used
-  - default: *(none, inherit from base profile)*
   - units: `milliseconds`
-  
+
+#### Example Mobility Profile Values
+
+Here are some example mobility profile values based on our previous experience.
+These values can be used as a reference when creating your own Mobility Profile.
+
+| **Asset Tracking** \* |        |
+|-----------------------|--------|
+| Slope                 | -0.008 |
+| Threshold             | 6.0    |
+| Holdoff Millis        | 500.0  |
+
+_\* These are the default mobility profile values._
+
+| **Retail Garment** |         |
+|--------------------|---------|
+| Slope              | -0.0005 |
+| Threshold          | 6.0     |
+| Holdoff Millis     | 60000.0 |
+
+
 ## Setting the Aliases
 
 - Every device(reader) + antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<deviceName>_<antennaId>` e.g.
@@ -224,7 +236,7 @@ The location will change when the following equation is true:
     
 - User needs to configure the alias using Consul. This can be achieved via Consul’s UI or CLI
   - **Setting Alias via Consul UI**
-    - Create a folder named `Aliases` under [Edgex Consul](http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/) and
+    - Create a folder named `Aliases` under [Edgex Consul][consul_root] and
       add Key Value pairs.
         
       ![Creating Aliases folder](images/consul_alias_folder.png)
@@ -234,7 +246,7 @@ The location will change when the following equation is true:
          
       ![Adding KV pairs](images/consul_kv_pairs.png)
       
-      ![Aliases created](images/aliases.png)   
+      ![Aliases created](images/aliases.png)
            
     - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
       
@@ -509,7 +521,6 @@ If that resource or command doesn't exist for the device,
 this service will receive a 404 from the Device Service,
 preventing it from operating as designed. 
 
-[device_service_profiles]: https://github.impcloud.net/RSP-Inventory-Suite/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
-
-## License
-[Apache-2.0](LICENSE)
+[device_service_profiles]: https://github.com/edgexfoundry-holding/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
+[consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/
+[consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/ApplicationSettings/

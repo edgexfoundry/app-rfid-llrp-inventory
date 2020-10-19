@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"math"
 	"strings"
 	"sync/atomic"
@@ -39,14 +38,13 @@ func nextEPC() string {
 
 type testDataset struct {
 	tp   *TagProcessor
-	lc   logger.LoggingClient
 	epcs []string
 }
 
-func newTestDataset(lc logger.LoggingClient, tagCount int) *testDataset {
+func newTestDataset(cfg ConsulConfig, tagCount int) *testDataset {
+	lc := getTestingLogger()
 	ds := testDataset{
-		tp:   NewTagProcessor(lc, nil),
-		lc:   lc,
+		tp:   NewTagProcessor(lc, cfg, nil),
 		epcs: make([]string, tagCount),
 	}
 
