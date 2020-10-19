@@ -159,12 +159,12 @@ func TestParseConsulConfig(t *testing.T) {
 		// but ParseFloat can't parse them, so it's not in this list.
 		fmts := [...]byte{'e', 'E', 'f', 'g', 'G', 'x', 'X'}
 		if err := quick.Check(func(f float64, fmtByte byte) bool {
-			iStr := strconv.FormatFloat(f, fmts[fmtByte%7], -1, 64)
+			iStr := strconv.FormatFloat(f, fmts[int(fmtByte)%len(fmts)], -1, 64)
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{
 				"MobilityProfileThreshold": iStr})
 			if parseErr != nil {
 				tt.Logf("fmt: %c (%d), f: %v, err: %+v",
-					fmts[fmtByte%8], fmtByte, f, parseErr)
+					fmts[int(fmtByte)%len(fmts)], fmtByte, f, parseErr)
 			}
 			return parseErr == nil && math.Abs(
 				conf.ApplicationSettings.MobilityProfileThreshold-f) < 0.001
