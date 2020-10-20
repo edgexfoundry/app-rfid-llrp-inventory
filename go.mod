@@ -1,4 +1,4 @@
-module github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory
+module edgexfoundry-holding/rfid-llrp-inventory-service
 
 go 1.15
 

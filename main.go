@@ -8,6 +8,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory"
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
@@ -19,8 +21,6 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/models"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/inventory"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -46,11 +46,6 @@ const (
 	ResourceReaderNotification = "ReaderEventNotification"
 	ResourceInventoryEvent     = "InventoryEvent"
 
-	// keys into the application settings map
-	sKeyDevServiceName   = "DeviceServiceName"
-	sKeyDeviceServiceURL = "DeviceServiceURL"
-	sKeyMetaServiceURL   = "MetadataServiceURL"
-
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
 	eventChSz           = 100
@@ -62,13 +57,12 @@ const (
 )
 
 type inventoryApp struct {
-	edgexSdk   *appsdk.AppFunctionsSDK
-	sdkCtx     atomic.Value
-	lgr        logWrap
-	devMu      sync.RWMutex
-	devService llrp.DSClient
-	defaultGrp *llrp.ReaderGroup
-
+	edgexSdk     *appsdk.AppFunctionsSDK
+	sdkCtx       atomic.Value // *appcontext.Context
+	lgr          logWrap
+	devMu        sync.RWMutex
+	devService   llrp.DSClient
+	defaultGrp   *llrp.ReaderGroup
 	snapshotReqs chan snapshotDest
 	reports      chan reportData
 }
@@ -81,10 +75,6 @@ type reportData struct {
 type snapshotDest struct {
 	w      io.Writer
 	result chan error
-}
-
-type consulConfig struct {
-	Aliases map[string]string
 }
 
 type logWrap struct {
@@ -139,12 +129,15 @@ func main() {
 	cc, err := getConfigClient()
 	lgr.exitIfErr(err, "Failed to create config client.")
 
-	metadataURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyMetaServiceURL]))
+	config, err := inventory.ParseConsulConfig(edgexSdk.LoggingClient, edgexSdk.ApplicationSettings())
+	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
+
+	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
 		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
 
-	devServURI, err := url.Parse(strings.TrimSpace(appSettings[sKeyDeviceServiceURL]))
+	devServURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.DeviceServiceURL))
 	lgr.exitIfErr(err, "Invalid device service URL.")
 	lgr.exitIf(devServURI.Scheme == "" || devServURI.Host == "",
 		"Invalid device service URL.", lg{"endpoint", devServURI.String()})
@@ -155,8 +148,8 @@ func main() {
 		Host:   devServURI.Host,
 	}, http.DefaultClient)
 
-	dsName := strings.TrimSpace(appSettings[sKeyDevServiceName])
-	lgr.exitIf(dsName == "", "Missing device service name.", lg{"key", sKeyDevServiceName})
+	dsName := config.ApplicationSettings.DeviceServiceName
+	lgr.exitIf(dsName == "", "Missing device service name.")
 	metadataURI.Path = "/api/v1/device/servicename/" + dsName
 	deviceNames, err := llrp.GetDevices(metadataURI.String(), http.DefaultClient)
 	lgr.exitIfErr(err, "Failed to get existing device names.", lg{"path", metadataURI.String()})
@@ -185,7 +178,7 @@ func main() {
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if err := app.defaultGrp.ListReaders(w); err != nil {
-				app.lgr.Error("Failed to write readers list.", "error", err.Error())
+				lgr.Error("Failed to write readers list.", "error", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}},
@@ -300,7 +293,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		app.taskLoop(ctx, cc, lgr)
+		app.taskLoop(ctx, cc, config, lgr)
 		lgr.Info("Task loop has exited.")
 	}()
 
@@ -499,8 +492,9 @@ func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
 // Since nearly every round through this loop must read or write the inventory,
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
-func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, lc logger.LoggingClient) {
-	aggregateDepartedTicker := time.NewTicker(time.Duration(inventory.DepartedCheckIntervalSeconds) * time.Second)
+func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, cfg inventory.ConsulConfig, lc logger.LoggingClient) {
+	departedCheckSeconds := cfg.ApplicationSettings.DepartedCheckIntervalSeconds
+	aggregateDepartedTicker := time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	confErrCh := make(chan error)
 	confUpdateCh := make(chan interface{})
@@ -523,15 +517,13 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			lc.Warn("Failed to unmarshal inventory snapshot.", "error", err.Error())
 		}
 	}
-	processor := inventory.NewTagProcessor(lc, snapshot)
+
+	processor := inventory.NewTagProcessor(lc, cfg, snapshot)
 	if len(snapshot) > 0 {
 		lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
 
-	config := &consulConfig{
-		Aliases: make(map[string]string),
-	}
-	cc.WatchForChanges(confUpdateCh, confErrCh, config, "/"+serviceKey)
+	cc.WatchForChanges(confUpdateCh, confErrCh, &cfg, "/"+serviceKey)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -601,13 +593,27 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			}
 
 		case rawConfig := <-confUpdateCh:
-			if newConfig, ok := rawConfig.(*consulConfig); ok {
-				lc.Info("Configuration updated from consul.")
-				lc.Debug("New configuration.", "raw", fmt.Sprintf("%+v", newConfig))
-				config = newConfig
-				processor.SetAliases(newConfig.Aliases)
-			} else {
-				lc.Warn("Unable to decode configuration.", "raw", fmt.Sprintf("%+v", rawConfig))
+			newConfig, ok := rawConfig.(*inventory.ConsulConfig)
+			if !ok {
+				lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
+				continue
+			}
+
+			if err := newConfig.ApplicationSettings.Validate(); err != nil {
+				lc.Error("Invalid Consul configuration.", "error", err.Error())
+				continue
+			}
+
+			lc.Info("Configuration updated from consul.")
+			lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
+			processor.UpdateConfig(*newConfig)
+
+			// check if we need to change the ticker interval
+			if departedCheckSeconds != newConfig.ApplicationSettings.DepartedCheckIntervalSeconds {
+				aggregateDepartedTicker.Stop()
+				departedCheckSeconds = newConfig.ApplicationSettings.DepartedCheckIntervalSeconds
+				aggregateDepartedTicker = time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
+				lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", departedCheckSeconds))
 			}
 
 		case req := <-app.snapshotReqs:
