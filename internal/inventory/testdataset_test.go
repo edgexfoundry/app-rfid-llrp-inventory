@@ -6,10 +6,10 @@
 package inventory
 
 import (
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"math"
 	"strings"
 	"sync/atomic"

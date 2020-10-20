@@ -6,11 +6,11 @@
 package inventory
 
 import (
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
 	"encoding/hex"
 	"fmt"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	contract "github.com/edgexfoundry/go-mod-core-contracts/models"
-	"github.impcloud.net/RSP-Inventory-Suite/rfid-llrp-inventory/internal/llrp"
 	"strings"
 	"time"
 )
