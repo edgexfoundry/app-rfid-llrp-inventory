@@ -550,10 +550,10 @@ Execute the following commands from the project's root directory.
 #### Install Snap Package
   - `sudo snap install --devmode *.snap` 
   
-#### Other helpful snap commands:
+#### Other helpful Snap commands:
  -  List installed snap packages: `snap list`
  -  List of snap services: `snap services`
  -  View logs: `journalctl -fu snap.edgex-rfid-llrp-inventory.rfid-llrp-inventory`
  -  Stop the snap service: `sudo snap stop edgex-rfid-llrp-inventory.rfid-llrp-inventory`
- -  Remove the Snap package: `sudo snap remove edgex-rfid-llrp-inventory`
+ -  Remove the snap package: `sudo snap remove edgex-rfid-llrp-inventory`
 
