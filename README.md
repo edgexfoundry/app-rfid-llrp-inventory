@@ -534,7 +534,7 @@ preventing it from operating as designed.
 [consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/
 [consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/ApplicationSettings/
 
-## Snap Development and Testing
+## Snap Build and Install
 The service can also be run as snap - [Snap documentation](https://snapcraft.io/docs)
 
 #### Pre-requisites
