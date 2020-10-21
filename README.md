@@ -3,6 +3,15 @@
 RFID Inventory Service - Edgex application service for processing tag reads,
 producing events [`Arrived`, `Moved`, `Departed`], configure and manage the LLRP readers via commands
 
+**Build Native**
+```bash
+make build
+```
+**Build Docker**
+```bash
+make docker
+```
+
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
 Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
@@ -524,3 +533,27 @@ preventing it from operating as designed.
 [device_service_profiles]: https://github.com/edgexfoundry-holding/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
 [consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/
 [consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/ApplicationSettings/
+
+## Snap Build and Install
+The service can also be run as snap - [Snap documentation](https://snapcraft.io/docs)
+
+#### Pre-requisites
+  - Edgex core services
+  - Edgex LLRP device service
+  
+#### Build Snap Package
+Execute the following commands from the project's root directory.
+  - `snapcraft clean`
+  - `snapcraft` (build happens on the VM) or `snapcraft --destructive-mode` (build happens on the host)
+  -  On success, this creates a `*.snap` package under the root directory. 
+
+#### Install Snap Package
+  - `sudo snap install --devmode *.snap` 
+  
+#### Other helpful Snap commands:
+ -  List installed snap packages: `snap list`
+ -  List of snap services: `snap services`
+ -  View logs: `journalctl -fu snap.edgex-rfid-llrp-inventory.rfid-llrp-inventory`
+ -  Stop the snap service: `sudo snap stop edgex-rfid-llrp-inventory.rfid-llrp-inventory`
+ -  Remove the snap package: `sudo snap remove edgex-rfid-llrp-inventory`
+
