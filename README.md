@@ -3,6 +3,15 @@
 RFID Inventory Service - Edgex application service for processing tag reads,
 producing events [`Arrived`, `Moved`, `Departed`], configure and manage the LLRP readers via commands
 
+**Build Native**
+```bash
+make build
+```
+**Build Docker**
+```bash
+make docker
+```
+
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
 Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
