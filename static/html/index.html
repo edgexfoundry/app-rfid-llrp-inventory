@@ -1,0 +1,138 @@
+<!--
+// Copyright (c) 2020 Intel Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <!-- Bootstrap CSS -->
+  <!-- TODO: Add to IP Plan -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <!-- todo: may have to remove theme (or this page altogether) before release -->
+  <link rel="stylesheet" href="https://bootswatch.com/4/darkly/bootstrap.min.css">
+
+  <style>
+    /* button divs */
+    .b {
+      margin: 20px;
+    }
+
+    #output_log {
+      background: rgba(255,255,255,0.1); /* translucent */
+      margin: 20px;
+      padding: 20px;
+    }
+  </style>
+
+  <script>
+      function log(str, alternate) {
+          console.log(alternate !== undefined ? alternate : str);
+          document.getElementById("output_log").innerHTML += "<pre>" + str + "</pre>";
+      }
+
+      function clear_log() {
+          document.getElementById("output_log").innerHTML = "";
+      }
+
+      function call(method, url, data) {
+          clear_log();
+
+          let xhr = new XMLHttpRequest();
+          log(method + ' ' + url);
+          xhr.open(method, url);
+
+          xhr.onload = function() {
+              if (xhr.status === 200) {
+                  if (xhr.getResponseHeader("Content-Type") === "application/json") {
+                      let obj = JSON.parse(xhr.responseText);
+                      log(JSON.stringify(obj, null, 2), obj);
+                  } else {
+                      log('200 OK: ' + xhr.responseText);
+                  }
+              } else {
+                  log('Request failed.  Returned status of ' + xhr.status);
+              }
+          };
+
+            xhr.send(data);
+        }
+
+        function setBehavior(behavior) {
+          call('PUT', 'api/v1/behaviors/default', JSON.stringify(behavior));
+          log(JSON.stringify(behavior, null, 2), behavior);
+        }
+
+      function setNormalScan() {
+        setBehavior({
+          scanType: "Normal",
+          impinjOptions: {
+            SuppressMonza: true
+          },
+          power: {
+            max: 3000,
+          }
+        });
+      }
+
+      function setFastScan() {
+        setBehavior({
+          scanType: "Fast",
+          power: {
+            max: 3000,
+          }
+        });
+      }
+
+      function setDeepScan() {
+        setBehavior({
+          scanType: "Deep",
+          power: {
+              max: 3000,
+          }
+        });
+      }
+    </script>
+
+  <title>RFID Inventory Service - Developer Console</title>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark">
+  <span class="navbar-brand mb-0 h1">RFID Inventory Service - Developer Console</span>
+</nav>
+
+<div id="content" style="height: 100%">
+  <div class="b"><button type="button" class="btn btn-primary" onclick="call('POST', 'http://localhost:51992/api/v1/discovery')">Discover Readers</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="call('GET', '/api/v1/readers')">List Readers</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="call('GET', '/api/v1/behaviors/default')">Show Default Behavior</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="setDeepScan()">Set Deep Scan Behavior</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="setNormalScan()">Set Normal Scan Behavior</button></div>
+  <div class="b"><button type="button" class="btn btn-primary" onclick="setFastScan()">Set Fast Scan Behavior</button></div>
+  <div class="b"><button type="button" class="btn btn-success" onclick="call('POST', '/api/v1/command/reading/start')">Start Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-danger" onclick="call('POST', '/api/v1/command/reading/stop')">Stop Reading</button></div>
+  <div class="b"><button type="button" class="btn btn-light" onclick="call('GET', '/api/v1/inventory/snapshot')">Inventory Snapshot</button></div>
+  <div class="b"><a href="http://localhost:48080/api/v1/event/device/rfid-llrp-inventory/100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
+
+  <div id="output_log">
+  </div>
+
+</div>
+
+</body>
+</html>
