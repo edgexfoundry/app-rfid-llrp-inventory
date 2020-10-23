@@ -1,0 +1,80 @@
+name: edgex-rfid-llrp-inventory
+base: core18
+type: app
+version: "replace-me"
+version-script: |
+  VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
+  echo $VERSION-$(date +%Y%m%d)+$(git rev-parse --short HEAD)
+
+license: Apache-2.0
+title: EdgeX RFID LLRP Inventory
+summary: EdgeX Application Service for inventory management
+description: |
+  Edgex application service for processing tag reads,
+  producing events such as 'Arrived', 'Moved', 'Departed', configure and manage the LLRP readers via commands
+
+# delhi: 0, edinburgh: 1, fuji: 2, geneva: 3
+epoch: 3
+
+# TODO: add armhf here when that's supported
+architectures:
+  - build-on: arm64
+  - build-on: amd64
+
+grade: stable
+confinement: strict
+
+apps:
+  rfid-llrp-inventory:
+    adapter: full
+    command: bin/rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
+    daemon: simple
+    environment:
+      CONFIG_PRO_ARG: "--cp=consul://localhost:8500"
+      CONF_ARG: "--confdir=$SNAP_DATA/config/rfid-llrp-inventory/res"
+      REGISTRY_ARG: "--registry"
+    plugs: [network, network-bind]
+
+parts:
+  go:
+    plugin: nil
+    source: snap/local
+    build-packages: [curl]
+    override-build: |
+      # use dpkg architecture to figure out our target arch
+      # note - we specifically don't use arch
+      case "$(dpkg --print-architecture)" in
+        amd64)
+          FILE_NAME=go1.15.2.linux-amd64.tar.gz
+          FILE_HASH=b49fda1ca29a1946d6bb2a5a6982cf07ccd2aba849289508ee0f9918f6bb4552
+          ;;
+        arm64)
+          FILE_NAME=go1.15.2.linux-arm64.tar.gz
+          FILE_HASH=c8ec460cc82d61604b048f9439c06bd591722efce5cd48f49e19b5f6226bd36d
+          ;;
+      esac
+      # download the archive, failing on ssl cert problems
+      curl https://dl.google.com/go/$FILE_NAME -O
+      echo "$FILE_HASH $FILE_NAME" > sha256
+      sha256sum -c sha256 | grep OK
+      tar -C $SNAPCRAFT_STAGE -xf go*.tar.gz --strip-components=1
+    prime:
+      - "-*"
+
+  rfid-llrp-inventory:
+    source: .
+    plugin: make
+    build-packages: [gcc, git, libzmq3-dev, pkg-config]
+    stage-packages: [libzmq5]
+    after: [go]
+    override-build: |
+      cd $SNAPCRAFT_PART_SRC
+      make build
+
+      install -DT "./rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/rfid-llrp-inventory"
+      install -DT "./res/configuration.toml" \
+         "$SNAPCRAFT_PART_INSTALL/config/rfid-llrp-inventory/res/configuration.toml"
+      install -DT "./Attribution.txt" \
+         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/rfid-llrp-inventory/Attribution.txt"
+      install -DT "./LICENSE" \
+         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/rfid-llrp-inventory/LICENSE"
