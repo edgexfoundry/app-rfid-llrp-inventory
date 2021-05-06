@@ -40,7 +40,7 @@ const (
 	serviceKey      = "rfid-llrp-inventory"
 	eventDeviceName = "rfid-llrp-inventory"
 
-	BaseConsulPath = "edgex/appservices/1.0/"
+	baseConsulPath = "edgex/appservices/1.0/"
 
 	ResourceROAccessReport     = "ROAccessReport"
 	ResourceReaderNotification = "ReaderEventNotification"
@@ -348,8 +348,8 @@ func getConfigClient() (configuration.Client, error) {
 	configClient, err := configuration.NewConfigurationClient(types.ServiceConfig{
 		Host:     cpUrl.Hostname(),
 		Port:     cpPort,
-		BasePath: BaseConsulPath,
-		Type:     cpUrl.Scheme,
+		BasePath: baseConsulPath,
+		Type:     strings.Split(cpUrl.Scheme, ".")[0],
 	})
 
 	return configClient, errors.Wrap(err, "failed to get config client")

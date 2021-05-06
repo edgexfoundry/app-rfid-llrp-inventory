@@ -50,4 +50,4 @@ docker:
 			.
 
 run: build
-	./$(MICROSERVICE) -cp=consul.http://edgex-core-consul:8500 -confdir=res
+	./$(MICROSERVICE) -cp=consul.http://localhost:8500 -confdir=res
