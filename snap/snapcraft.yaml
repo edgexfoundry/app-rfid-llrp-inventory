@@ -30,7 +30,7 @@ apps:
     command: bin/rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
     daemon: simple
     environment:
-      CONFIG_PRO_ARG: "--cp=consul://localhost:8500"
+      CONFIG_PRO_ARG: "-cp=consul.http://edgex-core-consul:8500"
       CONF_ARG: "--confdir=$SNAP_DATA/config/rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
     plugs: [network, network-bind]

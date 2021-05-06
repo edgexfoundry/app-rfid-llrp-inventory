@@ -15,5 +15,6 @@
 //
 
 edgeXBuildGoApp (
-    project: 'rfid-llrp-inventory-service'
+    project: 'rfid-llrp-inventory-service',
+    buildSnap: true
 )

@@ -133,7 +133,7 @@ func main() {
 	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
 
 	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
-	lgr.exitIfErr(err, "Invalid device service URL.")
+	lgr.exitIfErr(err, "Invalid metadata service URL.")
 	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
 		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
 

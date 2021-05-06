@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # build stage
-ARG BASE=golang:1.15-alpine
+ARG BASE=golang:1.15-alpine3.12
 FROM ${BASE} AS builder
 
 ARG ALPINE_PKG_BASE="make git gcc libc-dev libsodium-dev zeromq-dev"
@@ -35,7 +35,7 @@ ARG MAKE="make build"
 RUN $MAKE
 
 # final stage
-FROM alpine:latest
+FROM alpine:3.12
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2020: Intel'
 LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
@@ -51,4 +51,4 @@ COPY --from=builder /app/rfid-llrp-inventory /rfid-llrp-inventory
 EXPOSE 48086
 
 ENTRYPOINT ["/rfid-llrp-inventory"]
-CMD ["-cp=consul://edgex-core-consul:8500", "-registry", "-confdir=/res"]
+CMD ["-cp=consul.http://edgex-core-consul:8500", "-registry", "-confdir=/res"]
