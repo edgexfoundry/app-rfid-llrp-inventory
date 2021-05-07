@@ -16,7 +16,7 @@ var (
 	epsilon = math.Nextafter(1.0, 2.0) - 1.0
 )
 
-func assertBufferSize(t *testing.T, buff *CircularBuffer, expectedSize int) {
+func assertBufferSize(t *testing.T, buff *circularBuffer, expectedSize int) {
 	if buff.Len() != expectedSize {
 		t.Errorf("expected buffer size of %d, but was %d", buff.Len(), expectedSize)
 	}
@@ -28,7 +28,7 @@ func TestCircularBuffer_AddValue(t *testing.T) {
 	for _, window := range windowSizes {
 		window := window
 		t.Run(fmt.Sprintf("WindowOf%d", window), func(t *testing.T) {
-			buff := NewCircularBuffer(window)
+			buff := newCircularBuffer(window)
 
 			assertBufferSize(t, buff, 0)
 			// fill up the buffer
@@ -83,7 +83,7 @@ func TestCircularBuffer_GetMean(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			buff := NewCircularBuffer(test.window)
+			buff := newCircularBuffer(test.window)
 			for _, val := range test.data {
 				buff.AddValue(val)
 			}
@@ -127,7 +127,7 @@ func TestCircularBuffer_GetCount(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			buff := NewCircularBuffer(test.windowSize)
+			buff := newCircularBuffer(test.windowSize)
 			var i uint64
 			for i = 0; i < test.numberToAdd; i++ {
 				buff.AddValue(1.0)
@@ -143,7 +143,7 @@ func TestCircularBuffer_GetCount(t *testing.T) {
 
 func TestCircularBuffer_Wrap(t *testing.T) {
 	windowSize := 10
-	buff := NewCircularBuffer(windowSize)
+	buff := newCircularBuffer(windowSize)
 
 	assertBufferSize(t, buff, 0)
 	// fill up the buffer

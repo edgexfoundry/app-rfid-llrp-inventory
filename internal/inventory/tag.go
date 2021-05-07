@@ -6,7 +6,6 @@
 package inventory
 
 import (
-	"strconv"
 	"sync"
 )
 
@@ -18,65 +17,41 @@ const (
 	Departed TagState = "Departed"
 )
 
+// Tag represents an in-memory view of an RFID tag and its accompanying statistics and metadata.
 type Tag struct {
-	EPC          string
-	TID          string
-	Location     Location
-	LastRead     int64
+	// EPC stands for Electronic Product Code. EPC was designed as a universal identifier
+	// system to provides a unique identity for every physical object in the world.
+	EPC string
+	// TID is commonly referred to as Tag ID or Transponder ID. It is a unique number written to
+	// every RFID tag by the manufacturer and is non-writable.
+	TID string
+	// Location keeps track of the tag's current location in the form of Device and Antenna combo.
+	Location Location
+	// LastRead keeps track of the last time the tag was seen by any reader/antenna
+	// (Unix Epoch milliseconds). This value is used to determine AgeOut as
+	// well as Departed events.
+	LastRead int64
+	// LastDeparted keeps track of the most recent time this tag was marked as Departed
+	// (Unix Epoch milliseconds).
 	LastDeparted int64
-	LastArrived  int64
-	state        TagState
+	// LastArrived keeps track of the most recent time this tag generated an ArrivedEvent.
+	// (Unix Epoch milliseconds).
+	LastArrived int64
 
-	statsMap map[string]*TagStats
-	statsMu  sync.Mutex
-}
-
-type Location struct {
-	DeviceName string `json:"device_name"`
-	AntennaID  uint16 `json:"antenna_id"`
-}
-
-func NewLocation(deviceName string, antennaID uint16) Location {
-	return Location{DeviceName: deviceName, AntennaID: antennaID}
-}
-
-func (loc Location) Equals(other Location) bool {
-	return loc.AntennaID == other.AntennaID && loc.DeviceName == other.DeviceName
-}
-
-func (loc Location) IsEmpty() bool {
-	return loc.DeviceName == "" && loc.AntennaID == 0
-}
-
-func (loc Location) String() string {
-	return loc.DeviceName + "_" + strconv.Itoa(int(loc.AntennaID))
-}
-
-// StaticTag represents a Tag object stuck in time for use with APIs
-type StaticTag struct {
-	EPC           string                    `json:"epc"`
-	TID           string                    `json:"tid"`
-	Location      Location                  `json:"location"`
-	LocationAlias string                    `json:"location_alias"`
-	LastRead      int64                     `json:"last_read"`
-	LastArrived   int64                     `json:"last_arrived"`
-	LastDeparted  int64                     `json:"last_departed"`
-	State         TagState                  `json:"state"`
-	StatsMap      map[string]StaticTagStats `json:"stats_map"`
-}
-
-// StaticTagStats represents a TagStats object stuck in time for use with APIs
-// and includes pre-calculated data
-type StaticTagStats struct {
-	LastRead int64   `json:"last_read"`
-	MeanRSSI float64 `json:"mean_rssi"`
+	// state is the current state of the tag (Present, Departed, Unknown)
+	state TagState
+	// statsMap keeps track of read statistics on a per-antenna basis in order to apply
+	// tag location algorithms against.
+	statsMap map[string]*tagStats
+	// statsMu is a mutex to synchronize access to the statsMap
+	statsMu sync.Mutex
 }
 
 func NewTag(epc string) *Tag {
 	return &Tag{
 		EPC:      epc,
 		state:    Unknown,
-		statsMap: make(map[string]*TagStats),
+		statsMap: make(map[string]*tagStats),
 	}
 }
 
@@ -100,44 +75,17 @@ func (tag *Tag) resetStats() {
 	tag.statsMu.Lock()
 	defer tag.statsMu.Unlock()
 
-	tag.statsMap = make(map[string]*TagStats)
+	tag.statsMap = make(map[string]*tagStats)
 }
 
-func (tag *Tag) getStats(location string) *TagStats {
+func (tag *Tag) getStats(location string) *tagStats {
 	tag.statsMu.Lock()
 	defer tag.statsMu.Unlock()
 
 	stats, found := tag.statsMap[location]
 	if !found {
-		stats = NewTagStats()
+		stats = newTagStats()
 		tag.statsMap[location] = stats
 	}
 	return stats
-}
-
-// asTagPtr converts a StaticTag back to a Tag pointer for use in restoring inventory.
-// It will also restore a basic view of the per-location stats by setting the last read
-// timestamp and a single RSSI value which was the previously computed rolling average.
-func (s StaticTag) asTagPtr() *Tag {
-	t := &Tag{
-		EPC:          s.EPC,
-		TID:          s.TID,
-		Location:     s.Location,
-		LastRead:     s.LastRead,
-		LastDeparted: s.LastDeparted,
-		LastArrived:  s.LastArrived,
-		state:        s.State,
-		statsMap:     make(map[string]*TagStats),
-	}
-
-	// fill in any cached tag stats. this just adds the mean rssi as a single value,
-	// so some precision is lost by not having every single value, but it preserves
-	// a general view of the data which is good enough for now
-	for location, stats := range s.StatsMap {
-		tagStats := t.getStats(location)
-		tagStats.LastRead = stats.LastRead
-		tagStats.rssiDbm.AddValue(stats.MeanRSSI)
-	}
-
-	return t
 }
