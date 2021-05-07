@@ -6,19 +6,29 @@ MICROSERVICE=rfid-llrp-inventory
 
 .PHONY: build test clean fmt docker run
 
-VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
+APPVERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
 GIT_SHA=$(shell git rev-parse HEAD)
 
-GOFLAGS=-ldflags "-X edgexfoundry-holding/rfid-llrp-inventory-service.Version=$(VERSION)"
+# This pulls the version of the SDK from the go.mod file. It works by looking for the line
+# with the SDK and printing just the version number that comes after it.
+SDKVERSION=$(shell sed -En 's|.*github.com/edgexfoundry/app-functions-sdk-go (v[\.0-9a-zA-Z-]+).*|\1|p' go.mod)
+
+GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SDKVersion=$(SDKVERSION) \
+					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
+					-X edgexfoundry-holding/rfid-llrp-inventory-service.Version=$(APPVERSION)"
 
 build:
 	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
 
+t:
+	[ -z "$$(gofmt -p -l . || echo 'err')" ]
+
 test:
-	go test -coverprofile=coverage.out ./...
-	go vet ./...
+	$(GO) test -coverprofile=coverage.out ./...
+	$(GO) vet ./...
 	./bin/test-attribution.sh
 	./bin/test-go-mod-tidy.sh
+	output="$$(gofmt -l .)" && [ -z "$$output" ]
 
 clean:
 	rm -f $(MICROSERVICE)
@@ -27,7 +37,7 @@ update:
 	$(GO) mod download
 
 fmt:
-	go fmt ./...
+	$(GO) fmt ./...
 
 docker:
 	docker build \
@@ -40,4 +50,4 @@ docker:
 			.
 
 run: build
-	./$(MICROSERVICE) -cp=consul://localhost:8500 -confdir=res
+	./$(MICROSERVICE) -cp=consul.http://localhost:8500 -confdir=res

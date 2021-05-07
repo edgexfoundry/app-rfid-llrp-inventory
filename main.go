@@ -31,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -40,7 +39,7 @@ const (
 	serviceKey      = "rfid-llrp-inventory"
 	eventDeviceName = "rfid-llrp-inventory"
 
-	BaseConsulPath = "edgex/appservices/1.0/"
+	baseConsulPath = "edgex/appservices/1.0/"
 
 	ResourceROAccessReport     = "ROAccessReport"
 	ResourceReaderNotification = "ReaderEventNotification"
@@ -58,7 +57,6 @@ const (
 
 type inventoryApp struct {
 	edgexSdk     *appsdk.AppFunctionsSDK
-	sdkCtx       atomic.Value // *appcontext.Context
 	lgr          logWrap
 	devMu        sync.RWMutex
 	devService   llrp.DSClient
@@ -130,10 +128,15 @@ func main() {
 	lgr.exitIfErr(err, "Failed to create config client.")
 
 	config, err := inventory.ParseConsulConfig(edgexSdk.LoggingClient, edgexSdk.ApplicationSettings())
-	lgr.exitIf(err != nil && !errors.Is(err, inventory.ErrUnexpectedConfigItems), fmt.Sprintf("Config parse error: %v.", err))
+	if errors.Is(err, inventory.ErrUnexpectedConfigItems) {
+		// warn on unexpected config items, but do not exit
+		lgr.Warn(err.Error())
+		err = nil
+	}
+	lgr.exitIf(err != nil, fmt.Sprintf("Config parse error: %v.", err))
 
 	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
-	lgr.exitIfErr(err, "Invalid device service URL.")
+	lgr.exitIfErr(err, "Invalid metadata service URL.")
 	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
 		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
 
@@ -177,7 +180,7 @@ func main() {
 		}},
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			if err := app.defaultGrp.ListReaders(w); err != nil {
+			if err := app.defaultGrp.WriteReaders(w); err != nil {
 				lgr.Error("Failed to write readers list.", "error", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 			}
@@ -348,8 +351,8 @@ func getConfigClient() (configuration.Client, error) {
 	configClient, err := configuration.NewConfigurationClient(types.ServiceConfig{
 		Host:     cpUrl.Hostname(),
 		Port:     cpPort,
-		BasePath: BaseConsulPath,
-		Type:     cpUrl.Scheme,
+		BasePath: baseConsulPath,
+		Type:     strings.Split(cpUrl.Scheme, ".")[0],
 	})
 
 	return configClient, errors.Wrap(err, "failed to get config client")
@@ -373,9 +376,7 @@ func getConfigClient() (configuration.Client, error) {
 //
 // Once we've reestablished these basic requirements,
 // this dispatches the content to the appropriate type-safe functions.
-func (app *inventoryApp) processEdgeXEvent(edgeXCtx *appcontext.Context, params ...interface{}) (bool, interface{}) {
-	app.sdkCtx.Store(edgeXCtx)
-
+func (app *inventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	if len(params) != 1 {
 		if len(params) == 2 {
 			if s, ok := params[1].(string); ok && s == "" {
@@ -400,7 +401,6 @@ func (app *inventoryApp) processEdgeXEvent(edgeXCtx *appcontext.Context, params 
 	}
 
 	if len(event.Readings) < 1 {
-		// Is this really an error? EdgeX's Filter functions say yes.
 		return false, errors.New("event contains no Readings")
 	}
 
@@ -570,11 +570,6 @@ func (app *inventoryApp) taskLoop(ctx context.Context, cc configuration.Client, 
 			}
 
 		case t := <-aggregateDepartedTicker.C:
-			_, ok := app.sdkCtx.Load().(*appcontext.Context)
-			if !ok {
-				lc.Info("Delaying AggregateDeparted processor: missing app-functions-sdk context.")
-				break
-			}
 			lc.Debug("Running AggregateDeparted.", "time", fmt.Sprintf("%v", t))
 
 			if events, updatedSnapshot := processor.AggregateDeparted(); len(events) > 0 {
@@ -655,11 +650,6 @@ func (app *inventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
 func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
-	sdkCtx, ok := app.sdkCtx.Load().(*appcontext.Context)
-	if !ok {
-		return errors.New("unable to push events to core data: missing app-functions-sdk context")
-	}
-
 	now := time.Now().UnixNano()
 	readings := make([]models.Reading, 0, len(events))
 
@@ -692,10 +682,7 @@ func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 	ctx, cancel := context.WithTimeout(ctx, coreDataPostTimeout)
 	defer cancel()
 
-	// todo: Once this issue (https://github.com/edgexfoundry/app-functions-sdk-go/issues/446) is
-	//       resolved, we can use the appsdk.AppFunctionsSDK EventClient directly without the need
-	//       for the appcontext.Context.
-	if _, err := sdkCtx.EventClient.Add(ctx, edgeXEvent); err != nil {
+	if _, err := app.edgexSdk.EdgexClients.EventClient.Add(ctx, edgeXEvent); err != nil {
 		errs = append(errs, errors.Wrap(err, "unable to push inventory event(s) to core-data"))
 	}
 

@@ -45,6 +45,8 @@ type DSClient struct {
 
 // NewDSClient returns a DSClient reachable at the given host URL,
 // using the given http Client, which of course may be the default.
+// TODO: Use new device service Clients from go-mod-core-clients when upgrading to V2 (Ireland)
+//		 https://github.com/edgexfoundry-holding/rfid-llrp-inventory-service/pull/18#discussion_r592768121
 func NewDSClient(host *url.URL, c *http.Client) DSClient {
 	base := url.URL{
 		Scheme: host.Scheme,

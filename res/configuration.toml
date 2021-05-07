@@ -9,7 +9,7 @@ Host = 'localhost'
 Port = 48086
 Protocol = 'http'
 ReadMaxLimit = 100
-StartupMsg = 'RFID LLRP Inventory Service: http://localhost:48086'
+StartupMsg = 'RFID LLRP Inventory Service'
 Timeout = '30s'
 
 [Registry]
@@ -20,10 +20,6 @@ Type = 'consul'
 [Logging]
 EnableRemote = false
 File = ''
-
-# Database is require when Store and Forward is enabled
-# SecretStore is required when Store and Forward is enabled and running with security
-# so Database credentials can be pulled from Vault.
 
 [Clients]
   [Clients.CoreData]
@@ -41,11 +37,6 @@ Type = 'zero'
         Host = 'localhost'
         Port = 5563
         Protocol = 'tcp'
-
-# Choose either an HTTP trigger or MessageBus trigger (aka Binding)
-
-#[Binding]
-#Type="http"
 
 [Binding]
 Type="messagebus"

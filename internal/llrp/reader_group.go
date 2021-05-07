@@ -69,8 +69,8 @@ func (rg *ReaderGroup) Behavior() Behavior {
 	return b
 }
 
-// ListReaders writes to w a JSON-formatted list of readers in this group.
-func (rg *ReaderGroup) ListReaders(w io.Writer) error {
+// WriteReaders writes to w a JSON-formatted list of readers in this group.
+func (rg *ReaderGroup) WriteReaders(w io.Writer) error {
 	rg.mu.RLock()
 	defer rg.mu.RUnlock()
 

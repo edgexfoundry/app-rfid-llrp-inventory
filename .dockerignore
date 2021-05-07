@@ -7,3 +7,11 @@ docker-compose*.yml
 coverage.out
 .idea
 .gitignore
+Dockerfile*
+.dockerignore
+.git
+.gitignore
+.env
+*/bin
+README.md
+.vscode
