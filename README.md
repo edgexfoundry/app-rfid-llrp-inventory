@@ -550,9 +550,11 @@ Execute the following commands from the project's root directory.
 #### Install Snap Package
   - `sudo snap install --dangerous *.snap` 
   
-Use `--dangerous` instead of `--devmode` option as no other additional permissions are required.
+Two options are available for installing snap - `--dangerous` & `--devmode`
+  
+If additional permissions are required then use the `--devmode` option else use `--dangerous`.
 
-Note: If application is confined and want to install a local version, use `--dangerous` option (If specifying --devmode, then --dangerous is implied).
+Note: If application is confined and want to install a local version, then use `--dangerous` option. Specifying `--devmode`, implies `--dangerous` option.
   
 #### Other helpful Snap commands:
  -  List installed snap packages: `snap list`
