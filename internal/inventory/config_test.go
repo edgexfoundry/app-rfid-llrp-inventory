@@ -86,7 +86,7 @@ func TestParseConsulConfig(t *testing.T) {
 		{key: "DeviceServiceName", val: "", exp: ""},
 		{key: "DeviceServiceName", val: " ", exp: " "},
 
-		{key: "DeviceServiceURL", val: "http://testing:51992/", exp: "http://testing:51992/"},
+		{key: "DeviceServiceURL", val: "http://testing:49989/", exp: "http://testing:49989/"},
 		{key: "DeviceServiceURL", val: "", exp: ""},
 		{key: "MetadataServiceURL", val: "", exp: ""},
 	}

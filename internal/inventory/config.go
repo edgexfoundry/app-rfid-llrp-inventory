@@ -61,7 +61,7 @@ func NewConsulConfig() ConsulConfig {
 			MobilityProfileHoldoffMillis: 500,
 			MobilityProfileSlope:         -0.008,
 			DeviceServiceName:            "edgex-device-llrp",
-			DeviceServiceURL:             "http://edgex-device-llrp:51992/",
+			DeviceServiceURL:             "http://edgex-device-llrp:49989/",
 			MetadataServiceURL:           "http://edgex-core-metadata:48081/",
 			DepartedThresholdSeconds:     600,
 			DepartedCheckIntervalSeconds: 30,

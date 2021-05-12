@@ -153,7 +153,7 @@ func (tp *TagProcessor) snapshot() []StaticTag {
 				continue // skip empty
 			}
 			staticTag.StatsMap[loc] = StaticTagStats{
-				LastRead: stats.LastRead,
+				LastRead: stats.lastRead,
 				MeanRSSI: stats.rssiDbm.Mean(),
 			}
 		}
@@ -186,10 +186,12 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		case Unknown, Departed:
 			tag.setState(Present)
 			event = ArrivedEvent{
-				EPC:       tag.EPC,
-				TID:       tag.TID,
-				Timestamp: tag.LastRead,
-				Location:  tp.getAlias(tag.Location.String()),
+				BaseEvent: BaseEvent{
+					EPC:       tag.EPC,
+					TID:       tag.TID,
+					Timestamp: tag.LastRead,
+				},
+				Location: tp.getAlias(tag.Location.String()),
 			}
 
 		case Present:
@@ -203,9 +205,11 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 				break // do not send event if the two locations share the same alias
 			}
 			event = MovedEvent{
-				EPC:         tag.EPC,
-				TID:         tag.TID,
-				Timestamp:   tag.LastRead,
+				BaseEvent: BaseEvent{
+					EPC:       tag.EPC,
+					TID:       tag.TID,
+					Timestamp: tag.LastRead,
+				},
 				OldLocation: prevAlias,
 				NewLocation: curAlias,
 			}
@@ -267,7 +271,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		locationMean := statsAtPrevLoc.rssiDbm.Mean()
 		incomingMean := statsAtReadLoc.rssiDbm.Mean()
 
-		offset := tp.config.profile.computeOffset(info.referenceTimestamp, statsAtPrevLoc.LastRead)
+		offset := tp.config.profile.computeOffset(info.referenceTimestamp, statsAtPrevLoc.lastRead)
 		if tp.config.debugLogEnabled {
 			logTagStats(tp, tag, readLocation.String(), incomingMean, locationMean, offset)
 		}
@@ -296,15 +300,15 @@ func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean f
 		"stayFactor", fmt.Sprintf("%.2f", (existingMean+offset)-incomingMean))
 }
 
-func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *TagStats, tag *Tag) {
+func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *tagStats, tag *Tag) {
 	now := UnixMilliNow()
 	tp.lc.Debug("read timing",
 		"now", now,
 		"referenceTimestamp", info.referenceTimestamp,
 		"nowMinusRef", fmt.Sprintf("%v", time.Duration(now-info.referenceTimestamp)*time.Millisecond),
-		"locationLastRead", locationStats.LastRead,
+		"locationLastRead", locationStats.lastRead,
 		"lastRead", tag.LastRead,
-		"diff", fmt.Sprintf("%v", time.Duration(tag.LastRead-locationStats.LastRead)*time.Millisecond))
+		"diff", fmt.Sprintf("%v", time.Duration(tag.LastRead-locationStats.lastRead)*time.Millisecond))
 }
 
 // AgeOut is a cleanup method that will remove tag information from our in-memory
@@ -342,9 +346,11 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 		if tag.state == Present && tag.LastRead < expiration {
 			tag.setStateAt(Departed, nowMs)
 			e := DepartedEvent{
-				EPC:               tag.EPC,
-				TID:               tag.TID,
-				Timestamp:         nowMs,
+				BaseEvent: BaseEvent{
+					EPC:       tag.EPC,
+					TID:       tag.TID,
+					Timestamp: nowMs,
+				},
 				LastRead:          tag.LastRead,
 				LastKnownLocation: tp.getAlias(tag.Location.String()),
 			}

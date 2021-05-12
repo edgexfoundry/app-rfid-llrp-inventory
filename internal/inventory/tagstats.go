@@ -9,31 +9,31 @@ const (
 	tagStatsWindowSize = 20
 )
 
-// TagStats helps keep track of tag read rssi values over time
-type TagStats struct {
-	LastRead int64
-	rssiDbm  *CircularBuffer
+// tagStats helps keep track of tag read rssi values over time
+type tagStats struct {
+	lastRead int64
+	rssiDbm  *circularBuffer
 }
 
-// NewTagStats returns a new TagStats pointer with circular buffers initialized to the configured default window size
-func NewTagStats() *TagStats {
-	return &TagStats{
-		rssiDbm: NewCircularBuffer(tagStatsWindowSize),
+// newTagStats returns a new tagStats pointer with circular buffers initialized to the configured default window size
+func newTagStats() *tagStats {
+	return &tagStats{
+		rssiDbm: newCircularBuffer(tagStatsWindowSize),
 	}
 }
 
-func (stats *TagStats) updateRSSI(rssi float64) {
+func (stats *tagStats) updateRSSI(rssi float64) {
 	stats.rssiDbm.AddValue(rssi)
 }
 
-func (stats *TagStats) updateLastRead(lastRead int64) {
+func (stats *tagStats) updateLastRead(lastRead int64) {
 	// skip times that are at or before the current last read timestamp
-	if lastRead <= stats.LastRead {
+	if lastRead <= stats.lastRead {
 		return
 	}
-	stats.LastRead = lastRead
+	stats.lastRead = lastRead
 }
 
-func (stats *TagStats) rssiCount() int {
+func (stats *tagStats) rssiCount() int {
 	return stats.rssiDbm.Len()
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory"
 	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
+	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/logutil"
 	"encoding/json"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
@@ -57,7 +58,7 @@ const (
 
 type inventoryApp struct {
 	edgexSdk     *appsdk.AppFunctionsSDK
-	lgr          logWrap
+	lgr          logutil.LogWrap
 	devMu        sync.RWMutex
 	devService   llrp.DSClient
 	defaultGrp   *llrp.ReaderGroup
@@ -75,57 +76,20 @@ type snapshotDest struct {
 	result chan error
 }
 
-type logWrap struct {
-	logger.LoggingClient
-}
-
-type lg struct {
-	key string
-	val interface{}
-}
-
-func (lgr logWrap) errIf(cond bool, msg string, params ...lg) bool {
-	if !cond {
-		return false
-	}
-
-	if len(params) > 0 {
-		parts := make([]interface{}, len(params)*2)
-		for i := range params {
-			parts[i*2] = params[i].key
-			parts[i*2+1] = params[i].val
-		}
-		lgr.Error(msg, parts...)
-	} else {
-		lgr.Error(msg)
-	}
-
-	return true
-}
-
-func (lgr logWrap) exitIf(cond bool, msg string, params ...lg) {
-	if lgr.errIf(cond, msg, params...) {
-		os.Exit(1)
-	}
-}
-
-func (lgr logWrap) exitIfErr(err error, msg string, params ...lg) {
-	lgr.exitIf(err != nil, msg, append(params, lg{"error", err})...)
-}
-
 func main() {
 	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
 	if err := edgexSdk.Initialize(); err != nil {
-		panic(fmt.Sprintf("SDK initialization failed: %v\n", err))
+		fmt.Printf("SDK initialization failed: %v\n", err)
+		os.Exit(1)
 	}
 
-	lgr := logWrap{edgexSdk.LoggingClient}
+	lgr := logutil.LogWrap{LoggingClient: edgexSdk.LoggingClient}
 	lgr.Info("Starting.")
 
 	appSettings := edgexSdk.ApplicationSettings()
-	lgr.exitIf(appSettings == nil, "Missing application settings.")
+	lgr.ExitIf(appSettings == nil, "Missing application settings.")
 	cc, err := getConfigClient()
-	lgr.exitIfErr(err, "Failed to create config client.")
+	lgr.ExitIfErr(err, "Failed to create config client.")
 
 	config, err := inventory.ParseConsulConfig(edgexSdk.LoggingClient, edgexSdk.ApplicationSettings())
 	if errors.Is(err, inventory.ErrUnexpectedConfigItems) {
@@ -133,17 +97,17 @@ func main() {
 		lgr.Warn(err.Error())
 		err = nil
 	}
-	lgr.exitIf(err != nil, fmt.Sprintf("Config parse error: %v.", err))
+	lgr.ExitIf(err != nil, fmt.Sprintf("Config parse error: %v.", err))
 
 	metadataURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.MetadataServiceURL))
-	lgr.exitIfErr(err, "Invalid metadata service URL.")
-	lgr.exitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
-		"Invalid metadata service URL.", lg{"endpoint", metadataURI.String()})
+	lgr.ExitIfErr(err, "Invalid metadata service URL.")
+	lgr.ExitIf(metadataURI.Scheme == "" || metadataURI.Host == "",
+		"Invalid metadata service URL.", logutil.KeyValue{Key: "endpoint", Val: metadataURI.String()})
 
 	devServURI, err := url.Parse(strings.TrimSpace(config.ApplicationSettings.DeviceServiceURL))
-	lgr.exitIfErr(err, "Invalid device service URL.")
-	lgr.exitIf(devServURI.Scheme == "" || devServURI.Host == "",
-		"Invalid device service URL.", lg{"endpoint", devServURI.String()})
+	lgr.ExitIfErr(err, "Invalid device service URL.")
+	lgr.ExitIf(devServURI.Scheme == "" || devServURI.Host == "",
+		"Invalid device service URL.", logutil.KeyValue{Key: "endpoint", Val: devServURI.String()})
 
 	defaultGrp := llrp.NewReaderGroup()
 	devService := llrp.NewDSClient(&url.URL{
@@ -152,13 +116,13 @@ func main() {
 	}, http.DefaultClient)
 
 	dsName := config.ApplicationSettings.DeviceServiceName
-	lgr.exitIf(dsName == "", "Missing device service name.")
+	lgr.ExitIf(dsName == "", "Missing device service name.")
 	metadataURI.Path = "/api/v1/device/servicename/" + dsName
 	deviceNames, err := llrp.GetDevices(metadataURI.String(), http.DefaultClient)
-	lgr.exitIfErr(err, "Failed to get existing device names.", lg{"path", metadataURI.String()})
+	lgr.ExitIfErr(err, "Failed to get existing device names.", logutil.KeyValue{Key: "path", Val: metadataURI.String()})
 	for _, name := range deviceNames {
-		lgr.exitIfErr(defaultGrp.AddReader(devService, name),
-			"Failed to setup device.", lg{"device", name})
+		lgr.ExitIfErr(defaultGrp.AddReader(devService, name),
+			"Failed to setup device.", logutil.KeyValue{Key: "device", Val: name})
 	}
 
 	app := inventoryApp{
@@ -188,7 +152,7 @@ func main() {
 		{"/api/v1/inventory/snapshot", http.MethodGet,
 			func(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				if err := app.writeInventorySnapshot(w); err != nil {
+				if err := app.requestInventorySnapshot(w); err != nil {
 					app.lgr.Error("Failed to write inventory snapshot.", "error", err.Error())
 					w.WriteHeader(http.StatusInternalServerError)
 				}
@@ -282,8 +246,10 @@ func main() {
 			},
 		},
 	} {
-		lgr.exitIfErr(edgexSdk.AddRoute(rte.path, rte.f, rte.method),
-			"Failed to add route.", lg{"path", rte.path}, lg{"method", rte.method})
+		lgr.ExitIfErr(edgexSdk.AddRoute(rte.path, rte.f, rte.method),
+			"Failed to add route.",
+			logutil.KeyValue{Key: "path", Val: rte.path},
+			logutil.KeyValue{Key: "method", Val: rte.method})
 	}
 
 	if err := os.MkdirAll(cacheFolder, folderPerm); err != nil {
@@ -319,8 +285,8 @@ func main() {
 	}()
 
 	// Subscribe to events.
-	lgr.exitIfErr(edgexSdk.SetFunctionsPipeline(app.processEdgeXEvent), "Failed to build pipeline.")
-	lgr.exitIfErr(edgexSdk.MakeItRun(), "Failed to run pipeline.")
+	lgr.ExitIfErr(edgexSdk.SetFunctionsPipeline(app.processEdgeXEvent), "Failed to build pipeline.")
+	lgr.ExitIfErr(edgexSdk.MakeItRun(), "Failed to run pipeline.")
 
 	// let task loop complete
 	wg.Wait()
@@ -474,12 +440,18 @@ func (app *inventoryApp) handleReaderEvent(device string, notification *llrp.Rea
 	return nil
 }
 
-// writeInventorySnapshot writes the current inventory snapshot to w.
-func (app *inventoryApp) writeInventorySnapshot(w io.Writer) error {
+// requestInventorySnapshot requests that the current inventory snapshot be written to w.
+func (app *inventoryApp) requestInventorySnapshot(w io.Writer) error {
 	// We send w and a writeErr channel into the inventory execution context
 	// and then wait to read a value from the writeErr channel.
+	//
 	// That context closes writeErr to signal the snapshot is written to w
 	// or an error prevented such, and we can send the result back to our caller.
+	//
+	// This is architected in a way that allows the calling routine to block until the request has
+	// been fulfilled by the main taskLoop in a thread-safe manner. This allows callers of the
+	// REST API to get a race-free result while also not impacting the performance of the
+	// processing logic (ie. thread preemption and mutex locking).
 	writeErr := make(chan error, 1)
 	app.snapshotReqs <- snapshotDest{w, writeErr}
 	return <-writeErr
