@@ -147,3 +147,14 @@ https://github.com/go-playground/validator/blob/master/LICENSE
 leodido/go-urn (MIT) https://github.com/leodido/go-urn
 https://github.com/leodido/go-urn
 
+davecgh/go-spew (ISC) https://github.com/davecgh/go-spew
+https://github.com/davecgh/go-spew/blob/master/LICENSE
+
+pmezard/go-difflib (Patric Mezard) https://github.com/pmezard/go-difflib
+https://github.com/pmezard/go-difflib/blob/master/LICENSE
+
+stretchr/testify (MIT) github.com/stretchr/testify
+https://github.com/stretchr/testify/blob/master/LICENSE
+
+gopkg.in/yaml.v3 (Apache 2.0) https://github.com/go-yaml/yaml/tree/v3
+https://github.com/go-yaml/yaml/blob/v2/LICENSE
