@@ -6,7 +6,7 @@
 package inventory
 
 import (
-	"errors"
+	"github.com/stretchr/testify/require"
 	"math"
 	"reflect"
 	"strconv"
@@ -16,15 +16,10 @@ import (
 
 func TestEmptyConfigDefaults(t *testing.T) {
 	conf, err := ParseConsulConfig(getTestingLogger(), map[string]string{})
-	if err != nil {
-		t.Fatalf("unexpected err: %+v", err.Error())
-	}
+	require.NoError(t, err)
 
 	expected := NewConsulConfig()
-	if !reflect.DeepEqual(expected, conf) {
-		t.Errorf("expected defaults, but got %+v; defaults: %+v",
-			expected, conf)
-	}
+	require.Equal(t, expected, conf)
 }
 
 func TestParseConsulConfig(t *testing.T) {
@@ -97,68 +92,70 @@ func TestParseConsulConfig(t *testing.T) {
 		t.Run(c.key+":"+c.val, func(tt *testing.T) {
 			cfgMap := map[string]string{c.key: c.val}
 			ccfg, err := ParseConsulConfig(getTestingLogger(), cfgMap)
-			if !errors.Is(err, c.err) {
-				tt.Fatalf("expected %v, but got %+v", c.err, err)
-			}
-
+			require.ErrorIs(t, err, c.err)
 			if c.err != nil {
 				return
 			}
 
 			ft, ok := rt.FieldByName(c.key)
-			if !ok {
-				tt.Fatalf("no field %q", c.key)
-			}
+			require.True(t, ok)
 
 			rv := reflect.ValueOf(ccfg.ApplicationSettings)
 			fv := rv.FieldByIndex(ft.Index)
-
-			if !fv.IsValid() || !fv.CanInterface() {
-				tt.Errorf("value of %q is not valid", c.key)
-				return
-			}
-
-			if !reflect.DeepEqual(fv.Interface(), c.exp) {
-				tt.Errorf("invalid value for %q: expected %+v, got %+v",
-					c.key, c.exp, fv.Interface())
-			}
+			require.True(t, fv.IsValid())
+			require.True(t, fv.CanInterface())
+			require.Equal(t, fv.Interface(), c.exp)
 		})
 	}
+}
 
+func TestQuickCheckStr(t *testing.T) {
 	// quick.Check that we return an error (and don't panic) on arbitrary strings.
 	t.Run("quickCheckStr", func(tt *testing.T) {
 		tt.Parallel()
-		if err := quick.Check(func(val string) bool {
+		err := quick.Check(func(val string) bool {
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{
 				"DeviceServiceName": val})
 			return parseErr == nil && conf.ApplicationSettings.DeviceServiceName == val
-		}, nil); err != nil {
-			tt.Error(err)
-		}
+		}, nil);
+		require.NoError(tt, err)
 	})
+}
 
+func TestQuickCheckUint(t *testing.T) {
 	// quick.Check that we can round-trip arbitrary uints.
 	t.Run("quickCheckUint", func(tt *testing.T) {
 		tt.Parallel()
-		if err := quick.Check(func(u uint) bool {
+		//if err := quick.Check(func(u uint) bool {
+		//	if u == 0 {
+		//		return true
+		//	}
+		//	iStr := strconv.FormatUint(uint64(u), 10)
+		//	conf, parseErr := ParseConsulConfig(nil, map[string]string{"AgeOutHours": iStr})
+		//	return parseErr == nil && conf.ApplicationSettings.AgeOutHours == u
+		//}, nil); err != nil {
+		//	t.Error(err)
+		//}
+		err := quick.Check(func(u uint) bool {
 			if u == 0 {
 				return true
 			}
 			iStr := strconv.FormatUint(uint64(u), 10)
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{"AgeOutHours": iStr})
 			return parseErr == nil && conf.ApplicationSettings.AgeOutHours == u
-		}, nil); err != nil {
-			t.Error(err)
-		}
+		}, nil);
+		require.NoError(tt, err)
 	})
+}
 
+func TestQuickCheckFloat64(t *testing.T) {
 	// quick.Check that we can round-trip arbitrary float64s.
 	t.Run("quickCheckFloat64", func(tt *testing.T) {
 		tt.Parallel()
 		// Note: FormatFloat can produce binary values (with 'b'),
 		// but ParseFloat can't parse them, so it's not in this list.
 		fmts := [...]byte{'e', 'E', 'f', 'g', 'G', 'x', 'X'}
-		if err := quick.Check(func(f float64, fmtByte byte) bool {
+		err := quick.Check(func(f float64, fmtByte byte) bool {
 			iStr := strconv.FormatFloat(f, fmts[int(fmtByte)%len(fmts)], -1, 64)
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{
 				"MobilityProfileThreshold": iStr})
@@ -168,8 +165,7 @@ func TestParseConsulConfig(t *testing.T) {
 			}
 			return parseErr == nil && math.Abs(
 				conf.ApplicationSettings.MobilityProfileThreshold-f) < 0.001
-		}, nil); err != nil {
-			t.Error(err)
-		}
+		}, nil);
+		require.NoError(tt, err)
 	})
 }

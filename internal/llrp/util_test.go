@@ -163,13 +163,8 @@ func TestExtractRSSI(t *testing.T) {
 				Custom:                                  tt.fields.Custom,
 			}
 			got, got1 := rt.ExtractRSSI()
-
-			if got != tt.want {
-				t.Errorf("ExtractRSSI() got = %v, want %v %d", got, tt.want, len(impinjEnableBool16(ImpinjTagReportContentSelector)))
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ExtractRSSI() got1 = %v, want %v", got1, tt.want1)
-			}
+			require.Equal(t, got, tt.want)
+			require.Equal(t, got1, tt.want1)
 		})
 	}
 }
@@ -266,12 +261,8 @@ func TestReadDataAsHex(t *testing.T) {
 				Custom:                                  tt.fields.Custom,
 			}
 			gotData, gotOk := rt.ReadDataAsHex()
-			if gotData != tt.wantData {
-				t.Errorf("ReadDataAsHex() gotData = %v, want %v", gotData, tt.wantData)
-			}
-			if gotOk != tt.wantOk {
-				t.Errorf("ReadDataAsHex() gotOk = %v, want %v", gotOk, tt.wantOk)
-			}
+			require.Equal(t, gotData, tt.wantData)
+			require.Equal(t,gotOk, tt.wantOk)
 		})
 	}
 }
@@ -318,9 +309,7 @@ func TestIs(t *testing.T) {
 				Subtype:  tt.fields.Subtype,
 				Data:     tt.fields.Data,
 			}
-			if got := c.Is(tt.args.idType, tt.args.subtype); got != tt.want {
-				t.Errorf("Is() = %v, want %v", got, tt.want)
-			}
+			require.Equal(t, c.Is(tt.args.idType, tt.args.subtype), tt.want)
 		})
 	}
 }
