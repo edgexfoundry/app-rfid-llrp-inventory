@@ -41,7 +41,5 @@ func TestUnixMilli(t *testing.T) {
 func TestUnixMilliCalculation(t *testing.T) {
 	expectedMs := int64(1502472327865)
 	calcMs := UnixMilli(time.Unix(expectedMs/1000, expectedMs%1000*1000000))
-	fmt.Println(calcMs)
-	fmt.Println(expectedMs)
 	assert.Equal(t, calcMs, expectedMs, "Time to epoch calculation failed")
 }
