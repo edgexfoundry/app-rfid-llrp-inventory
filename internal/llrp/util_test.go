@@ -124,8 +124,8 @@ func TestExtractRSSI(t *testing.T) {
 		},
 		{
 			name:   "OK - custom",
-			fields: fields{Custom: []Custom{{VendorID: uint32(PENImpinj), Subtype: ImpinjEnablePeakRSSI, Data: []byte{'1','2'}}}},
-			want:   float64(int16(binary.BigEndian.Uint16([]byte{'1','2'}))) / 100.0,
+			fields: fields{Custom: []Custom{{VendorID: uint32(PENImpinj), Subtype: ImpinjEnablePeakRSSI, Data: []byte{'1', '2'}}}},
+			want:   float64(int16(binary.BigEndian.Uint16([]byte{'1', '2'}))) / 100.0,
 			want1:  true,
 		},
 	}
@@ -169,9 +169,8 @@ func TestExtractRSSI(t *testing.T) {
 	}
 }
 
-
-func helper()  *C1G2ReadOpSpecResult{
-	val := C1G2ReadOpSpecResult{C1G2ReadOpSpecResultType: 1, OpSpecID: impjDualTarget, Data: []uint16{1,2}}
+func helper() *C1G2ReadOpSpecResult {
+	val := C1G2ReadOpSpecResult{C1G2ReadOpSpecResultType: 1, OpSpecID: impjDualTarget, Data: []uint16{1, 2}}
 	return &val
 }
 
@@ -215,16 +214,16 @@ func TestReadDataAsHex(t *testing.T) {
 		wantOk   bool
 	}{
 		{
-			name: "OK - nil",
-			fields: fields{C1G2ReadOpSpecResult: nil},
+			name:     "OK - nil",
+			fields:   fields{C1G2ReadOpSpecResult: nil},
 			wantData: "",
-			wantOk: false,
+			wantOk:   false,
 		},
 		{
-			name: "OK - default values",
-			fields: fields{C1G2ReadOpSpecResult: new(C1G2ReadOpSpecResult)},
+			name:     "OK - default values",
+			fields:   fields{C1G2ReadOpSpecResult: new(C1G2ReadOpSpecResult)},
 			wantData: wordsToHex([]uint16{}),
-			wantOk: true,
+			wantOk:   true,
 		},
 	}
 	for _, tt := range tests {
@@ -262,7 +261,7 @@ func TestReadDataAsHex(t *testing.T) {
 			}
 			gotData, gotOk := rt.ReadDataAsHex()
 			require.Equal(t, gotData, tt.wantData)
-			require.Equal(t,gotOk, tt.wantOk)
+			require.Equal(t, gotOk, tt.wantOk)
 		})
 	}
 }

@@ -117,7 +117,7 @@ func TestQuickCheckStr(t *testing.T) {
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{
 				"DeviceServiceName": val})
 			return parseErr == nil && conf.ApplicationSettings.DeviceServiceName == val
-		}, nil);
+		}, nil)
 		require.NoError(tt, err)
 	})
 }
@@ -143,7 +143,7 @@ func TestQuickCheckUint(t *testing.T) {
 			iStr := strconv.FormatUint(uint64(u), 10)
 			conf, parseErr := ParseConsulConfig(nil, map[string]string{"AgeOutHours": iStr})
 			return parseErr == nil && conf.ApplicationSettings.AgeOutHours == u
-		}, nil);
+		}, nil)
 		require.NoError(tt, err)
 	})
 }
@@ -165,7 +165,7 @@ func TestQuickCheckFloat64(t *testing.T) {
 			}
 			return parseErr == nil && math.Abs(
 				conf.ApplicationSettings.MobilityProfileThreshold-f) < 0.001
-		}, nil);
+		}, nil)
 		require.NoError(tt, err)
 	})
 }
