@@ -7,7 +7,7 @@ package llrp
 
 import (
 	"encoding/binary"
-	"github.com/go-playground/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
