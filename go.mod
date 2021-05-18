@@ -7,6 +7,7 @@ require (
 	github.com/edgexfoundry/go-mod-bootstrap v0.0.57
 	github.com/edgexfoundry/go-mod-configuration v0.0.8
 	github.com/edgexfoundry/go-mod-core-contracts v0.1.112
+	github.com/go-playground/assert v1.2.1
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0

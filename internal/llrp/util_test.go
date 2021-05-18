@@ -7,6 +7,7 @@ package llrp
 
 import (
 	"encoding/binary"
+	"github.com/go-playground/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -56,7 +57,7 @@ func TestWordsToHex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := wordsToHex(tt.x)
-			require.Equal(t, tt.want, res)
+			assert.Equal(t, tt.want, res)
 		})
 	}
 }
@@ -163,13 +164,8 @@ func TestExtractRSSI(t *testing.T) {
 				Custom:                                  tt.fields.Custom,
 			}
 			got, got1 := rt.ExtractRSSI()
-
-			if got != tt.want {
-				t.Errorf("ExtractRSSI() got = %v, want %v %d", got, tt.want, len(impinjEnableBool16(ImpinjTagReportContentSelector)))
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ExtractRSSI() got1 = %v, want %v", got1, tt.want1)
-			}
+			assert.Equal(t, got, tt.want)
+			assert.Equal(t, got1, tt.want1)
 		})
 	}
 }
@@ -265,8 +261,8 @@ func TestReadDataAsHex(t *testing.T) {
 				Custom:                                  tt.fields.Custom,
 			}
 			gotData, gotOk := rt.ReadDataAsHex()
-			require.Equal(t, gotData, tt.wantData)
 			require.Equal(t, gotOk, tt.wantOk)
+			assert.Equal(t, gotData, tt.wantData)
 		})
 	}
 }
@@ -314,7 +310,7 @@ func TestIs(t *testing.T) {
 				Data:     tt.fields.Data,
 			}
 			got := c.Is(tt.args.idType, tt.args.subtype)
-			require.Equal(t, got, tt.want)
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }

@@ -1,7 +1,7 @@
 package inventory
 
 import (
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -27,7 +27,7 @@ func TestNewTag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NewTag(tt.args.epc)
-			require.Equal(t, got, tt.want)
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
@@ -68,7 +68,7 @@ func TestSetState(t *testing.T) {
 				state:    tt.fields.state,
 			}
 			tag.setState(tt.args.newState)
-			require.Equal(t, tt.args.newState, tag.state)
+			assert.Equal(t, tt.args.newState, tag.state)
 		})
 	}
 }
@@ -117,9 +117,9 @@ func TestSetStateAt(t *testing.T) {
 				state:        tt.fields.state,
 			}
 			tag.setStateAt(tt.args.newState, tt.args.timestamp)
-			require.Equal(t, tag.state, tt.args.newState)
-			require.Equal(t, tag.LastArrived, tt.args.timestamp)
-			require.Equal(t, tag.LastDeparted, tt.args.timestamp)
+			assert.Equal(t, tag.state, tt.args.newState)
+			assert.Equal(t, tag.LastArrived, tt.args.timestamp)
+			assert.Equal(t, tag.LastDeparted, tt.args.timestamp)
 		})
 	}
 }
@@ -149,7 +149,7 @@ func TestResetStats(t *testing.T) {
 				statsMap: tt.fields.statsMap,
 			}
 			tag.resetStats()
-			require.Equal(t, tag.statsMap, make(map[string]*tagStats))
+			assert.Equal(t, tag.statsMap, make(map[string]*tagStats))
 		})
 	}
 }
@@ -190,7 +190,7 @@ func TestGetStats(t *testing.T) {
 				statsMap: tt.fields.statsMap,
 			}
 			got := tag.getStats(tt.args.location)
-			require.Equal(t, got, tt.want)
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
