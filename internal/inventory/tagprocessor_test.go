@@ -7,9 +7,11 @@ package inventory
 
 import (
 	"fmt"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"testing"
 	"time"
+
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -136,10 +138,8 @@ func TestMoveAntennaLocation(t *testing.T) {
 				count:      4,
 			})
 
-			if tag.Location.String() != ds.findAlias(sensor, antID) {
-				t.Errorf("tag location was %s, but we expected %s.\n\t%#v",
-					tag.Location.String(), ds.findAlias(sensor, antID), tag)
-			}
+			assert.Equalf(t, tag.Location.String(), ds.findAlias(sensor, antID), "tag location was %s, but we expected %s.\n\t%#v", tag.Location.String(), ds.findAlias(sensor, antID), tag)
+
 			// ensure moved events generated
 			if err := ds.verifyEventPattern(events, 1, MovedType); err != nil {
 				t.Error(err)
@@ -207,10 +207,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 
 	// should not remove any tags
 	ds.tp.AgeOut()
-	if len(ds.tp.inventory) != ds.size() {
-		t.Errorf("expected there to be %d items in the inventory, but there were %d.\ninventory: %#v",
-			ds.size(), len(ds.tp.inventory), ds.tp.inventory)
-	}
+	assert.Equalf(t, len(ds.tp.inventory), ds.size(), "expected there to be %d items in the inventory, but there were %d.\ninventory: %#v", ds.size(), len(ds.tp.inventory), ds.tp.inventory)
 
 	// now we will flag the items as departed and run the ageout task again
 	_, _ = ds.tp.AggregateDeparted()
@@ -219,10 +216,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 	}
 	// this time they should be removed from the inventory
 	ds.tp.AgeOut()
-	if len(ds.tp.inventory) != 0 {
-		t.Errorf("expected there to be 0 items in the inventory, but there were %d.\ninventory: %#v",
-			len(ds.tp.inventory), ds.tp.inventory)
-	}
+	assert.Equalf(t, len(ds.tp.inventory), 0, "expected there to be 0 items in the inventory, but there were %d.\ninventory: %#v", len(ds.tp.inventory), ds.tp.inventory)
 }
 
 func TestAgeOutThreshold(t *testing.T) {
@@ -453,9 +447,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
 			alias := ds.findAlias(test.deviceID, test.antennaID)
-			if alias != test.expected {
-				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
-			}
+			assert.Equalf(t, alias, test.expected, "Expected alias of %s, but got %s", test.expected, alias)
 		})
 	}
 }
@@ -494,9 +486,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
 			alias := ds.findAlias(test.deviceID, test.antennaID)
-			if alias != test.expected {
-				t.Errorf("Expected alias of %s, but got %s", test.expected, alias)
-			}
+			assert.Equalf(t, alias, test.expected, "Expected alias of %s, but got %s", test.expected, alias)
 		})
 	}
 }
@@ -532,9 +522,7 @@ func TestEventLocationMatchesAlias(t *testing.T) {
 	// make sure the Location field matches the alias for Arrived events
 	for _, event := range events {
 		a := event.(ArrivedEvent)
-		if a.Location != alias1 {
-			t.Errorf("Expected arrived event location to be %s, but was %s", alias1, a.Location)
-		}
+		assert.Equalf(t, a.Location, alias1, "Expected arrived event location to be %s, but was %s", alias1, a.Location)
 	}
 
 	// Generate moved events alias1 -> alias2
@@ -552,12 +540,10 @@ func TestEventLocationMatchesAlias(t *testing.T) {
 	// make sure the 2 Location fields match the alias for Moved events
 	for _, event := range events {
 		m := event.(MovedEvent)
-		if m.OldLocation != alias1 {
-			t.Errorf("Expected moved event old location to be %s, but was %s", alias1, m.OldLocation)
-		}
-		if m.NewLocation != alias2 {
-			t.Errorf("Expected moved event new location to be %s, but was %s", alias2, m.NewLocation)
-		}
+		assert.Equalf(t, m.OldLocation, alias1, "Expected moved event old location to be %s, but was %s", alias1, m.OldLocation)
+
+		assert.Equalf(t, m.NewLocation, alias2, "Expected moved event new location to be %s, but was %s", alias2, m.NewLocation)
+
 	}
 
 	// Generate departed events
@@ -568,8 +554,7 @@ func TestEventLocationMatchesAlias(t *testing.T) {
 	// make sure the Location field matches the alias for Departed events
 	for _, event := range events {
 		d := event.(DepartedEvent)
-		if d.LastKnownLocation != alias2 {
-			t.Errorf("Expected departed event last known location to be %s, but was %s", alias2, d.LastKnownLocation)
-		}
+		assert.Equalf(t, d.LastKnownLocation, alias2, "Expected departed event last known location to be %s, but was %s", alias2, d.LastKnownLocation)
+
 	}
 }
