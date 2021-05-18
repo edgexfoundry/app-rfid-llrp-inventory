@@ -3,6 +3,8 @@ package inventory
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewMobilityProfile_yIntercept(t *testing.T) {
@@ -19,9 +21,7 @@ func TestNewMobilityProfile_yIntercept(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			mp := newMobilityProfile(test.slope, test.threshold, test.holdoffMillis)
-			if math.Abs(mp.yIntercept-test.yIntercept) > epsilon {
-				t.Errorf("Expected yIntercept to be: %v, but was: %v.", test.yIntercept, mp.yIntercept)
-			}
+			assert.LessOrEqualf(t, math.Abs(mp.yIntercept-test.yIntercept), epsilon, "Expected yIntercept to be: %v, but was: %v.", test.yIntercept, mp.yIntercept)
 		})
 	}
 }

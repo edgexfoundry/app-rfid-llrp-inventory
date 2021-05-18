@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"testing"
 	"testing/quick"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmptyConfigDefaults(t *testing.T) {
@@ -97,33 +100,27 @@ func TestParseConsulConfig(t *testing.T) {
 		t.Run(c.key+":"+c.val, func(tt *testing.T) {
 			cfgMap := map[string]string{c.key: c.val}
 			ccfg, err := ParseConsulConfig(getTestingLogger(), cfgMap)
-			if !errors.Is(err, c.err) {
-				tt.Fatalf("expected %v, but got %+v", c.err, err)
-			}
+			require.Truef(t, errors.Is(err, c.err), "expected %v, but got %+v", c.err, err)
 
 			if c.err != nil {
 				return
 			}
 
 			ft, ok := rt.FieldByName(c.key)
-			if !ok {
-				tt.Fatalf("no field %q", c.key)
-			}
+			require.Truef(t, ok, "no field %q", c.key)
 
 			rv := reflect.ValueOf(ccfg.ApplicationSettings)
 			fv := rv.FieldByIndex(ft.Index)
 
-			if !fv.IsValid() || !fv.CanInterface() {
-				tt.Errorf("value of %q is not valid", c.key)
-				return
-			}
+			assert.Truef(t, fv.IsValid() || fv.CanInterface(), "value of %q is not valid", c.key)
 
-			if !reflect.DeepEqual(fv.Interface(), c.exp) {
-				tt.Errorf("invalid value for %q: expected %+v, got %+v",
-					c.key, c.exp, fv.Interface())
-			}
+			assert.Equalf(t, fv.Interface(), c.exp, "invalid value for %q: expected %+v, got %+v", c.key, c.exp, fv.Interface())
 		})
 	}
+
+}
+
+func TestQuickCheckStr(t *testing.T) {
 
 	// quick.Check that we return an error (and don't panic) on arbitrary strings.
 	t.Run("quickCheckStr", func(tt *testing.T) {
@@ -136,6 +133,10 @@ func TestParseConsulConfig(t *testing.T) {
 			tt.Error(err)
 		}
 	})
+
+}
+
+func TestQuickCheckUint(t *testing.T) {
 
 	// quick.Check that we can round-trip arbitrary uints.
 	t.Run("quickCheckUint", func(tt *testing.T) {
@@ -151,6 +152,9 @@ func TestParseConsulConfig(t *testing.T) {
 			t.Error(err)
 		}
 	})
+}
+
+func TestQuickCheckFloat64(t *testing.T) {
 
 	// quick.Check that we can round-trip arbitrary float64s.
 	t.Run("quickCheckFloat64", func(tt *testing.T) {
@@ -172,4 +176,5 @@ func TestParseConsulConfig(t *testing.T) {
 			t.Error(err)
 		}
 	})
+
 }

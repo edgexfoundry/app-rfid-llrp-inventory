@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -17,9 +19,7 @@ var (
 )
 
 func assertBufferSize(t *testing.T, buff *circularBuffer, expectedSize int) {
-	if buff.Len() != expectedSize {
-		t.Errorf("expected buffer size of %d, but was %d", buff.Len(), expectedSize)
-	}
+	assert.Equalf(t, buff.Len(), expectedSize, "expected buffer size of %d, but was %d", buff.Len(), expectedSize)
 }
 
 func TestCircularBuffer_AddValue(t *testing.T) {
@@ -89,9 +89,7 @@ func TestCircularBuffer_GetMean(t *testing.T) {
 			}
 
 			mean := buff.Mean()
-			if math.Abs(mean-test.expected) > epsilon {
-				t.Errorf("expected mean of %v, but got %v", test.expected, mean)
-			}
+			assert.LessOrEqualf(t, math.Abs(mean-test.expected), epsilon, "expected mean of %v, but got %v", test.expected, mean)
 		})
 	}
 }
@@ -134,9 +132,7 @@ func TestCircularBuffer_GetCount(t *testing.T) {
 			}
 
 			count := buff.Len()
-			if count != test.expectedCount {
-				t.Errorf("buff.Len() returned %d, but we expected %d", count, test.expectedCount)
-			}
+			assert.Equalf(t, count, test.expectedCount, "buff.Len() returned %d, but we expected %d", count, test.expectedCount)
 		})
 	}
 }
@@ -151,9 +147,7 @@ func TestCircularBuffer_Wrap(t *testing.T) {
 		val := float64(i * 2)
 		buff.AddValue(val)
 		assertBufferSize(t, buff, int(math.Min(float64(i+1), float64(windowSize))))
-		if buff.values[i%windowSize] != val {
-			t.Errorf("A value was added in the wrong location!")
-		}
+		assert.Equal(t, buff.values[i%windowSize], val, "A value was added in the wrong location!")
 	}
 	assertBufferSize(t, buff, windowSize)
 }
