@@ -367,13 +367,13 @@ To view the `default` Behavior:
 
 ```json
 {
-    "ImpinjOptions": {
-        "SuppressMonza": false
+    "impinjOptions": {
+        "suppressMonza": false
     },
-    "ScanType": "Normal",
-    "Duration": 0,
-    "Power": {
-        "Max": 3000
+    "scanType": "Normal",
+    "duration": 0,
+    "power": {
+        "max": 3000
     }
 }
 ```
