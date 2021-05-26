@@ -10,9 +10,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"math"
 	"strings"
 	"sync/atomic"
+	"testing"
 	"time"
 )
 
@@ -87,7 +89,8 @@ func (ds *testDataset) findAlias(deviceID string, antID uint16) string {
 	return ds.tp.getAlias(NewLocation(deviceID, antID).String())
 }
 
-func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
+func (ds *testDataset) readTag(t *testing.T, epc string, params readParams) (events []Event) {
+	t.Helper()
 	params.sanitize()
 
 	rss := llrp.PeakRSSI(params.rssi)
@@ -95,9 +98,8 @@ func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
 	seen := llrp.LastSeenUTC(params.lastSeen.UnixNano() / int64(time.Microsecond))
 
 	epcBytes, err := hex.DecodeString(epc)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
+
 	for i := 0; i < params.count; i++ {
 		r := &llrp.ROAccessReport{
 			TagReportData: []llrp.TagReportData{
@@ -124,9 +126,9 @@ func (ds *testDataset) readTag(epc string, params readParams) (events []Event) {
 	return events
 }
 
-func (ds *testDataset) readAll(params readParams) (events []Event) {
+func (ds *testDataset) readAll(t *testing.T, params readParams) (events []Event) {
 	for _, epc := range ds.epcs {
-		e := ds.readTag(epc, params)
+		e := ds.readTag(t, epc, params)
 		events = append(events, e...)
 	}
 	return events
