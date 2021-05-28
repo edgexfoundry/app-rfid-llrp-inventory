@@ -6,9 +6,11 @@
 package llrp
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"reflect"
 	"testing"
@@ -23,28 +25,17 @@ func testROSpecProperties(t *testing.T, spec *ROSpec) {
 	t.Helper()
 
 	// These assume we're creating a new spec
-
-	if spec.ROSpecID == 0 {
-		t.Error("spec ID should not be 0")
-	}
-
-	if spec.ROSpecCurrentState != ROSpecStateDisabled {
-		t.Error("spec should be created in the Disabled state")
-	}
+	assert.NotZero(t, spec.ROSpecID)
+	assert.Equal(t, spec.ROSpecCurrentState, ROSpecStateDisabled)
 
 	// We're currently controlling reporting at the ReaderConfig level,
 	// so we don't want to override it in the ROSpec itself.
-	if spec.ROReportSpec != nil {
-		t.Error("spec should not use an ROReportSpec")
-	}
-
-	if len(spec.AISpecs) == 0 {
-		t.Error("spec should have at least one AI Spec")
-	}
+	assert.Nil(t, spec.ROReportSpec)
+	assert.NotZero(t, len(spec.AISpecs))
 }
 
 func TestImpinjEnableBool16(t *testing.T) {
-	if err := quick.Check(func(subtype uint32) bool {
+	require.NoError(t, quick.Check(func(subtype uint32) bool {
 		data := impinjEnableBool16(subtype)
 		if len(data) != int(binary.BigEndian.Uint16(data[2:])) {
 			return false
@@ -67,9 +58,7 @@ func TestImpinjEnableBool16(t *testing.T) {
 		}
 
 		return true
-	}, nil); err != nil {
-		t.Error(err)
-	}
+	}, nil))
 }
 
 var fccFreqs = []Kilohertz{
@@ -84,7 +73,8 @@ var fccFreqs = []Kilohertz{
 }
 
 // newImpinjCaps returns capabilities matching an Impinj Reader in an FCC region.
-func newImpinjCaps() *GetReaderCapabilitiesResponse {
+func newImpinjCaps(t *testing.T) *GetReaderCapabilitiesResponse {
+	t.Helper()
 	powerTable := make([]TransmitPowerLevelTableEntry, 81)
 	for i := range powerTable {
 		powerTable[i] = TransmitPowerLevelTableEntry{
@@ -102,9 +92,7 @@ func newImpinjCaps() *GetReaderCapabilitiesResponse {
 	}
 	receiveTable[0].ReceiveSensitivity = 0
 
-	if len(fccFreqs) != 50 {
-		panic("This code is based on the assumption that the FCC Frequency list has 50 entries.")
-	}
+	assert.Equal(t, len(fccFreqs), 50)
 
 	// Build the frequency list by appending entries from the FCC list,
 	// where we step the index into the FCC list by some generator of Z/Z(50)
@@ -267,54 +255,30 @@ func newImpinjCaps() *GetReaderCapabilitiesResponse {
 }
 
 func TestImpinjDevice_invalid(t *testing.T) {
-	caps := newImpinjCaps()
+	caps := newImpinjCaps(t)
 	caps.RegulatoryCapabilities.UHFBandCapabilities.C1G2RFModes.UHFC1G2RFModeTableEntries = nil
 	_, err := NewImpinjDevice(caps)
-	if err == nil {
-		t.Fatal("there should be an error if the capabilities lacks an RF Mode Table")
-	}
+	require.Error(t, err)
 }
 
 func TestImpinjDevice_NewConfig(t *testing.T) {
-	caps := newImpinjCaps()
+	caps := newImpinjCaps(t)
 	d, err := NewImpinjDevice(caps)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if d.stateAware {
-		t.Errorf("d should not be state aware")
-	}
-
-	if !d.allowsHop {
-		t.Errorf("d should allow hopping")
-	}
-
-	if d.nSpecsPerRO != caps.LLRPCapabilities.MaxSpecsPerROSpec {
-		t.Errorf("mismatched nRoSpecs: %d != %d",
-			d.nSpecsPerRO, caps.LLRPCapabilities.MaxSpecsPerROSpec)
-	}
+	require.NoError(t, err)
+	assert.False(t, d.stateAware)
+	assert.True(t, d.allowsHop)
+	assert.Equal(t, d.nSpecsPerRO, caps.LLRPCapabilities.MaxSpecsPerROSpec)
 
 	nFreqs := len(caps.RegulatoryCapabilities.UHFBandCapabilities.
 		FrequencyInformation.FrequencyHopTables[0].Frequencies)
-	if int(d.nFreqs) != nFreqs {
-		t.Errorf("mismatched nFreqs: %d != %d", d.nFreqs, nFreqs)
-	}
-
-	if d.nGPIs != caps.GeneralDeviceCapabilities.GPIOCapabilities.NumGPIs {
-		t.Errorf("mismatched nGPIs: %d != %d",
-			d.nGPIs, caps.GeneralDeviceCapabilities.GPIOCapabilities.NumGPIs)
-	}
+	assert.Equal(t, int(d.nFreqs), nFreqs)
+	assert.Equal(t, d.nGPIs, caps.GeneralDeviceCapabilities.GPIOCapabilities.NumGPIs)
 
 	// make sure we removed the meaningless Autoset modes
-	if len(d.modes) != 5 {
-		t.Errorf("expected 5 modes; got %d", len(d.modes))
-	}
+	assert.Equal(t, len(d.modes), 5)
 
 	for i := range d.pwrMinToMax[1:] {
-		if d.pwrMinToMax[i].TransmitPowerValue > d.pwrMinToMax[i+1].TransmitPowerValue {
-			t.Errorf("power levels are not sorted properly: %v", d.pwrMinToMax)
-		}
+		assert.Less(t, d.pwrMinToMax[i].TransmitPowerValue, d.pwrMinToMax[i+1].TransmitPowerValue)
 
 		// The next few tests assume power values are more than 0.01 dBm apart.
 		// They
@@ -322,55 +286,36 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 
 		// If we look for a power entry that exists, we should get that exact value.
 		pIdx, pValue := d.findPower(pwrAtI.TransmitPowerValue)
-		if pIdx == 0 {
-			t.Errorf("a valid power index should never be 0")
-		}
-		if pwrAtI.TransmitPowerValue != pValue || pwrAtI.Index != pIdx {
-			t.Errorf("expected power %d (index %d), but got %d (index %d)",
-				pwrAtI.TransmitPowerValue, pwrAtI.Index, pValue, pIdx)
-		}
+		assert.NotZero(t, pIdx)
+		assert.Equal(t, pwrAtI.TransmitPowerValue, pValue)
+		assert.Equal(t, pwrAtI.Index, pIdx)
 
 		// If we search for a power just above this one,
 		// we should get back the same power value,
 		// assuming power values are more than 0.01 dBm apart.
 		pIdx, pValue = d.findPower(pwrAtI.TransmitPowerValue + 1)
-		if pwrAtI.Index != pIdx {
-			t.Errorf("expected power %d (index %d), but got %d (index %d)",
-				pwrAtI.TransmitPowerValue, pwrAtI.Index, pValue, pIdx)
-		}
+		assert.Equal(t, pwrAtI.Index, pIdx)
 		pIdx, pValue = d.findPower(pwrAtI.TransmitPowerValue + 1)
-		if pIdx == 0 {
-			t.Errorf("a valid power index should never be 0")
-		}
+		assert.NotZero(t, pIdx)
 
 		// If we search for a power just below this one,
 		// we should get back a power value less the target,
-		if pwrAtI.TransmitPowerValue+1 < pValue {
-			t.Errorf("selected power should not exceed %d (index %d), but got %d (index %d)",
-				pwrAtI.TransmitPowerValue, pwrAtI.Index, pValue, pIdx)
-		}
+		assert.Greater(t, pwrAtI.TransmitPowerValue+1, pValue)
 	}
 
 	// Look for a power lower than the lowest power.
 	// It should yield the lowest power value.
 	lowest := d.pwrMinToMax[0]
 	pIdx, pValue := d.findPower(lowest.TransmitPowerValue - 1)
-	if lowest.Index != pIdx || lowest.TransmitPowerValue != pValue {
-		t.Errorf("expected lowest power %d at %d; got %d at %d",
-			lowest.Index, lowest.TransmitPowerValue, pValue, pIdx)
-	}
-
-	if d.NewConfig() == nil {
-		t.Error("expected device to provide a config")
-	}
+	assert.Equal(t, lowest.Index, pIdx)
+	assert.Equal(t, lowest.TransmitPowerValue, pValue)
+	assert.NotNil(t, d.NewConfig())
 }
 
 func TestBasicDevice_NewROSpec(t *testing.T) {
-	caps := newImpinjCaps()
+	caps := newImpinjCaps(t)
 	d, err := NewBasicDevice(caps)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	for _, b := range []Behavior{
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}},
@@ -387,13 +332,10 @@ func TestBasicDevice_NewROSpec(t *testing.T) {
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{fccFreqs[0], fccFreqs[1], fccFreqs[2]}},
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{}},
 	} {
-		if r, err := d.NewROSpec(b, Environment{}); err != nil {
-			t.Errorf("expected an ROSpec, but got an error for behavior %+v: %+v", b, err)
-		} else if r == nil {
-			t.Errorf("expected an ROSpec, but got nil for behavior %+v", b)
-		} else {
-			testROSpecProperties(t, r)
-		}
+		r, err := d.NewROSpec(b, Environment{})
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
+		testROSpecProperties(t, r)
 	}
 
 	for _, b := range []Behavior{
@@ -403,55 +345,37 @@ func TestBasicDevice_NewROSpec(t *testing.T) {
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 5}},
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: math.MaxUint16}},
 	} {
-		if r, err := d.NewROSpec(b, Environment{}); err == nil {
-			t.Errorf("expected an error for behavior %+v: %+v", b, r)
-		}
+		_, err := d.NewROSpec(b, Environment{})
+		assert.Error(t, err)
 	}
 }
 
 func TestBasicDevice_NewROSpec_noHopThisTime(t *testing.T) {
-	caps := newImpinjCaps()
+	caps := newImpinjCaps(t)
 	freqInfo := &caps.RegulatoryCapabilities.UHFBandCapabilities.FrequencyInformation
 	freqInfo.Hopping = false
 
-	if _, err := NewBasicDevice(caps); err == nil {
-		t.Fatal("Creating a device should fail if Hopping is false " +
-			"but no FixedFrequencyTable is defined")
-	}
-
+	_, err := NewBasicDevice(caps)
+	require.Error(t, err)
 	freqInfo.FrequencyHopTables = nil
 	freqInfo.FixedFrequencyTable = &FixedFrequencyTable{Frequencies: fccFreqs}
 	d, err := NewBasicDevice(caps)
-	if err != nil {
-		t.Fatalf("failed to create device with fixed frequencies: %+v", err)
-	}
+	assert.NoError(t, err)
 
 	for _, b := range []Behavior{
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, Frequencies: []Kilohertz{fccFreqs[2]}},
 	} {
 		r, err := d.NewROSpec(b, Environment{})
-
-		if err != nil {
-			t.Errorf("expected an ROSpec, but got an error for behavior %+v: %+v", b, err)
-			continue
-		} else if r == nil {
-			t.Errorf("expected an ROSpec, but got nil for behavior %+v", b)
-			continue
-		}
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
 
 		for i, ai := range r.AISpecs {
 			for j, ips := range ai.InventoryParameterSpecs {
 				for k, ac := range ips.AntennaConfigurations {
-					if ac.RFTransmitter == nil {
-						t.Errorf("missing transmitter info for (%d, %d, %d)", i, j, k)
-						continue
-					}
+					assert.NotNil(t, ac.RFTransmitter)
 
 					// 3 because index is 1-based, and above we used fccFreq[2]
-					if ac.RFTransmitter.ChannelIndex != 3 {
-						t.Errorf("invalid channel index for (%d, %d, %d): %d", i, j, k,
-							ac.RFTransmitter.ChannelIndex)
-					}
+					assert.Equal(t, ac.RFTransmitter.ChannelIndex, uint16(3), fmt.Sprintf("invalid channel index for (%d, %d, %d): %d", i, j, k, ac.RFTransmitter.ChannelIndex))
 				}
 			}
 		}
@@ -476,25 +400,20 @@ func TestBasicDevice_NewROSpec_noHopThisTime(t *testing.T) {
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: 5}},
 		{ScanType: ScanFast, Power: PowerTarget{Max: 3000}, GPITrigger: &GPITrigger{Port: math.MaxUint16}},
 	} {
-		if r, err := d.NewROSpec(b, Environment{}); err == nil {
-			t.Errorf("expected an error for behavior %+v: %+v", b, r)
-		}
+		r, err := d.NewROSpec(b, Environment{})
+		assert.Error(t, err, "expected an error for behavior %+v: %+v", b, r)
 	}
 }
 
 func TestFastestAt(t *testing.T) {
-	caps := newImpinjCaps()
+	caps := newImpinjCaps(t)
 	d, err := NewImpinjDevice(caps)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// find best should return something, regardless of the number of readers
 	for i := 0; i < 100; i++ {
 		best, m := d.findBestMode(0)
-		if best > len(d.modes)-1 {
-			t.Errorf("find best returned an invalid mode: %d, %+v", best, m)
-		}
+		assert.Less(t, best, len(d.modes)-1, fmt.Sprintf("find best returned an invalid mode: %d, %+v", best, m))
 	}
 
 	type expMode struct {
@@ -512,22 +431,11 @@ func TestFastestAt(t *testing.T) {
 	} {
 		bestIdx, ok := d.fastestAt(testCase.mask)
 		if !testCase.shouldHaveMode {
-			if ok {
-				t.Errorf("did not expect a mode index for %+v, but found %d",
-					testCase, bestIdx)
-			}
+			assert.False(t, ok)
 			continue
 		}
-
-		if !ok {
-			t.Errorf("expected mode index for %+v, but none found", testCase)
-			continue
-		}
-
-		if testCase.modeIdx != bestIdx {
-			t.Errorf("expected mode %d for %+v, but got %d",
-				testCase.modeIdx, testCase, bestIdx)
-		}
+		assert.True(t, ok)
+		assert.Equal(t, testCase.modeIdx, bestIdx)
 	}
 
 	// if we remove the denser masks, we shouldn't get modes at those higher levels
@@ -543,30 +451,17 @@ func TestFastestAt(t *testing.T) {
 	} {
 		bestIdx, ok := d.fastestAt(testCase.mask)
 		if !testCase.shouldHaveMode {
-			if ok {
-				t.Errorf("did not expect a mode index for %+v, but found %d",
-					testCase, bestIdx)
-			}
+			assert.False(t, ok)
 			continue
 		}
-
-		if !ok {
-			t.Errorf("expected mode index for %+v, but none found", testCase)
-			continue
-		}
-
-		if testCase.modeIdx != bestIdx {
-			t.Errorf("expected mode %d for %+v, but got %d",
-				testCase.modeIdx, testCase, bestIdx)
-		}
+		assert.True(t, ok)
+		assert.Equal(t, testCase.modeIdx, bestIdx)
 	}
 
 	// find best should return something, regardless of the number of readers
 	for i := 0; i < 100; i++ {
 		best, m := d.findBestMode(0)
-		if best > len(d.modes)-1 {
-			t.Errorf("find best returned an invalid mode: %d, %+v", best, m)
-		}
+		assert.Less(t, best, len(d.modes)-1, fmt.Sprintf("find best returned an invalid mode: %d, %+v", best, m))
 	}
 }
 
@@ -591,83 +486,37 @@ func TestBehavior_Boundary_zero(t *testing.T) {
 
 func checkStartImmediate(t *testing.T, spec ROBoundarySpec) {
 	t.Helper()
-	if spec.StartTrigger.Trigger != ROStartTriggerImmediate {
-		t.Errorf("behavior should have immediate start trigger, not %v",
-			spec.StartTrigger.Trigger)
-	}
-
-	if spec.StartTrigger.GPITrigger != nil {
-		t.Errorf("behavior without GPI trigger should not have a GPI trigger")
-	}
-
-	if spec.StartTrigger.PeriodicTrigger != nil {
-		t.Error("behavior with immediate start trigger should not have a periodic trigger")
-	}
+	require.Equal(t, spec.StartTrigger.Trigger, ROStartTriggerImmediate)
+	require.Nil(t, spec.StartTrigger.GPITrigger)
+	require.Nil(t, spec.StartTrigger.PeriodicTrigger)
 }
 
 func checkStartNone(t *testing.T, spec ROBoundarySpec) {
 	t.Helper()
-	if spec.StartTrigger.Trigger != ROStartTriggerNone {
-		t.Errorf("behavior should not have a start trigger, but has %v",
-			spec.StartTrigger.Trigger)
-	}
-
-	if spec.StartTrigger.GPITrigger != nil {
-		t.Errorf("behavior without GPI trigger should not have a GPI trigger")
-	}
-
-	if spec.StartTrigger.PeriodicTrigger != nil {
-		t.Error("behavior should not have a periodic trigger")
-	}
+	require.Equal(t, spec.StartTrigger.Trigger, ROStartTriggerNone)
+	require.Nil(t, spec.StartTrigger.GPITrigger)
+	require.Nil(t, spec.StartTrigger.PeriodicTrigger)
 }
 
 func checkStartGPI(t *testing.T, spec ROBoundarySpec) {
 	t.Helper()
-	if spec.StartTrigger.Trigger != ROStartTriggerGPI {
-		t.Errorf("behavior should have GPI start trigger, not %v",
-			spec.StartTrigger.Trigger)
-	}
-
-	if spec.StartTrigger.GPITrigger == nil {
-		t.Errorf("behavior should have GPI trigger, but doesn't")
-	}
-
-	if spec.StartTrigger.PeriodicTrigger != nil {
-		t.Error("behavior should not have a periodic trigger")
-	}
+	require.Equal(t, spec.StartTrigger.Trigger, ROStartTriggerGPI)
+	require.NotNil(t, spec.StartTrigger.GPITrigger)
+	require.Nil(t, spec.StartTrigger.PeriodicTrigger)
 }
 
 func checkStopNone(t *testing.T, spec ROBoundarySpec) {
 	t.Helper()
-	if spec.StopTrigger.Trigger != ROStopTriggerNone {
-		t.Errorf("behavior should not have a stop trigger, but has %v",
-			spec.StopTrigger.Trigger)
-	}
-
-	if spec.StopTrigger.DurationTriggerValue != 0 {
-		t.Errorf("behavior stop trigger duration should be 0, not %d",
-			spec.StopTrigger.DurationTriggerValue)
-	}
-
-	if spec.StopTrigger.GPITriggerValue != nil {
-		t.Error("behavior should not have a GPI stop trigger")
-	}
+	require.Equal(t, spec.StopTrigger.Trigger, ROStopTriggerNone)
+	require.Zero(t, spec.StopTrigger.DurationTriggerValue)
+	require.Nil(t, spec.StopTrigger.GPITriggerValue)
 }
 
 func checkStopDuration(t *testing.T, spec ROBoundarySpec) {
 	t.Helper()
-	if spec.StopTrigger.Trigger != ROStopTriggerDuration {
-		t.Errorf("behavior should have a duration stop trigger, but has %v",
-			spec.StopTrigger.Trigger)
-	}
-
-	if spec.StopTrigger.DurationTriggerValue == 0 {
-		t.Error("behavior stop trigger duration should not be 0")
-	}
-
-	if spec.StopTrigger.GPITriggerValue != nil {
-		t.Error("behavior should not have a GPI stop trigger")
-	}
+	require.Equal(t, spec.StopTrigger.Trigger, ROStopTriggerDuration)
+	require.NotZero(t, spec.StopTrigger.DurationTriggerValue)
+	require.Nil(t, spec.StopTrigger.GPITriggerValue)
 }
 
 func TestMarshalBehaviorText(t *testing.T) {
@@ -697,27 +546,18 @@ func TestMarshalBehaviorText(t *testing.T) {
 
 			got, err := json.Marshal(testCase.val)
 			if testCase.shouldFail {
-				if err == nil {
-					t.Errorf("expected a marshaling error, but got %v", got)
-				}
+				assert.Error(t, err)
 				return
 			}
-
-			if !bytes.Equal(got, testCase.data) {
-				t.Errorf("got = %s, want %s", got, testCase.data)
-			}
+			assert.Equal(t, got, testCase.data)
 
 			newInst := reflect.New(reflect.TypeOf(testCase.val))
 			ptr := newInst.Interface()
-			if err := json.Unmarshal(testCase.data, ptr); err != nil {
-				t.Errorf("unmarshaling failed: data = %s, error = %v", testCase.data, err)
-				return
-			}
+			err = json.Unmarshal(testCase.data, ptr)
+			assert.NoError(t, err)
 
 			newVal := newInst.Elem().Interface()
-			if !reflect.DeepEqual(newVal, testCase.val) {
-				t.Errorf("roundtrip failed: got = %+v, want %+v", newVal, testCase.val)
-			}
+			assert.Equal(t, newVal, testCase.val)
 		})
 	}
 }
