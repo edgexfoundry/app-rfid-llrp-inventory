@@ -22,10 +22,10 @@ func getTestingLogger() logger.LoggingClient {
 	logLevel := "WARN"
 	if testing.Verbose() {
 		logLevel = "DEBUG"
+		return logger.NewClientStdOut("test", false, logLevel)
 	}
-	mockLogger := logger.NewMockClient()
-	mockLogger.SetLogLevel(logLevel)
-	return mockLogger
+
+	return logger.NewClientStdOut("test", false, logLevel)
 }
 
 func TestBasicArrival(t *testing.T) {

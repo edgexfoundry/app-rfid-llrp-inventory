@@ -354,15 +354,7 @@ func getConfigClient() (configuration.Client, error) {
 // may come from any of several sources.
 func (app *inventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	if len(params) < 1 {
-		err := errors.Errorf("expected a single parameter, but got %d", len(params))
-		app.lgr.Error("Processing error.", "error", err.Error())
-		return false, err
-	}
-	if s, ok := params[1].(string); ok && s == "" {
-		// Turns out, sometimes the "pipeline" gives a second parameter:
-		// an empty string which sometimes has type info about the first param.
-	} else {
-		err := errors.Errorf("expected a single parameter, but got a second: %T %+[1]v", params[1])
+		err := errors.Errorf("no Event received")
 		app.lgr.Error("Processing error.", "error", err.Error())
 		return false, err
 	}
