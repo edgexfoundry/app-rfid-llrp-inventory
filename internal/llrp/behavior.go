@@ -23,8 +23,8 @@ type Behavior struct {
 	GPITrigger    *GPITrigger    `json:"gpiTrigger,omitempty"`
 	ImpinjOptions *ImpinjOptions `json:"impinjOptions,omitempty"`
 
-	ScanType    ScanType `json:"scanType"`
-	Duration    Millisecs32 `json:"duration"`// 0 = repeat forever
+	ScanType    ScanType    `json:"scanType"`
+	Duration    Millisecs32 `json:"duration"` // 0 = repeat forever
 	Power       PowerTarget `json:"power"`
 	Frequencies []Kilohertz `json:"frequencies,omitempty"` // ignored in Hopping regions
 }
