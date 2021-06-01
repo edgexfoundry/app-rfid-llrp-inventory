@@ -22,7 +22,9 @@ func getTestingLogger() logger.LoggingClient {
 	logLevel := "WARN"
 	if testing.Verbose() {
 		logLevel = "DEBUG"
-		return logger.NewClientStdOut("test", false, logLevel)
+		log := logger.NewMockClient()
+		log.SetLogLevel(logLevel)
+		return log
 	}
 
 	return logger.NewClientStdOut("test", false, logLevel)
