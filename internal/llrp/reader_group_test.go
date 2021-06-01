@@ -40,7 +40,7 @@ func addReaderHelper(t *testing.T) (*ReaderGroup, DSClient, func()) {
 	rg := readerGroupHelper()
 	err = rg.AddReader(ds, "test")
 	require.NoError(t, err)
-	return rg, ds, func() {ts.Close()}
+	return rg, ds, func() { ts.Close() }
 }
 
 func TestNewReaderGroup(t *testing.T) {

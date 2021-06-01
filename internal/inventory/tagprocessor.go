@@ -30,6 +30,7 @@ type processorConfig struct {
 	debugLogEnabled bool
 }
 
+// TagProcessor holds the current inventory data and processes incoming tag read data
 type TagProcessor struct {
 	lc        logger.LoggingClient
 	inventory map[string]*Tag
@@ -51,6 +52,9 @@ func NewTagProcessor(lc logger.LoggingClient, cfg ConsulConfig, tags []StaticTag
 	return tp
 }
 
+// UpdateConfig takes in a ConsulConfig raw config object and converts it into a locally cached
+// version that is understood by the TagProcessor. It also generates the correct mobility profile
+// based on the supplied values, and the alias map as well.
 func (tp *TagProcessor) UpdateConfig(cfg ConsulConfig) {
 	as := cfg.ApplicationSettings
 	profile := newMobilityProfile(as.MobilityProfileSlope, as.MobilityProfileThreshold, as.MobilityProfileHoldoffMillis)
@@ -99,25 +103,6 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (
 		}
 	}
 	return events, tp.snapshot()
-}
-
-// ReportInfo holds both pre-existing as well as computed metadata about an incoming ROAccessReport
-type ReportInfo struct {
-	DeviceName  string
-	OriginNanos int64
-
-	offsetMicros int64
-	// referenceTimestamp is the same as OriginNanos, but converted to milliseconds
-	referenceTimestamp int64
-}
-
-// NewReportInfo creates a new ReportInfo based on an EdgeX Reading value
-func NewReportInfo(reading *contract.Reading) ReportInfo {
-	return ReportInfo{
-		DeviceName:         reading.Device,
-		OriginNanos:        reading.Origin,
-		referenceTimestamp: reading.Origin / int64(time.Millisecond),
-	}
 }
 
 // getAlias returns the alias associated with a location if one has been defined,
@@ -180,6 +165,9 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	}
 	prevState, prevLoc := tag.state, tag.Location
 
+	// Note: This must be deferred because the code following this defer block has many early-exit
+	// scenarios, however we need this deferred block to be run regardless. It is an anonymous
+	// function to allow usage of local variables via closure.
 	defer func() {
 		// Update tag state after processing report.
 		switch prevState {
@@ -216,7 +204,9 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 		}
 	}()
 
-	// Assumes that we're only Reading TIDs and never anything else.
+	// todo: The following code assumes that if ReadDataAsHex returns ok, that the data contained
+	// 		 within is the TID (Tag ID). This is not always the case, but it is the only
+	//		 type we currently support for ReadOpSpec.
 	if tid, ok := rt.ReadDataAsHex(); ok {
 		tag.TID = tid
 	}
@@ -315,12 +305,14 @@ func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *tagStats, t
 // structures if it has not been seen in a long enough time. Only applies to
 // tags which are already Departed.
 func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
-	expiration := UnixMilli(time.Now().Add(time.Hour * time.Duration(-tp.config.ageOutHours)))
+	// subtract the ageOutHours to get the minimum allowed LastRead timestamp.
+	// anything older than that is considered aged-out.
+	minTimestamp := UnixMilli(time.Now().Add(time.Hour * -time.Duration(tp.config.ageOutHours)))
 
 	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
 	for epc, tag := range tp.inventory {
-		if tag.state == Departed && tag.LastRead < expiration {
+		if tag.state == Departed && tag.LastRead < minTimestamp {
 			numRemoved++
 			delete(tp.inventory, epc)
 		}
@@ -340,10 +332,12 @@ func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTag) {
 	now := time.Now()
 	nowMs := now.UnixNano() / 1e6
-	expiration := now.Add(-time.Duration(tp.config.departedThresholdSeconds)*time.Second).UnixNano() / 1e6
+	// subtract the departedThresholdSeconds to get the minimum allowed LastRead timestamp.
+	// anything older than that is considered departed.
+	minTimestamp := now.Add(-1*time.Duration(tp.config.departedThresholdSeconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {
-		if tag.state == Present && tag.LastRead < expiration {
+		if tag.state == Present && tag.LastRead < minTimestamp {
 			tag.setStateAt(Departed, nowMs)
 			e := DepartedEvent{
 				BaseEvent: BaseEvent{

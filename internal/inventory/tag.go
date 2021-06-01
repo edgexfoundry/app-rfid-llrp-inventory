@@ -9,11 +9,15 @@ import (
 	"sync"
 )
 
+// TagState is an enum of the various states a tag can be in.
 type TagState string
 
 const (
-	Unknown  TagState = "Unknown"
-	Present  TagState = "Present"
+	// Unknown is the tag state when then tag has not been read before.
+	Unknown TagState = "Unknown"
+	// Present is the state a tag will be in once it has been read and not been Departed.
+	Present TagState = "Present"
+	// Departed is the state a tag is in when it has not been read for a long period time.
 	Departed TagState = "Departed"
 )
 
@@ -47,6 +51,8 @@ type Tag struct {
 	statsMu sync.Mutex
 }
 
+// NewTag creates a new tag object with the specified EPC. THe state is set to Unknown and
+// an empty statsMap is created.
 func NewTag(epc string) *Tag {
 	return &Tag{
 		EPC:      epc,

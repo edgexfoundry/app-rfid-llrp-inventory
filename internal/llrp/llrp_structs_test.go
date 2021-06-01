@@ -1530,16 +1530,15 @@ func TestGetAccessSpecsResponse_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK - nil",
+			name:   "OK - nil",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}, AccessSpecs: nil},
-			want: MsgGetAccessSpecsResponse,
+			want:   MsgGetAccessSpecsResponse,
 		},
 		{
-			name: "OK - one AccessSpec",
+			name:   "OK - one AccessSpec",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}, AccessSpecs: []AccessSpec{{AccessSpecID: ImpinjTagReportContentSelector, AntennaID: 0, AirProtocolID: AirProtoEPCGlobalClass1Gen2, IsActive: true, ROSpecID: ImpinjPeakRSSI, Trigger: AccessSpecStopTrigger{Trigger: AccessSpecStopTriggerNone, OperationCountValue: 0}, AccessCommand: AccessCommand{}}}},
-			want: MsgGetAccessSpecsResponse,
+			want:   MsgGetAccessSpecsResponse,
 		},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1563,24 +1562,24 @@ func TestGetAccessSpecsResponse_Status(t *testing.T) {
 		want   LLRPStatus
 	}{
 		{
-			name: "OK - nil success",
+			name:   "OK - nil success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}, AccessSpecs: nil},
-			want: LLRPStatus{Status: StatusSuccess},
+			want:   LLRPStatus{Status: StatusSuccess},
 		},
 		{
-			name: "OK - nil device err",
+			name:   "OK - nil device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}, AccessSpecs: nil},
-			want: LLRPStatus{Status: StatusDeviceError},
+			want:   LLRPStatus{Status: StatusDeviceError},
 		},
 		{
-			name: "OK - one AccessSpec success",
+			name:   "OK - one AccessSpec success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}, AccessSpecs: []AccessSpec{{AccessSpecID: ImpinjTagReportContentSelector, AntennaID: 0, AirProtocolID: AirProtoEPCGlobalClass1Gen2, IsActive: true, ROSpecID: ImpinjPeakRSSI, Trigger: AccessSpecStopTrigger{Trigger: AccessSpecStopTriggerNone, OperationCountValue: 0}, AccessCommand: AccessCommand{}}}},
-			want: LLRPStatus{Status: StatusSuccess},
+			want:   LLRPStatus{Status: StatusSuccess},
 		},
 		{
-			name: "OK - one AccessSpec device err",
+			name:   "OK - one AccessSpec device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}, AccessSpecs: []AccessSpec{{AccessSpecID: ImpinjTagReportContentSelector, AntennaID: 0, AirProtocolID: AirProtoEPCGlobalClass1Gen2, IsActive: true, ROSpecID: ImpinjPeakRSSI, Trigger: AccessSpecStopTrigger{Trigger: AccessSpecStopTriggerNone, OperationCountValue: 0}, AccessCommand: AccessCommand{}}}},
-			want: LLRPStatus{Status: StatusDeviceError},
+			want:   LLRPStatus{Status: StatusDeviceError},
 		},
 	}
 	for _, tt := range tests {
@@ -1630,7 +1629,7 @@ func TestClientRequestOp_Type(t *testing.T) {
 				FirstSeenUTC:             new(FirstSeenUTC),
 				LastSeenUTC:              new(LastSeenUTC),
 				TagSeenCount:             new(TagSeenCount),
-				EPC96: EPC96{EPC: impinjEnableBool16(2)},
+				EPC96:                    EPC96{EPC: impinjEnableBool16(2)},
 			}},
 			want: MsgClientRequestOp,
 		},
@@ -1658,7 +1657,7 @@ func TestClientRequestOpResponse_Type(t *testing.T) {
 			name: "OK",
 			fields: fields{ClientRequestResponse: ClientRequestResponse{
 				AccessSpecID: ImpinjTagReportContentSelector,
-				EPCData: EPCData{EPCNumBits: 0, EPC: impinjEnableBool16(5)},
+				EPCData:      EPCData{EPCNumBits: 0, EPC: impinjEnableBool16(5)},
 			}},
 			want: MsgClientRequestOpResponse,
 		},
@@ -1666,13 +1665,13 @@ func TestClientRequestOpResponse_Type(t *testing.T) {
 			name: "OK",
 			fields: fields{ClientRequestResponse: ClientRequestResponse{
 				AccessSpecID: ImpinjTagReportContentSelector,
-				EPCData: EPCData{EPCNumBits: 0, EPC: impinjEnableBool16(5)},
-				Custom: &Custom{VendorID: ImpinjSearchMode},
+				EPCData:      EPCData{EPCNumBits: 0, EPC: impinjEnableBool16(5)},
+				Custom:       &Custom{VendorID: ImpinjSearchMode},
 			}},
 			want: MsgClientRequestOpResponse,
 		},
 	}
-		for _, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cl := &ClientRequestOpResponse{
 				ClientRequestResponse: tt.fields.ClientRequestResponse,
@@ -1694,9 +1693,9 @@ func TestROAccessReport_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK",
+			name:   "OK",
 			fields: fields{},
-			want: MsgROAccessReport,
+			want:   MsgROAccessReport,
 		},
 		{
 			name: "OK",
@@ -1710,7 +1709,7 @@ func TestROAccessReport_Type(t *testing.T) {
 				FirstSeenUTC:             new(FirstSeenUTC),
 				LastSeenUTC:              new(LastSeenUTC),
 				TagSeenCount:             new(TagSeenCount),
-				EPC96: EPC96{EPC: impinjEnableBool16(2)},
+				EPC96:                    EPC96{EPC: impinjEnableBool16(2)},
 			}}, Custom: []Custom{{
 				VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'},
 			}}},
@@ -1775,9 +1774,9 @@ func TestReaderEventNotification_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK",
+			name:   "OK",
 			fields: fields{},
-			want: MsgReaderEventNotification,
+			want:   MsgReaderEventNotification,
 		},
 		{
 			name: "OK",
@@ -1900,9 +1899,9 @@ func TestGetReaderConfig_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK",
-			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}},},
-			want: MsgGetReaderConfig,
+			name:   "OK",
+			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
+			want:   MsgGetReaderConfig,
 		},
 	}
 	for _, tt := range tests {
@@ -1941,12 +1940,12 @@ func TestGetReaderConfigResponse_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK",
-			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}},},
-			want: MsgGetReaderConfigResponse,
+			name:   "OK",
+			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
+			want:   MsgGetReaderConfigResponse,
 		},
 	}
-		for _, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ge := &GetReaderConfigResponse{
 				LLRPStatus:                  tt.fields.LLRPStatus,
@@ -1990,19 +1989,19 @@ func TestGetReaderConfigResponse_Status(t *testing.T) {
 		want   LLRPStatus
 	}{
 		{
-			name: "OK - success",
+			name:   "OK - success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}, Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
-			want: LLRPStatus{Status: StatusSuccess},
+			want:   LLRPStatus{Status: StatusSuccess},
 		},
 		{
-			name: "OK - device err",
+			name:   "OK - device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}, Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
-			want: LLRPStatus{Status: StatusDeviceError},
+			want:   LLRPStatus{Status: StatusDeviceError},
 		},
 		{
-			name: "OK - invalid field",
+			name:   "OK - invalid field",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusFieldInvalid}, Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
-			want: LLRPStatus{Status: StatusFieldInvalid},
+			want:   LLRPStatus{Status: StatusFieldInvalid},
 		},
 	}
 	for _, tt := range tests {
@@ -2047,14 +2046,14 @@ func TestSetReaderConfig_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK",
+			name:   "OK",
 			fields: fields{},
-			want: MsgSetReaderConfig,
+			want:   MsgSetReaderConfig,
 		},
 		{
-			name: "OK",
-			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}},},
-			want: MsgSetReaderConfig,
+			name:   "OK",
+			fields: fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
+			want:   MsgSetReaderConfig,
 		},
 	}
 	for _, tt := range tests {
@@ -2087,19 +2086,19 @@ func TestSetReaderConfigResponse_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK - success",
+			name:   "OK - success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}},
-			want: MsgSetReaderConfigResponse,
+			want:   MsgSetReaderConfigResponse,
 		},
 		{
-			name: "OK - device err",
+			name:   "OK - device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}},
-			want: MsgSetReaderConfigResponse,
+			want:   MsgSetReaderConfigResponse,
 		},
 		{
-			name: "OK - invalid field",
+			name:   "OK - invalid field",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusFieldInvalid}},
-			want: MsgSetReaderConfigResponse,
+			want:   MsgSetReaderConfigResponse,
 		},
 	}
 	for _, tt := range tests {
@@ -2122,19 +2121,19 @@ func TestSetReaderConfigResponse_Status(t *testing.T) {
 		want   LLRPStatus
 	}{
 		{
-			name: "OK - success",
+			name:   "OK - success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}},
-			want: LLRPStatus{Status: StatusSuccess},
+			want:   LLRPStatus{Status: StatusSuccess},
 		},
 		{
-			name: "OK - device err",
+			name:   "OK - device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}},
-			want: LLRPStatus{Status: StatusDeviceError},
+			want:   LLRPStatus{Status: StatusDeviceError},
 		},
 		{
-			name: "OK - invalid field",
+			name:   "OK - invalid field",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusFieldInvalid}},
-			want: LLRPStatus{Status: StatusFieldInvalid},
+			want:   LLRPStatus{Status: StatusFieldInvalid},
 		},
 	}
 	for _, tt := range tests {
@@ -2175,19 +2174,19 @@ func TestCloseConnectionResponse_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK - success",
+			name:   "OK - success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}},
-			want: MsgCloseConnectionResponse,
+			want:   MsgCloseConnectionResponse,
 		},
 		{
-			name: "OK - device err",
+			name:   "OK - device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}},
-			want: MsgCloseConnectionResponse,
+			want:   MsgCloseConnectionResponse,
 		},
 		{
-			name: "OK - invalid field",
+			name:   "OK - invalid field",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusFieldInvalid}},
-			want: MsgCloseConnectionResponse,
+			want:   MsgCloseConnectionResponse,
 		},
 	}
 	for _, tt := range tests {
@@ -2210,19 +2209,19 @@ func TestCloseConnectionResponse_Status(t *testing.T) {
 		want   LLRPStatus
 	}{
 		{
-			name: "OK - success",
+			name:   "OK - success",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusSuccess}},
-			want: LLRPStatus{Status: StatusSuccess},
+			want:   LLRPStatus{Status: StatusSuccess},
 		},
 		{
-			name: "OK - device err",
+			name:   "OK - device err",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusDeviceError}},
-			want: LLRPStatus{Status: StatusDeviceError},
+			want:   LLRPStatus{Status: StatusDeviceError},
 		},
 		{
-			name: "OK - invalid field",
+			name:   "OK - invalid field",
 			fields: fields{LLRPStatus: LLRPStatus{Status: StatusFieldInvalid}},
-			want: LLRPStatus{Status: StatusFieldInvalid},
+			want:   LLRPStatus{Status: StatusFieldInvalid},
 		},
 	}
 	for _, tt := range tests {
@@ -2247,14 +2246,14 @@ func TestCustomMessage_Type(t *testing.T) {
 		want   MessageType
 	}{
 		{
-			name: "OK - ImpinjTagReportContentSelector",
+			name:   "OK - ImpinjTagReportContentSelector",
 			fields: fields{VendorID: ImpinjTagReportContentSelector, MessageSubtype: 0, Data: []byte{'b'}},
-			want: MsgCustomMessage,
+			want:   MsgCustomMessage,
 		},
 		{
-			name: "OK - ImpinjPeakRSSI",
+			name:   "OK - ImpinjPeakRSSI",
 			fields: fields{VendorID: ImpinjPeakRSSI, MessageSubtype: 10, Data: []byte{'c'}},
-			want: MsgCustomMessage,
+			want:   MsgCustomMessage,
 		},
 	}
 	for _, tt := range tests {
