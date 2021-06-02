@@ -66,7 +66,7 @@ func TestGetDevices(t *testing.T) {
 		{
 			testCaseName: "Test Get Device List",
 			respCode:     http.StatusOK,
-			devices:      []device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BC-20"}},
+			devices:      []device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BCclear-20"}},
 		},
 	}
 	for _, tc := range testCases {
@@ -88,7 +88,6 @@ func TestGetDevices(t *testing.T) {
 			deviceServiceClient := NewDSClient(actualURL, s.Client())
 
 			deviceList, err := GetDevices(s.URL, deviceServiceClient.httpClient)
-
 			if tc.respCode == http.StatusOK {
 				assert.NotNil(tt, deviceList, "Expected device list to be not empty")
 			} else {
@@ -109,7 +108,6 @@ func TestNewReader(t *testing.T) {
 		testCaseName string
 		deviceName   string
 		respCode     int
-		respBody     string
 		capabilities string
 	}
 
@@ -150,9 +148,8 @@ func TestNewReader(t *testing.T) {
 					jsonData, err := json.Marshal(resp)
 					require.NoError(t, err)
 					w.Write(jsonData)
-				} else {
-					w.Write([]byte(tc.respBody))
 				}
+
 			}
 
 			s := httptest.NewServer(http.HandlerFunc(handler))
@@ -190,7 +187,6 @@ func TestGetCapabilities(t *testing.T) {
 	type testCase struct {
 		testCaseName string
 		deviceName   string
-		errMsg       string
 		respCode     int
 		respBody     string
 		capabilities string
@@ -507,7 +503,6 @@ func TestPut(t *testing.T) {
 			}
 
 			err = deviceServiceClient.put(tc.path, tc.data)
-			//require.False(tt, (tc.errStatus && err == nil), "Encountered Error: %s", err)
 			if tc.respCode != http.StatusOK {
 				assert.NotNil(tt, err, "Encountered Error: %s", err)
 			} else {
