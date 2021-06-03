@@ -42,9 +42,9 @@ const (
 
 	baseConsulPath = "edgex/appservices/1.0/"
 
-	ResourceROAccessReport     = "ROAccessReport"
-	ResourceReaderNotification = "ReaderEventNotification"
-	ResourceInventoryEvent     = "InventoryEvent"
+	resourceROAccessReport     = "ROAccessReport"
+	resourceReaderNotification = "ReaderEventNotification"
+	resourceInventoryEvent     = "InventoryEvent"
 
 	maxBodyBytes        = 100 * 1024
 	coreDataPostTimeout = 3 * time.Minute
@@ -382,7 +382,7 @@ func (app *inventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 			app.lgr.Debug("Unknown reading.", "reading", reading.Name)
 			continue
 
-		case ResourceReaderNotification:
+		case resourceReaderNotification:
 			r.Reset()
 			r.WriteString(reading.Value)
 			notification := &llrp.ReaderEventNotification{}
@@ -396,7 +396,7 @@ func (app *inventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 					"error", err.Error(), "device", event.Device)
 			}
 
-		case ResourceROAccessReport:
+		case resourceROAccessReport:
 			r.Reset()
 			r.WriteString(reading.Value)
 
@@ -633,7 +633,7 @@ func (app *inventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 			continue
 		}
 
-		resourceName := ResourceInventoryEvent + string(event.OfType())
+		resourceName := resourceInventoryEvent + string(event.OfType())
 		app.edgexSdk.LoggingClient.Info("Sending Inventory Event.",
 			"type", resourceName, "payload", string(payload))
 

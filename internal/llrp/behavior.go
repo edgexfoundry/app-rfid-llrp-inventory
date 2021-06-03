@@ -3,8 +3,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/* Package llrp implements higher-level logic atop an LLRP Reader.
-This package converts <LLRP Reader Info, Desired Behavior> to LLRP messages & parameters.*/
+// Package llrp implements higher-level logic atop an LLRP Reader.
+// This package converts <LLRP Reader Info, Desired Behavior> to LLRP messages & parameters.
 package llrp
 
 import (

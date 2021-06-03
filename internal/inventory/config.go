@@ -12,6 +12,8 @@ import (
 	"strconv"
 )
 
+// ApplicationSettings is a struct that defines the ApplicationSettings section of the
+// configuration.toml file.
 type ApplicationSettings struct {
 	MobilityProfileThreshold     float64
 	MobilityProfileHoldoffMillis float64
@@ -28,10 +30,13 @@ type ApplicationSettings struct {
 	AdjustLastReadOnByOrigin bool
 }
 
+// WriteableConfig is a struct representation of the Writeable section of the configuration.toml file.
 type WriteableConfig struct {
 	LogLevel string
 }
 
+// ConsulConfig is the struct representation of all of the sections from the configuration.toml
+// that we are interested in syncing with Consul.
 type ConsulConfig struct {
 	Writable            WriteableConfig
 	ApplicationSettings ApplicationSettings
