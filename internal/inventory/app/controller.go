@@ -62,7 +62,7 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 		reading := &event.Readings[i] // Readings is 169 bytes. This avoid the copy.
 		switch reading.Name {
 		default:
-			app.lc.Debug("Unknown reading.", "reading", reading.Name)
+			app.lc.Error("Unknown reading name.", "reading", reading.Name)
 			continue
 
 		case resourceReaderNotification:

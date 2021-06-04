@@ -11,6 +11,7 @@ import (
 	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
+	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
 	"github.com/edgexfoundry/go-mod-configuration/configuration"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/pkg/errors"
@@ -164,11 +165,14 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	}()
 
 	// Subscribe to events.
-	if err := app.edgexSdk.SetFunctionsPipeline(app.processEdgeXEvent); err != nil {
-		return errors.New("failed to build pipeline")
+	err := app.edgexSdk.SetFunctionsPipeline(
+		transforms.NewFilter([]string{resourceROAccessReport, resourceReaderNotification}).FilterByValueDescriptor,
+		app.processEdgeXEvent)
+	if err != nil {
+		return errors.Wrap(err, "failed to build pipeline")
 	}
-	if err := app.edgexSdk.MakeItRun(); err != nil {
-		return errors.New("failed to run pipeline")
+	if err = app.edgexSdk.MakeItRun(); err != nil {
+		return errors.Wrap(err, "failed to run pipeline")
 	}
 
 	// let task loop complete
