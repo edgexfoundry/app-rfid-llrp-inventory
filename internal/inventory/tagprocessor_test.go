@@ -19,15 +19,11 @@ const (
 )
 
 func getTestingLogger() logger.LoggingClient {
-	logLevel := "WARN"
 	if testing.Verbose() {
-		logLevel = "DEBUG"
-		log := logger.NewMockClient()
-		log.SetLogLevel(logLevel)
-		return log
+		return logger.NewClientStdOut("test", false, "DEBUG")
 	}
 
-	return logger.NewClientStdOut("test", false, logLevel)
+	return logger.NewMockClient()
 }
 
 func TestBasicArrival(t *testing.T) {
