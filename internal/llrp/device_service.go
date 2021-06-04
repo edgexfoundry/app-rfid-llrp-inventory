@@ -268,9 +268,10 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 // Note that the device in question must be registered
 // with a device profile that has an enableImpinjExt deviceCommand.
 func (d *ImpinjDevice) EnableCustomExt(name string, ds DSClient) error {
-	return errors.WithMessage(ds.put(name+enableImpinjCmd,
-		[]byte(`{"ImpinjCustomExtensionMessage":"AAAAAA=="}`)),
-		"failed to enable Impinj extensions")
+	enableExtension := ds.put(name+enableImpinjCmd,
+		[]byte(`{"ImpinjCustomExtensionMessage":"AAAAAA=="}`))
+	msg := "failed to enable Impinj extensions"
+	return errors.WithMessage(enableExtension, msg)
 }
 
 // put PUTs the data to the device service path.

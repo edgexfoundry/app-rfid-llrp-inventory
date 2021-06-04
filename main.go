@@ -145,24 +145,30 @@ func main() {
 		{"/api/v1/readers", http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			if err := app.defaultGrp.WriteReaders(w); err != nil {
-				lgr.Error("Failed to write readers list.", "error", err.Error())
+				msg := fmt.Sprintf("Failed to write readers list: %v", err)
+				lgr.Error(msg)
 				w.WriteHeader(http.StatusInternalServerError)
+				http.Error(w, msg, http.StatusInternalServerError)
 			}
 		}},
 		{"/api/v1/inventory/snapshot", http.MethodGet,
 			func(w http.ResponseWriter, req *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if err := app.requestInventorySnapshot(w); err != nil {
-					app.lgr.Error("Failed to write inventory snapshot.", "error", err.Error())
+					msg := fmt.Sprintf("Failed to write inventory snapshot: %v", err)
+					app.lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 				}
 			},
 		},
 		{"/api/v1/command/reading/start", http.MethodPost,
 			func(w http.ResponseWriter, req *http.Request) {
 				if err := app.defaultGrp.StartAll(devService); err != nil {
-					lgr.Error("Failed to StartAll.", "error", err.Error())
+					msg := fmt.Sprintf("Failed to StartAll: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 			},
@@ -170,8 +176,10 @@ func main() {
 		{"/api/v1/command/reading/stop", http.MethodPost,
 			func(w http.ResponseWriter, req *http.Request) {
 				if err := app.defaultGrp.StopAll(devService); err != nil {
-					lgr.Error("Failed to StopAll.", "error", err)
+					msg := fmt.Sprintf("Failed to StopAll: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 			},
@@ -182,24 +190,30 @@ func main() {
 				bName := rv["name"]
 				// Currently, only "default" is supported.
 				if bName != "default" {
-					lgr.Error("Request to GET unknown behavior.", "name", bName)
+					msg := fmt.Sprintf("Request to GET unknown behavior. Name: %v", bName)
+					lgr.Error(msg)
 					if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
 						lgr.Error("Error writing failure response.", "error", err)
 					}
 					w.WriteHeader(http.StatusNotFound)
+					http.Error(w, msg, http.StatusNotFound)
 					return
 				}
 
 				data, err := json.Marshal(app.defaultGrp.Behavior())
 				if err != nil {
-					lgr.Error("Failed to marshal behavior.", "error", err)
+					msg := fmt.Sprintf("Failed to marshal behavior: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 
 				if _, err := w.Write(data); err != nil {
-					lgr.Error("Failed to write behavior data.", "error", err)
+					msg := fmt.Sprintf("Failed to write behavior data: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 				}
 			},
 		},
@@ -209,36 +223,42 @@ func main() {
 				bName := rv["name"]
 				// Currently, only "default" is supported.
 				if bName != "default" {
-					lgr.Error("Attempt to PUT unknown behavior.", "name", bName)
+					msg := fmt.Sprintf("Attempt to PUT unknown behavior. Name %v", bName)
+					lgr.Error(msg)
 					if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
 						lgr.Error("Error writing failure response.", "error", err)
 					}
 					w.WriteHeader(http.StatusNotFound)
+					http.Error(w, msg, http.StatusNotFound)
 					return
 				}
 
 				data, err := ioutil.ReadAll(io.LimitReader(req.Body, maxBodyBytes))
 				if err != nil {
-					lgr.Error("Failed to read behavior body.", "error", err)
+					msg := fmt.Sprintf("Failed to read behavior data: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusInternalServerError)
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 
 				var b llrp.Behavior
 				if err := json.Unmarshal(data, &b); err != nil {
-					lgr.Error("Failed to unmarshal behavior body.", "error", err,
-						"body", string(data))
+					msg := fmt.Sprintf("Failed to unmarshal behavior data: %v. Body: %s", err, string(data))
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusBadRequest)
-					_, _ = w.Write([]byte(err.Error())) // best effort
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 
 				if err := app.defaultGrp.SetBehavior(devService, b); err != nil {
-					lgr.Error("Failed to set new behavior.", "error", err)
+					msg := fmt.Sprintf("Failed to set net behavior: %v", err)
+					lgr.Error(msg)
 					w.WriteHeader(http.StatusBadRequest)
 					if _, err := w.Write([]byte(err.Error())); err != nil {
 						lgr.Error("Error writing failure response.", "error", err)
 					}
+					http.Error(w, msg, http.StatusInternalServerError)
 					return
 				}
 
@@ -332,38 +352,17 @@ func getConfigClient() (configuration.Client, error) {
 // subscribing to EdgeX's event stream and
 // accessing the resources that its agnosticism necessitates
 // may come from any of several sources.
-//
-// But since it's a lot easier, safer, and more performant
-// to write, call, compose, and test typical Go functions,
-// we only use the SDK to call a single function (this one),
-// which must verify the parameter types and arity,
-// then verify the safety we lost by piping this through EdgeX by
-// string matching the Event.Reading[].Name and JSON-unmarshal the Value string.
-//
-// Once we've reestablished these basic requirements,
-// this dispatches the content to the appropriate type-safe functions.
 func (app *inventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
-	if len(params) != 1 {
-		if len(params) == 2 {
-			if s, ok := params[1].(string); ok && s == "" {
-				// Turns out, sometimes the "pipeline" gives a second parameter:
-				// an empty string which sometimes has type info about the first param.
-			} else {
-				err := errors.Errorf("expected a single parameter, but got a second: %T %+[1]v", params[1])
-				app.lgr.Error("Processing error.", "error", err.Error())
-				return false, err
-			}
-		} else {
-			err := errors.Errorf("expected a single parameter, but got %d", len(params))
-			app.lgr.Error("Processing error.", "error", err.Error())
-			return false, err
-		}
+	if len(params) < 1 {
+		err := errors.Errorf("no Event received")
+		app.lgr.Error("Processing error.", "error", err.Error())
+		return false, err
 	}
 
 	event, ok := params[0].(models.Event)
 	if !ok {
 		// You know what's cool in compiled languages? Type safety.
-		return false, errors.Errorf("expected an EdgeX Event, but got %T", event)
+		return false, errors.Errorf("unexpected type received, not an EdgeX Event")
 	}
 
 	if len(event.Readings) < 1 {

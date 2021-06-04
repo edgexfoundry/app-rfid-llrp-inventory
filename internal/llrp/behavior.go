@@ -20,19 +20,19 @@ import (
 // LLRP Readers vary wildly in their capabilities;
 // some Behavior characteristics cannot be well-mapped to all Readers.
 type Behavior struct {
-	GPITrigger    *GPITrigger    `json:",omitempty"`
-	ImpinjOptions *ImpinjOptions `json:",omitempty"`
+	GPITrigger    *GPITrigger    `json:"gpiTrigger,omitempty"`
+	ImpinjOptions *ImpinjOptions `json:"impinjOptions,omitempty"`
 
-	ScanType    ScanType
-	Duration    Millisecs32 // 0 = repeat forever
-	Power       PowerTarget
-	Frequencies []Kilohertz `json:",omitempty"` // ignored in Hopping regions
+	ScanType    ScanType    `json:"scanType"`
+	Duration    Millisecs32 `json:"duration"` // 0 = repeat forever
+	Power       PowerTarget `json:"power"`
+	Frequencies []Kilohertz `json:"frequencies,omitempty"` // ignored in Hopping regions
 }
 
 type GPITrigger struct {
 	Port    uint16
 	Event   bool
-	Timeout Millisecs32 `json:",omitempty"`
+	Timeout Millisecs32 `json:"timeout,omitempty"`
 }
 
 // ImpinjOptions control behaviors that will only apply to Impinj Readers,
@@ -48,7 +48,7 @@ type ImpinjOptions struct {
 	// other tags should revert their S1 flag normally,
 	// and thus will get re-inventoried every so often,
 	// regardless of movement in and out of antennas' Fields of View.
-	SuppressMonza bool
+	SuppressMonza bool `json:"suppressMonza"`
 }
 
 // PowerTarget specifies a target power for the Reader to push through the antenna.
@@ -58,7 +58,7 @@ type ImpinjOptions struct {
 // or compliance with local regulatory requirements.
 // The power is assumed valid at all Frequencies
 type PowerTarget struct {
-	Max MillibelMilliwatt
+	Max MillibelMilliwatt `json:"max"`
 }
 
 type ScanType int
@@ -147,7 +147,7 @@ func NewBasicDevice(c *GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 	}
 
 	regCap := c.RegulatoryCapabilities
-	if regCap == nil || regCap.UHFBandCapabilities == nil ||
+	if regCap.UHFBandCapabilities == nil ||
 		len(regCap.UHFBandCapabilities.TransmitPowerLevels) == 0 {
 		return nil, errMissingCapInfo("power levels",
 			"RegulatoryCapabilities", "UHFBandCapabilities", "TransmitPowerLevels")
@@ -514,6 +514,8 @@ func (d *BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 // so you should check the value upon return if a higher level is never suitable.
 //
 // This panics if there is not at least one power value.
+// If this code gets called without a power value, it means that someone changed
+// the code in a way that subvert assumptions this relies upon.
 func (d *BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, value MillibelMilliwatt) {
 	// sort.Search returns the smallest index i at which f(i) is true,
 	// or the list len if the result is always false.
@@ -545,6 +547,9 @@ func (d *BasicDevice) findPower(target MillibelMilliwatt) (tableIdx uint16, valu
 //
 // If the number of nearby Readers is unknown, use 0.
 // This returns both the best RF Mode entry as well as its 0-index within the slice.
+// If the code gets to the point where the panic is called due to maskTarget being 0,
+// then it's not a recoverable error -- it's a stop-the-program kind of error, as we
+// are no longer certain of the program's state.
 func (d *BasicDevice) findBestMode(nReaders uint) (bestIdx int, mode UHFC1G2RFModeTableEntry) {
 	const dense = 0.5 // EPC spec implies >50% is about where "multi" becomes "dense"
 	var maskTarget SpectralMaskType
