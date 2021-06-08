@@ -28,14 +28,13 @@ const (
 	eventChSz           = 100
 )
 
-// processEdgeXEvent is used as the sole member of our pipeline.
-// It's essentially our entrypoint for EdgeX event processing.
+// processEdgeXEvent is our core processing logic for EdgeX events after they are first
+// filtered by the SDK pipeline functions.
 //
-// Using the pipeline SDK is the least-effort method
-// of accomplishing the grunt work of
-// subscribing to EdgeX's event stream and
-// accessing the resources that its agnosticism necessitates
-// may come from any of several sources.
+// Currently it supports two different event types. The first is reader event notifications which
+// handles events such as readers being connected and disconnected. The second event type is
+// ROAccessReport which is a wrapper around rfid tag read events. These tag readings are sent to
+// a channel which processes them as part of the main taskLoop.
 func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
 	if len(params) < 1 {
 		err := errors.Errorf("no Event received")
@@ -53,8 +52,8 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 		return false, errors.New("event contains no Readings")
 	}
 
-	r := bytes.Buffer{}
-	decoder := json.NewDecoder(&r)
+	buff := bytes.Buffer{}
+	decoder := json.NewDecoder(&buff)
 	decoder.UseNumber()
 	decoder.DisallowUnknownFields()
 
@@ -62,12 +61,13 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 		reading := &event.Readings[i] // Readings is 169 bytes. This avoid the copy.
 		switch reading.Name {
 		default:
+			// this should never happen because it is pre-filtered by the SDK pipeline
 			app.lc.Error("Unknown reading name.", "reading", reading.Name)
 			continue
 
 		case resourceReaderNotification:
-			r.Reset()
-			r.WriteString(reading.Value)
+			buff.Reset()
+			buff.WriteString(reading.Value)
 			notification := &llrp.ReaderEventNotification{}
 			if err := decoder.Decode(notification); err != nil {
 				app.lc.Error("Failed to decode reader event notification", "error", err.Error())
@@ -80,8 +80,8 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 			}
 
 		case resourceROAccessReport:
-			r.Reset()
-			r.WriteString(reading.Value)
+			buff.Reset()
+			buff.WriteString(reading.Value)
 
 			report := &llrp.ROAccessReport{}
 			if err := decoder.Decode(report); err != nil {
@@ -93,6 +93,7 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 			if report.TagReportData == nil {
 				app.lc.Warn("No tag report data in report.", "device", event.Device)
 			} else {
+				// pass the tag report data to the reports channel to be processed by our taskLoop
 				app.reports <- reportData{report, inventory.NewReportInfo(reading)}
 				app.lc.Trace("New ROAccessReport.",
 					"device", event.Device, "tags", len(report.TagReportData))

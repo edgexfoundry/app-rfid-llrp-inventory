@@ -7,18 +7,18 @@ package main
 
 import (
 	inventoryapp "edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory/app"
-	"fmt"
 	"os"
 )
 
 func main() {
 	app := inventoryapp.NewInventoryApp()
 	if err := app.Initialize(); err != nil {
-		fmt.Printf("App initialization failed: %v\n", err)
+		app.LoggingClient().Error("App initialization failed", "err", err.Error())
 		os.Exit(1)
 	}
+
 	if err := app.RunUntilCancelled(); err != nil {
-		fmt.Printf("App RunUntilCancelled failed: %v\n", err)
+		app.LoggingClient().Error("App RunUntilCancelled failed", "err", err.Error())
 		os.Exit(1)
 	}
 }

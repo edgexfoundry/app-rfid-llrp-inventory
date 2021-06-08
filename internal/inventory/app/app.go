@@ -63,24 +63,27 @@ func NewInventoryApp() *InventoryApp {
 	}
 }
 
-func (app *InventoryApp) Initialize() (err error) {
-	edgexSdk := &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
-	if err := edgexSdk.Initialize(); err != nil {
-		fmt.Printf("SDK initialization failed: %v\n", err)
-		os.Exit(1)
+// Initialize will initialize the AppFunctionsSDK and Logging Client. It also reads the user's
+// configuration and sets up the API routes.
+func (app *InventoryApp) Initialize() error {
+	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
+	err := app.edgexSdk.Initialize()
+	app.lc = app.edgexSdk.LoggingClient // ensure logging client is assigned before returning
+	if err != nil {
+		return errors.Wrap(err, "SDK initialization failed")
 	}
 
-	app.lc = app.edgexSdk.LoggingClient
 	app.lc.Info("Starting.")
 
-	appSettings := edgexSdk.ApplicationSettings()
+	appSettings := app.edgexSdk.ApplicationSettings()
 	if appSettings == nil {
 		return errors.New("missing application settings")
 	}
 	if app.configClient, err = getConfigClient(); err != nil {
-		return errors.Wrap(err, "Failed to create config client.")
+		return errors.Wrap(err, "failed to create config client")
 	}
 
+	// todo: switch to using SDK's custom config capability when upgrade to Ireland
 	app.config, err = inventory.ParseConsulConfig(app.edgexSdk.LoggingClient, app.edgexSdk.ApplicationSettings())
 	if errors.Is(err, inventory.ErrUnexpectedConfigItems) {
 		// warn on unexpected config items, but do not exit
@@ -90,6 +93,7 @@ func (app *InventoryApp) Initialize() (err error) {
 		return errors.Wrap(err, "config parse error")
 	}
 
+	// todo: switch to using EdgeX clients for accessing Core Metadata APIs when upgrade to Ireland
 	metadataURI, err := url.Parse(strings.TrimSpace(app.config.ApplicationSettings.MetadataServiceURL))
 	if err != nil {
 		return errors.Wrap(err, "invalid metadata service URL")
@@ -130,6 +134,8 @@ func (app *InventoryApp) Initialize() (err error) {
 	return app.addRoutes()
 }
 
+// RunUntilCancelled sets up the function pipeline and runs it. This function will not return
+// until the function pipeline is complete unless an error occurred running it.
 func (app *InventoryApp) RunUntilCancelled() error {
 
 	if err := os.MkdirAll(cacheFolder, folderPerm); err != nil {
@@ -171,6 +177,7 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to build pipeline")
 	}
+
 	if err = app.edgexSdk.MakeItRun(); err != nil {
 		return errors.Wrap(err, "failed to run pipeline")
 	}
@@ -180,4 +187,8 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	app.lc.Info("Exiting.")
 
 	return nil
+}
+
+func (app *InventoryApp) LoggingClient() logger.LoggingClient {
+	return app.lc
 }
