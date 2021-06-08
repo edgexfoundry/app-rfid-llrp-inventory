@@ -104,6 +104,7 @@ func (as ApplicationSettings) Validate() error {
 //
 // If the map is missing a non-required key,
 // it logs an INFO message unless the given logging client is nil.
+// todo: switch to using SDK's custom config capability when upgrade to Ireland
 func ParseConsulConfig(lc logger.LoggingClient, configMap map[string]string) (ConsulConfig, error) {
 	cfg := NewConsulConfig()
 	settings := &cfg.ApplicationSettings
