@@ -1,3 +1,8 @@
+//
+// Copyright (C) 2021 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package inventoryapp
 
 import (
@@ -179,7 +184,7 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 		app.lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
 
-	app.configClient.WatchForChanges(confUpdateCh, confErrCh, &app.config, "/"+serviceKey)
+	app.configClient.WatchForChanges(confUpdateCh, confErrCh, &app.config, "/")
 
 	var wg sync.WaitGroup
 	wg.Add(1)

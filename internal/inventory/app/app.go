@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2020, 2021 Intel Corporation
+// Copyright (C) 2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
 	"sync"
 	"syscall"
@@ -93,6 +94,12 @@ func (app *InventoryApp) Initialize() error {
 		return errors.Wrap(err, "config parse error")
 	}
 
+	// todo: switch to using SDK's custom config capability when upgrade to Ireland
+	if err = app.bootstrapAliasConfig(); err != nil {
+		// simply log error loading alias config, but do not exit
+		app.lc.Error(err.Error())
+	}
+
 	// todo: switch to using EdgeX clients for accessing Core Metadata APIs when upgrade to Ireland
 	metadataURI, err := url.Parse(strings.TrimSpace(app.config.ApplicationSettings.MetadataServiceURL))
 	if err != nil {
@@ -132,6 +139,67 @@ func (app *InventoryApp) Initialize() error {
 	}
 
 	return app.addRoutes()
+}
+
+// bootstrapAliasConfig loads the aliases from the user's configuration toml and pushes them
+// to the config provider if and only if the Aliases key is not present, or the overwrite
+// config flag is passed via the command line
+// todo: switch to using SDK's custom config capability when upgrade to Ireland
+func (app *InventoryApp) bootstrapAliasConfig() error {
+	// Note: This expects that the config client has been setup with a base path already including
+	// the Aliases at the end. All paths are relative to that.
+
+	overwrite := getSdkFlags().OverwriteConfig()
+	app.lc.Debug(fmt.Sprintf("Bootstrapping %s config. OverwriteConfig: %v", aliasesConfigKey, overwrite))
+	// skip checking the existing status if overwrite is enabled
+	if !overwrite {
+		// Note: We need to use GetConfiguration and manually check for the existence of
+		// Aliases because ConfigurationValueExists and GetConfigurationValue both internally
+		// use a method that only returns values for single keys. They return nil for an item that
+		// has a collection of child keys.
+		res, err := app.configClient.GetConfiguration(&inventory.ConsulConfig{})
+		if err != nil {
+			return errors.Wrapf(err, "issue checking config provider for existing %s key", aliasesConfigKey)
+		}
+		cfg, ok := res.(*inventory.ConsulConfig)
+		if !ok {
+			return errors.Wrapf(err, "issue converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(cfg))
+		}
+		if cfg.Aliases != nil {
+			app.lc.Debug(fmt.Sprintf("%s config already exists in config provider, not overriding", aliasesConfigKey))
+			return nil
+		}
+
+		app.lc.Debug(fmt.Sprintf("No existing configuration found for key %s, will atempt to load it from toml",
+			aliasesConfigKey))
+	}
+
+	// load just the aliases section from the toml file. we only need to load the file if
+	// we know for sure we are going to send the config up to the config provider
+	aliases, err := loadAliasesFromTomlFile(app.lc)
+	if err != nil {
+		return errors.Wrapf(err, "issue loading %s section from toml file", aliasesConfigKey)
+	} else if aliases == nil {
+		app.lc.Debug(fmt.Sprintf("No key/value pairs found in %s section, adding empty folder.", aliasesConfigKey))
+		// Note: a key that ends with a '/' is considered a folder/parent key
+		if err = app.configClient.PutConfigurationValue(aliasesConfigKey+"/", nil); err != nil {
+			return errors.Wrapf(err, "issue putting empty %s folder into config provider", aliasesConfigKey)
+		}
+		app.lc.Info(fmt.Sprintf("Successfully pushed empty %s configuration into config provider.", aliasesConfigKey))
+		return nil
+	}
+
+	app.lc.Debug(fmt.Sprintf("Pushing %s configuration into config provider: %+v", aliasesConfigKey, aliases))
+
+	// send the data to the configuration provider. note that PutConfigurationToml is used in order to
+	// re-use some of the internal parsing logic which is not directly exposed, such as converting
+	// a map into separate config key/value pairs.
+	if err = app.configClient.PutConfigurationToml(aliases, overwrite); err != nil {
+		return errors.Wrapf(err, "issue putting %s toml into config provider", aliasesConfigKey)
+	}
+
+	app.lc.Info(fmt.Sprintf("Successfully pushed %s configuration into config provider.", aliasesConfigKey))
+	return nil
 }
 
 // RunUntilCancelled sets up the function pipeline and runs it. This function will not return
