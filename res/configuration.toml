@@ -49,7 +49,7 @@ PublishTopic="events"
 # Reader-10-EF-25 is the deviceName and 1 is the antennaId.
 # See also: https://github.com/edgexfoundry-holding/rfid-llrp-inventory-service#setting-the-aliases
 #
-# In order to override an alias, set the default alias as the key and the new alias as the value you want, such as:
+# In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
 # Reader-10-EF-25_1 = "Freezer"
 # Reader-10-EF-25_2 = "Backroom"
 [Aliases]
