@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
+	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
 	"github.com/edgexfoundry/go-mod-configuration/configuration"
 	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/pkg/errors"
@@ -76,11 +77,13 @@ func (app *InventoryApp) Initialize() error {
 
 	app.lc.Info("Starting.")
 
+	sdkFlags := getSdkFlags()
+
 	appSettings := app.edgexSdk.ApplicationSettings()
 	if appSettings == nil {
 		return errors.New("missing application settings")
 	}
-	if app.configClient, err = getConfigClient(); err != nil {
+	if app.configClient, err = getConfigClient(sdkFlags); err != nil {
 		return errors.Wrap(err, "failed to create config client")
 	}
 
@@ -95,7 +98,7 @@ func (app *InventoryApp) Initialize() error {
 	}
 
 	// todo: switch to using SDK's custom config capability when upgrade to Ireland
-	if err = app.bootstrapAliasConfig(); err != nil {
+	if err = app.bootstrapAliasConfig(sdkFlags); err != nil {
 		// simply log error loading alias config, but do not exit
 		app.lc.Error(err.Error())
 	}
@@ -145,11 +148,8 @@ func (app *InventoryApp) Initialize() error {
 // to the config provider if and only if the Aliases key is not present, or the overwrite
 // config flag is passed via the command line
 // todo: switch to using SDK's custom config capability when upgrade to Ireland
-func (app *InventoryApp) bootstrapAliasConfig() error {
-	// Note: This expects that the config client has been setup with a base path already including
-	// the Aliases at the end. All paths are relative to that.
-
-	overwrite := getSdkFlags().OverwriteConfig()
+func (app *InventoryApp) bootstrapAliasConfig(sdkFlags flags.Common) error {
+	overwrite := sdkFlags.OverwriteConfig()
 	app.lc.Debug(fmt.Sprintf("Bootstrapping %s config. OverwriteConfig: %v", aliasesConfigKey, overwrite))
 	// skip checking the existing status if overwrite is enabled
 	if !overwrite {
@@ -163,7 +163,7 @@ func (app *InventoryApp) bootstrapAliasConfig() error {
 		}
 		cfg, ok := res.(*inventory.ConsulConfig)
 		if !ok {
-			return errors.Wrapf(err, "issue converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(cfg))
+			return fmt.Errorf("issue converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(res))
 		}
 		if cfg.Aliases != nil {
 			app.lc.Debug(fmt.Sprintf("%s config already exists in config provider, not overriding", aliasesConfigKey))
@@ -176,7 +176,7 @@ func (app *InventoryApp) bootstrapAliasConfig() error {
 
 	// load just the aliases section from the toml file. we only need to load the file if
 	// we know for sure we are going to send the config up to the config provider
-	aliases, err := loadAliasesFromTomlFile(app.lc)
+	aliases, err := loadAliasesFromTomlFile(app.lc, sdkFlags)
 	if err != nil {
 		return errors.Wrapf(err, "issue loading %s section from toml file", aliasesConfigKey)
 	} else if aliases == nil {

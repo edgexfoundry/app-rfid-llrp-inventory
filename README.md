@@ -30,7 +30,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "origin": 1598043284109799400,
       "device": "rfid-llrp-inventory",
       "name": "InventoryEventArrived",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-25_1\"}"
     }
   ]
 }
@@ -70,7 +70,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "origin": 1598062424894043600,
       "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-25_1\"}"
     },
     {
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
@@ -265,7 +265,7 @@ Note that this **does not** delete any existing keys in Consul if there are exis
 aliases defined there that do not exist in the toml file. It will however add or replace any aliases
 from the toml file that are new or existing to Consul.
 
-##### If `overwriteConfig` _is not enabled_ via the command line:
+##### If `overwriteConfig` _is not enabled_ via the command line (default):
 If an existing `Aliases` folder key (even if empty) is found in Consul, nothing is done. Data in Consul
 will be left as-is.
 
@@ -275,10 +275,11 @@ If no existing `Aliases` folder key is found in Consul:
 - If an `[Aliases]` section is **present and contains data**, this data will be uploaded to Consul.
 
 ### Via Consul (after deployment)
-Users can to configure the alias using Consul. This can be achieved via Consul’s UI or CLI.
+Users can also configure the aliases using Consul. This can be achieved via Consul’s UI or CLI. This
+can be done regardless of whether configuration.toml specified initial aliases or not.
 
 #### Setting Alias via Consul UI
-- Create a folder named `Aliases` under [Edgex Consul][consul_root].
+- If one does not exist, create a folder named `Aliases` under [Edgex Consul][consul_root].
   A folder is created by ending the key with a `/` like so: `Aliases/`
   
 ![Creating Aliases folder](images/consul_alias_folder.png)
@@ -291,7 +292,7 @@ Users can to configure the alias using Consul. This can be achieved via Consul�
 ![Adding KV pairs](images/consul_kv_pairs.png)
 
 ![Aliases created](images/aliases.png)
-       
+
 Everytime the user creates/updates the Aliases folder, the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
   
 `GET` to the `/api/v1/inventory/snapshot` endpoint:   
@@ -328,7 +329,7 @@ Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). E
     curl \
       --request PUT \
       --data "Freezer" \
-      http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-18_1
+      http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-25_1
           
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,

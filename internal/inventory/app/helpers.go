@@ -27,7 +27,7 @@ const (
 )
 
 // getSdkFlags returns the flags given via command line
-func getSdkFlags() *flags.Default {
+func getSdkFlags() flags.Common {
 	sdkFlags := flags.New()
 	sdkFlags.Parse(os.Args[1:])
 	return sdkFlags
@@ -37,8 +37,7 @@ func getSdkFlags() *flags.Default {
 // or a default one if those lack a config provider URL.
 // Ideally, a future version of the EdgeX SDKs will give us something like this
 // without parsing the args again, but for now, this will do.
-func getConfigClient() (configuration.Client, error) {
-	sdkFlags := getSdkFlags()
+func getConfigClient(sdkFlags flags.Common) (configuration.Client, error) {
 	cpUrl, err := url.Parse(sdkFlags.ConfigProviderUrl())
 	if err != nil {
 		return nil, err
@@ -67,10 +66,9 @@ func getConfigClient() (configuration.Client, error) {
 // the user's configuration toml file in order to pre-fill that information into
 // the ConfigurationProvider
 // Developer Note: This returns nil, nil if Aliases section is found, but no values are present
-func loadAliasesFromTomlFile(lc logger.LoggingClient) (*toml.Tree, error) {
+func loadAliasesFromTomlFile(lc logger.LoggingClient, sdkFlags flags.Common) (*toml.Tree, error) {
 	// file path to configuration file is based on the code found in
 	// go-mod-bootstrap/config/config.Processor's loadFromFile method
-	sdkFlags := getSdkFlags()
 	configDir := environment.GetConfDir(lc, sdkFlags.ConfigDirectory())
 	profileDir := environment.GetProfileDir(lc, sdkFlags.Profile())
 	configFileName := environment.GetConfigFileName(lc, sdkFlags.ConfigFileName())

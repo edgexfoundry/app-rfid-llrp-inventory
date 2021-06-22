@@ -28,7 +28,7 @@ test:
 	$(GO) vet ./...
 	./bin/test-attribution.sh
 	./bin/test-go-mod-tidy.sh
-	output="$$(gofmt -l .)" && [ -z "$$output" ]
+	output="$$(gofmt -l .)" && [ -z "$$output" ] || printf "gofmt error:\n$$output\n"
 
 clean:
 	rm -f $(MICROSERVICE)
