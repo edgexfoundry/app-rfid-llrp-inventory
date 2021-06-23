@@ -1,3 +1,8 @@
+//
+// Copyright (C) 2021 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package inventoryapp
 
 import (
@@ -6,7 +11,10 @@ import (
 	"github.com/pelletier/go-toml"
 )
 
-// MockConfigClient implements EdgeX's configuration.Client interface
+// MockConfigClient implements EdgeX's configuration.Client interface for use with unit tests.
+// It has the ability to allow the unit test to pre-define the existing configuration that is
+// returned, spoof errors to be returned by the API calls, and keeps track of any data
+// that has been passed through it for use in validating the data against expected results.
 type MockConfigClient struct {
 	// config represents the internal config data which is provided via GetConfiguration
 	config *inventory.ConsulConfig
@@ -28,6 +36,7 @@ func NewMockConfigClient() *MockConfigClient {
 }
 
 // Checks to see if the Configuration service contains the service's configuration.
+// Not currently needed, so not implemented
 func (m *MockConfigClient) HasConfiguration() (bool, error) {
 	panic("Not implemented.")
 }
@@ -54,6 +63,7 @@ func (m *MockConfigClient) PutConfigurationToml(configuration *toml.Tree, overwr
 }
 
 // Puts a full configuration struct into the Configuration service
+// Not currently needed, so not implemented
 func (m *MockConfigClient) PutConfiguration(configStruct interface{}, overwrite bool) error {
 	panic("Not implemented.")
 }
@@ -73,6 +83,7 @@ func (m *MockConfigClient) GetConfiguration(configStruct interface{}) (interface
 // Sets up a Consul watch for the target key and send back updates on the update channel.
 // Passed in struct is only a reference for Configuration service, empty struct is ok
 // Sends the configuration in the target struct as interface{} on updateChannel, which caller must cast
+// Not currently needed, so not implemented
 func (m *MockConfigClient) WatchForChanges(updateChannel chan<- interface{}, errorChannel chan<- error, configuration interface{}, waitKey string) {
 	panic("Not implemented.")
 }
@@ -83,11 +94,13 @@ func (m *MockConfigClient) IsAlive() bool {
 }
 
 // Checks if a configuration value exists in the Configuration service
+// Not currently needed, so not implemented
 func (m *MockConfigClient) ConfigurationValueExists(name string) (bool, error) {
 	panic("Not implemented.")
 }
 
 // Gets a specific configuration value from the Configuration service
+// Not currently needed, so not implemented
 func (m *MockConfigClient) GetConfigurationValue(name string) ([]byte, error) {
 	panic("Not implemented.")
 }
