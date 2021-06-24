@@ -46,7 +46,7 @@ docker:
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
 			-t edgexfoundry/docker-rfid-llrp-inventory:$(GIT_SHA) \
-			-t edgexfoundry/docker-rfid-llrp-inventory:$(VERSION)-dev \
+			-t edgexfoundry/docker-rfid-llrp-inventory:$(APPVERSION)-dev \
 			.
 
 run: build
