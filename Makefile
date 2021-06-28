@@ -26,9 +26,10 @@ t:
 test:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) vet ./...
+	gofmt -l .
+	[ "`gofmt -l .`" = "" ]
 	./bin/test-attribution.sh
 	./bin/test-go-mod-tidy.sh
-	output="$$(gofmt -l .)" && [ -z "$$output" ] || printf "gofmt error:\n$$output\n"
 
 clean:
 	rm -f $(MICROSERVICE)

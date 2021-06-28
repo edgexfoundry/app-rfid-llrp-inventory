@@ -137,7 +137,7 @@ func (app *InventoryApp) Initialize() error {
 	}
 	for _, name := range deviceNames {
 		if err = app.defaultGrp.AddReader(app.devService, name); err != nil {
-			return fmt.Errorf("failed to setup device %s", name)
+			return errors.Wrapf(err, "failed to setup device %s", name)
 		}
 	}
 
@@ -145,32 +145,39 @@ func (app *InventoryApp) Initialize() error {
 }
 
 // bootstrapAliasConfig loads the aliases from the user's configuration toml and pushes them
-// to the config provider if and only if the Aliases key is not present, or the overwrite
-// config flag is passed via the command line
+// to the config provider if and only if the Aliases key is not present, or the -o/--overwrite
+// flag is passed via the command line
 // todo: switch to using SDK's custom config capability when upgrade to Ireland
 func (app *InventoryApp) bootstrapAliasConfig(sdkFlags flags.Common) error {
 	overwrite := sdkFlags.OverwriteConfig()
-	app.lc.Debug(fmt.Sprintf("Bootstrapping %s config. OverwriteConfig: %v", aliasesConfigKey, overwrite))
+	app.lc.Debug(fmt.Sprintf("Bootstrapping %s config. -o/--overwrite: %v", aliasesConfigKey, overwrite))
 	// skip checking the existing status if overwrite is enabled
 	if !overwrite {
-		// Note: We need to use GetConfiguration and manually check for the existence of
-		// Aliases because ConfigurationValueExists and GetConfigurationValue both internally
-		// use a method that only returns values for single keys. They return nil for an item that
-		// has a collection of child keys.
+		// Note: We need to use `GetConfiguration` and manually check for the existence of Aliases
+		// within the configuration provider because of two reasons:
+		//
+		// 1. `HasConfiguration` only checks if the root configuration item for this service
+		//    exists or not. Here we are specifically checking to see if the `Aliases` section
+		//    is present within that configuration.
+		//
+		// 2. `ConfigurationValueExists` and `GetConfigurationValue` both internally
+		//    use a method that only returns values for single keys. They return nil for a key that
+		//    has a collection of children keys or is an empty parent/folder key. This is Consul
+		//    implementation specific.
 		res, err := app.configClient.GetConfiguration(&inventory.ConsulConfig{})
 		if err != nil {
-			return errors.Wrapf(err, "issue checking config provider for existing %s key", aliasesConfigKey)
+			return errors.Wrapf(err, "error checking config provider for existing %s key", aliasesConfigKey)
 		}
 		cfg, ok := res.(*inventory.ConsulConfig)
 		if !ok {
-			return fmt.Errorf("issue converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(res))
+			return fmt.Errorf("error converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(res))
 		}
 		if cfg.Aliases != nil {
-			app.lc.Debug(fmt.Sprintf("%s config already exists in config provider, not overriding", aliasesConfigKey))
+			app.lc.Info(fmt.Sprintf("%s config already exists in config provider, not overriding", aliasesConfigKey))
 			return nil
 		}
 
-		app.lc.Debug(fmt.Sprintf("No existing configuration found for key %s, will atempt to load it from toml",
+		app.lc.Info(fmt.Sprintf("No existing configuration found for key %s, will atempt to load it from toml",
 			aliasesConfigKey))
 	}
 
@@ -178,24 +185,24 @@ func (app *InventoryApp) bootstrapAliasConfig(sdkFlags flags.Common) error {
 	// we know for sure we are going to send the config up to the config provider
 	aliases, err := loadAliasesFromTomlFile(app.lc, sdkFlags)
 	if err != nil {
-		return errors.Wrapf(err, "issue loading %s section from toml file", aliasesConfigKey)
+		return errors.Wrapf(err, "error loading %s section from toml file", aliasesConfigKey)
 	} else if aliases == nil {
-		app.lc.Debug(fmt.Sprintf("No key/value pairs found in %s section, adding empty folder.", aliasesConfigKey))
-		// Note: a key that ends with a '/' is considered a folder/parent key
+		app.lc.Info(fmt.Sprintf("No key/value pairs found in %s section, adding empty folder.", aliasesConfigKey))
+		// Note: a key that ends with a '/' is considered a folder/parent key (Consul specific)
 		if err = app.configClient.PutConfigurationValue(aliasesConfigKey+"/", nil); err != nil {
-			return errors.Wrapf(err, "issue putting empty %s folder into config provider", aliasesConfigKey)
+			return errors.Wrapf(err, "error putting empty %s folder into config provider", aliasesConfigKey)
 		}
 		app.lc.Info(fmt.Sprintf("Successfully pushed empty %s configuration into config provider.", aliasesConfigKey))
 		return nil
 	}
 
-	app.lc.Debug(fmt.Sprintf("Pushing %s configuration into config provider: %+v", aliasesConfigKey, aliases))
+	app.lc.Info(fmt.Sprintf("Pushing %s configuration into config provider: %+v", aliasesConfigKey, aliases))
 
 	// send the data to the configuration provider. note that PutConfigurationToml is used in order to
 	// re-use some of the internal parsing logic which is not directly exposed, such as converting
 	// a map into separate config key/value pairs.
 	if err = app.configClient.PutConfigurationToml(aliases, overwrite); err != nil {
-		return errors.Wrapf(err, "issue putting %s toml into config provider", aliasesConfigKey)
+		return errors.Wrapf(err, "error putting %s toml into config provider", aliasesConfigKey)
 	}
 
 	app.lc.Info(fmt.Sprintf("Successfully pushed %s configuration into config provider.", aliasesConfigKey))

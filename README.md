@@ -246,7 +246,7 @@ To get the list of LLRP devices or readers connected,
 ```
 
 ### Via configuration.toml (before deployment)
-If you already know they alias values you would like to use before deployment, they can be defined in your
+If you already know the alias values you would like to use before deployment, they can be defined in your
 `configuration.toml` file. There is a section called `[Aliases]` that is defaulted to empty.
 
 In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
@@ -257,26 +257,51 @@ In order to override an alias, set the default alias as the key, and the new ali
 
 #### EdgeX Hanoi implementation
 When EdgeX Ireland is released, this service will be updated to use `AppCustom` in order to configure
-Aliases via toml. For now, this is the way the code has been implemented:
+Aliases via TOML. For now, this is the way the code has been implemented:
 
-##### If `overwriteConfig` _is enabled_ via the command line:
-The Aliases in the toml file will be read and uploaded to Consul. 
-Note that this **does not** delete any existing keys in Consul if there are existing
-aliases defined there that do not exist in the toml file. It will however add or replace any aliases
-from the toml file that are new or existing to Consul.
-
-##### If `overwriteConfig` _is not enabled_ via the command line (default):
+##### Configuration for Normal Service Startup
 If an existing `Aliases` folder key (even if empty) is found in Consul, nothing is done. Data in Consul
 will be left as-is.
 
 If no existing `Aliases` folder key is found in Consul:
-- If an `[Aliases]` section is **not present** in the user's toml file, nothing will be done or added to Consul.
-- If an `[Aliases]` section is **present, but empty** in the user's toml file, an empty `Aliases` folder key will be added to Consul.
+- If an `[Aliases]` section is **not present** in the user's TOML file, nothing will be done or added to Consul.
+- If an `[Aliases]` section is **present, but empty** in the user's TOML file, an empty `Aliases` folder key will be added to Consul.
 - If an `[Aliases]` section is **present and contains data**, this data will be uploaded to Consul.
+
+##### Overwrite Config in Consul (During Development)
+During development, the user also has the option to pass the `-o/--overwrite` command line flag
+to the service. In addition to what EdgeX normally does when this is passed, the Aliases are read
+from the TOML file and uploaded to Consul, overwriting existing Aliases with the same key. 
+
+> _One thing to be aware of however is that the Aliases are treated as Key/Value pairs so any Alias
+> key in Consul that is not present in the TOML file will **not** be deleted from Consul. Read
+> below for an example scenario._
+
+###### Scenario
+Consul already contains the following key/values:
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `POS`
+- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+
+The user passes `-o/--overwrite` flag, with the following TOML file:
+
+    [Aliases]
+    Reader-10-EF-25_1 = "Freezer"
+    Reader-10-EF-25_2 = "Backroom"
+
+- `Reader-10-EF-25_1` already exists with a value of `POS` and will be overwritten to `Freezer`.
+- `Reader-10-EF-25_2` is new and will be added as expected with value `Backroom`.
+- `Reader-20-20-20_1` is not present in the TOML file, but was pre-existing in Consul. This value will be left alone.
+
+###### Outcome
+The following key/value pairs will exist in Consul:
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `Freezer`
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_2` = `Backroom`
+- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+
 
 ### Via Consul (after deployment)
 Users can also configure the aliases using Consul. This can be achieved via Consul’s UI or CLI. This
-can be done regardless of whether configuration.toml specified initial aliases or not.
+can be done regardless of whether `configuration.toml` specified initial aliases or not.
 
 #### Setting Alias via Consul UI
 - If one does not exist, create a folder named `Aliases` under [Edgex Consul][consul_root].
