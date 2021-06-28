@@ -26,9 +26,10 @@ t:
 test:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) vet ./...
+	gofmt -l .
+	[ "`gofmt -l .`" = "" ]
 	./bin/test-attribution.sh
 	./bin/test-go-mod-tidy.sh
-	output="$$(gofmt -l .)" && [ -z "$$output" ]
 
 clean:
 	rm -f $(MICROSERVICE)
@@ -46,7 +47,7 @@ docker:
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
 			-t edgexfoundry/docker-rfid-llrp-inventory:$(GIT_SHA) \
-			-t edgexfoundry/docker-rfid-llrp-inventory:$(VERSION)-dev \
+			-t edgexfoundry/docker-rfid-llrp-inventory:$(APPVERSION)-dev \
 			.
 
 run: build

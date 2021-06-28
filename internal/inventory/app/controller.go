@@ -1,3 +1,8 @@
+//
+// Copyright (C) 2021 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package inventoryapp
 
 import (
@@ -115,9 +120,11 @@ func (app *InventoryApp) handleReaderEvent(device string, notification *llrp.Rea
 	data := notification.ReaderEventNotificationData
 	switch {
 	case data.ConnectionAttemptEvent != nil && *data.ConnectionAttemptEvent == connSuccess:
+		app.lc.Info(fmt.Sprintf("Adding device to default group: %v", device))
 		return app.defaultGrp.AddReader(app.devService, device)
 
 	case data.ConnectionCloseEvent != nil:
+		app.lc.Info(fmt.Sprintf("Removing device from default group: %v", device))
 		app.defaultGrp.RemoveReader(device)
 	}
 
@@ -179,7 +186,7 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 		app.lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
 
-	app.configClient.WatchForChanges(confUpdateCh, confErrCh, &app.config, "/"+serviceKey)
+	app.configClient.WatchForChanges(confUpdateCh, confErrCh, &app.config, "/")
 
 	var wg sync.WaitGroup
 	wg.Add(1)

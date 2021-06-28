@@ -30,7 +30,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "origin": 1598043284109799400,
       "device": "rfid-llrp-inventory",
       "name": "InventoryEventArrived",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-25_1\"}"
     }
   ]
 }
@@ -70,7 +70,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "origin": 1598062424894043600,
       "device": "rfid-llrp-inventory",
       "name": "InventoryEventDeparted",
-      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-18_1\"}"
+      "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-25_1\"}"
     },
     {
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
@@ -227,75 +227,134 @@ _\* These are the default mobility profile values._
 
 ## Setting the Aliases
 
-- Every device(reader) + antenna port represents a tag location and needs an alias such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the application has a format of `<deviceName>_<antennaId>` e.g.
-   `Reader-10-EF-25_1` where `Reader-10-EF-25` is the deviceName and `1` is the antennaId
-     
-   To get the list of LLRP devices or readers connected,
-   `GET` to the `/api/v1/readers` endpoint:   
-                                                           
-        curl -o- localhost:48086/api/v1/readers
-        
-    ```json
-        {
-          "Readers": [
-            "SpeedwayR-10-EF-25"
-          ]
-        }
-    ```
+Every device(reader) + antenna port represents a tag location and can be assigned an alias 
+such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the 
+application has a format of `<deviceName>_<antennaId>` e.g.
+`Reader-10-EF-25_1` where `Reader-10-EF-25` is the deviceName and `1` is the antennaId.
+ 
+To get the list of LLRP devices or readers connected,
+`GET` to the `/api/v1/readers` endpoint:   
+                                                       
+    curl -o- localhost:48086/api/v1/readers
     
-- User needs to configure the alias using Consul. This can be achieved via Consul’s UI or CLI
-  - **Setting Alias via Consul UI**
-    - Create a folder named `Aliases` under [Edgex Consul][consul_root] and
-      add Key Value pairs.
-        
-      ![Creating Aliases folder](images/consul_alias_folder.png)
-    - Key is the default alias which is `<deviceName>_<antennaId>`. The value must be the alias value. Examples of KV pairs:
-         - Speedway-10-EF-25_1: Freezer
-         - Speedway-10-EF-25_2: Backstock
-         
-      ![Adding KV pairs](images/consul_kv_pairs.png)
-      
-      ![Aliases created](images/aliases.png)
-           
-    - Everytime the user creates/updates the Aliases folder the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
-      
-      `GET` to the `/api/v1/inventory/snapshot` endpoint:   
-                                                               
-            curl -o- localhost:48086/api/v1/inventory/snapshot
-            
-      ```json
-         [
-           {
-             "epc": "30143639f8419145db602154",
-             "tid": "",
-             "location": {
-               "device_name": "SpeedwayR-10-EF-25",
-               "antenna_id": 1
-             },
-             "location_alias": "Freezer",
-             "last_read": 1601441311411,
-             "last_arrived": 1601441265669,
-             "last_departed": 0,
-             "state": "Present",
-             "stats_map": {
-               "SpeedwayR-10-EF-25_1": {
-                 "last_read": 1601441311411,
-                 "mean_rssi": -54.25
-               }
-             }
-           }
-         ]     
-      ```
-            
-            
+```json
+{
+  "Readers": [
+    "SpeedwayR-10-EF-25"
+  ]
+}
+```
+
+### Via configuration.toml (before deployment)
+If you already know the alias values you would like to use before deployment, they can be defined in your
+`configuration.toml` file. There is a section called `[Aliases]` that is defaulted to empty.
+
+In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
+
+    [Aliases]
+    Reader-10-EF-25_1 = "Freezer"
+    Reader-10-EF-25_2 = "Backroom"
+
+#### EdgeX Hanoi implementation
+When EdgeX Ireland is released, this service will be updated to use `AppCustom` in order to configure
+Aliases via TOML. For now, this is the way the code has been implemented:
+
+##### Configuration for Normal Service Startup
+If an existing `Aliases` folder key (even if empty) is found in Consul, nothing is done. Data in Consul
+will be left as-is.
+
+If no existing `Aliases` folder key is found in Consul:
+- If an `[Aliases]` section is **not present** in the user's TOML file, nothing will be done or added to Consul.
+- If an `[Aliases]` section is **present, but empty** in the user's TOML file, an empty `Aliases` folder key will be added to Consul.
+- If an `[Aliases]` section is **present and contains data**, this data will be uploaded to Consul.
+
+##### Overwrite Config in Consul (During Development)
+During development, the user also has the option to pass the `-o/--overwrite` command line flag
+to the service. In addition to what EdgeX normally does when this is passed, the Aliases are read
+from the TOML file and uploaded to Consul, overwriting existing Aliases with the same key. 
+
+> _One thing to be aware of however is that the Aliases are treated as Key/Value pairs so any Alias
+> key in Consul that is not present in the TOML file will **not** be deleted from Consul. Read
+> below for an example scenario._
+
+###### Scenario
+Consul already contains the following key/values:
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `POS`
+- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+
+The user passes `-o/--overwrite` flag, with the following TOML file:
+
+    [Aliases]
+    Reader-10-EF-25_1 = "Freezer"
+    Reader-10-EF-25_2 = "Backroom"
+
+- `Reader-10-EF-25_1` already exists with a value of `POS` and will be overwritten to `Freezer`.
+- `Reader-10-EF-25_2` is new and will be added as expected with value `Backroom`.
+- `Reader-20-20-20_1` is not present in the TOML file, but was pre-existing in Consul. This value will be left alone.
+
+###### Outcome
+The following key/value pairs will exist in Consul:
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `Freezer`
+- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_2` = `Backroom`
+- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+
+
+### Via Consul (after deployment)
+Users can also configure the aliases using Consul. This can be achieved via Consul’s UI or CLI. This
+can be done regardless of whether `configuration.toml` specified initial aliases or not.
+
+#### Setting Alias via Consul UI
+- If one does not exist, create a folder named `Aliases` under [Edgex Consul][consul_root].
+  A folder is created by ending the key with a `/` like so: `Aliases/`
+  
+![Creating Aliases folder](images/consul_alias_folder.png)
+
+- Add Key Value pairs. Key is the default alias which is `<deviceName>_<antennaId>`. The value must be the alias value. 
+  Examples of KV pairs:
+     - Speedway-10-EF-25_1: Freezer
+     - Speedway-10-EF-25_2: Backstock
+
+![Adding KV pairs](images/consul_kv_pairs.png)
+
+![Aliases created](images/aliases.png)
+
+Everytime the user creates/updates the Aliases folder, the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
+  
+`GET` to the `/api/v1/inventory/snapshot` endpoint:   
+                                                       
+    curl -o- localhost:48086/api/v1/inventory/snapshot
     
-  - **Setting Alias via Consul CLI**
-    - Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). Ex:
-     
-            curl \
-              --request PUT \
-              --data "Freezer" \
-              http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-18_1
+```json
+ [
+   {
+     "epc": "30143639f8419145db602154",
+     "tid": "",
+     "location": {
+       "device_name": "SpeedwayR-10-EF-25",
+       "antenna_id": 1
+     },
+     "location_alias": "Freezer",
+     "last_read": 1601441311411,
+     "last_arrived": 1601441265669,
+     "last_departed": 0,
+     "state": "Present",
+     "stats_map": {
+       "SpeedwayR-10-EF-25_1": {
+         "last_read": 1601441311411,
+         "mean_rssi": -54.25
+       }
+     }
+   }
+ ]     
+```
+
+#### Setting Alias via Consul CLI
+Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). Ex:
+
+    curl \
+      --request PUT \
+      --data "Freezer" \
+      http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-25_1
           
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,
