@@ -26,29 +26,6 @@ RUN sed -e 's/dl-cdn[.]alpinelinux.org/nl.alpinelinux.org/g' -i~ /etc/apk/reposi
 RUN apk add --no-cache ${ALPINE_PKG_BASE} ${ALPINE_PKG_EXTRA}
 WORKDIR /app
 
-COPY go.mod .
-RUN go mod download
-
 COPY . .
 
-ARG MAKE="make build"
-RUN $MAKE
-
-# final stage
-FROM alpine:3.12
-LABEL license='SPDX-License-Identifier: Apache-2.0' \
-  copyright='Copyright (c) 2020: Intel'
-LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
-
-RUN apk --no-cache add ca-certificates zeromq
-
-COPY --from=builder /app/Attribution.txt /Attribution.txt
-COPY --from=builder /app/LICENSE /LICENSE
-COPY --from=builder /app/res/ /res/
-COPY --from=builder /app/static/ /static/
-COPY --from=builder /app/rfid-llrp-inventory /rfid-llrp-inventory
-
-EXPOSE 48086
-
-ENTRYPOINT ["/rfid-llrp-inventory"]
-CMD ["-cp=consul.http://edgex-core-consul:8500", "-registry", "-confdir=/res"]
+RUN go mod download

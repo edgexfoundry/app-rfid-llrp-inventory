@@ -1,6 +1,6 @@
 module edgexfoundry-holding/rfid-llrp-inventory-service
 
-go 1.15
+go 1.16
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go v1.3.1

@@ -17,8 +17,11 @@ GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SD
 					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
 					-X edgexfoundry-holding/rfid-llrp-inventory-service.Version=$(APPVERSION)"
 
-build:
+build: tidy
 	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
+
+tidy:
+	go mod tidy
 
 t:
 	[ -z "$$(gofmt -p -l . || echo 'err')" ]
@@ -46,8 +49,8 @@ docker:
 		--build-arg http_proxy \
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
-			-t edgexfoundry/docker-rfid-llrp-inventory:$(GIT_SHA) \
-			-t edgexfoundry/docker-rfid-llrp-inventory:$(APPVERSION)-dev \
+			-t edgexfoundry/rfid-llrp-inventory:$(GIT_SHA) \
+			-t edgexfoundry/rfid-llrp-inventory:$(APPVERSION)-dev \
 			.
 
 run: build
