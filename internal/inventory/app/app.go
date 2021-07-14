@@ -7,8 +7,8 @@ package inventoryapp
 
 import (
 	"context"
-	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory"
-	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"fmt"
 	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
 	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"

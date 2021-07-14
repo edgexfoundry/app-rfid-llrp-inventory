@@ -1,4 +1,4 @@
-The following open source projects are referenced by rfid-llrp-inventory-service:
+The following open source projects are referenced by app-rfid-llrp-inventory:
 
 bertimus9/systemstat (MIT) https://bitbucket.org/bertimus9/systemstat
 https://bitbucket.org/bertimus9/systemstat/src/master/LICENSE

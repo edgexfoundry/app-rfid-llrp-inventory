@@ -1,6 +1,6 @@
-# RFID Inventory Service
+# RFID LLRP Inventory Application Service
 ## Overview
-RFID Inventory Service - Edgex application service for processing tag reads,
+RFID LLRP Inventory - Edgex application service for processing tag reads,
 producing events [`Arrived`, `Moved`, `Departed`], configure and manage the LLRP readers via commands
 
 **Build Native**

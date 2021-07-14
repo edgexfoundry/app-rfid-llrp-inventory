@@ -6,7 +6,7 @@
 package inventoryapp
 
 import (
-	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/llrp"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
