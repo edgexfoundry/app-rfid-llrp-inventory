@@ -4,7 +4,7 @@ Please check if your PR fulfills the following requirements:
 - [ ] Tests for the changes have been added (for bug fixes / features)
 - [ ] Docs have been added / updated (for bug fixes / features)
 
-<!-- If your build fails due to your commit message not passing the build checks, please review the guidelines here: https://github.com/edgexfoundry-holding/app-rfid-llrp-inventory/blob/master/.github/Contributing.md -->
+<!-- If your build fails due to your commit message not passing the build checks, please review the guidelines here: https://github.com/edgexfoundry/app-rfid-llrp-inventory/blob/master/.github/Contributing.md -->
 
 ## PR Type
 What kind of change does this PR introduce?
