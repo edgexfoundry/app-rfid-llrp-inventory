@@ -1,4 +1,4 @@
-name: edgex-rfid-llrp-inventory
+name: edgex-app-rfid-llrp-inventory
 base: core18
 type: app
 version: "replace-me"
@@ -25,13 +25,13 @@ grade: stable
 confinement: strict
 
 apps:
-  rfid-llrp-inventory:
+  app-rfid-llrp-inventory:
     adapter: full
-    command: bin/rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
+    command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
     daemon: simple
     environment:
       CONFIG_PRO_ARG: "-cp=consul.http://localhost:8500"
-      CONF_ARG: "--confdir=$SNAP_DATA/config/rfid-llrp-inventory/res"
+      CONF_ARG: "--confdir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
     plugs: [network, network-bind]
 
@@ -61,7 +61,7 @@ parts:
     prime:
       - "-*"
 
-  rfid-llrp-inventory:
+  app-rfid-llrp-inventory:
     source: .
     plugin: make
     build-packages: [gcc, git, libzmq3-dev, pkg-config]
@@ -71,10 +71,10 @@ parts:
       cd $SNAPCRAFT_PART_SRC
       make build
 
-      install -DT "./rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/rfid-llrp-inventory"
+      install -DT "./app-rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
       install -DT "./res/configuration.toml" \
-         "$SNAPCRAFT_PART_INSTALL/config/rfid-llrp-inventory/res/configuration.toml"
+         "$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res/configuration.toml"
       install -DT "./Attribution.txt" \
-         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/rfid-llrp-inventory/Attribution.txt"
+         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/Attribution.txt"
       install -DT "./LICENSE" \
-         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/rfid-llrp-inventory/LICENSE"
+         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/LICENSE"
