@@ -1,6 +1,6 @@
-# RFID Inventory Service
+# RFID LLRP Inventory Application Service
 ## Overview
-RFID Inventory Service - Edgex application service for processing tag reads,
+RFID LLRP Inventory - Edgex application service for processing tag reads,
 producing events [`Arrived`, `Moved`, `Departed`], configure and manage the LLRP readers via commands
 
 **Build Native**
@@ -589,7 +589,7 @@ If that resource or command doesn't exist for the device,
 this service will receive a 404 from the Device Service,
 preventing it from operating as designed. 
 
-[device_service_profiles]: https://github.com/edgexfoundry-holding/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
+[device_service_profiles]: https://github.com/edgexfoundry/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
 [consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/
 [consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/ApplicationSettings/
 

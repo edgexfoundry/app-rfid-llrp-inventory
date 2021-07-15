@@ -2,7 +2,7 @@
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
 
-MICROSERVICE=rfid-llrp-inventory
+MICROSERVICE=app-rfid-llrp-inventory
 
 .PHONY: build test clean fmt docker run
 
@@ -15,7 +15,7 @@ SDKVERSION=$(shell sed -En 's|.*github.com/edgexfoundry/app-functions-sdk-go (v[
 
 GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SDKVersion=$(SDKVERSION) \
 					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
-					-X edgexfoundry-holding/rfid-llrp-inventory-service.Version=$(APPVERSION)"
+					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)"
 
 build: tidy
 	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
@@ -49,8 +49,8 @@ docker:
 		--build-arg http_proxy \
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
-			-t edgexfoundry/rfid-llrp-inventory:$(GIT_SHA) \
-			-t edgexfoundry/rfid-llrp-inventory:$(APPVERSION)-dev \
+			-t edgexfoundry/app-rfid-llrp-inventory:$(GIT_SHA) \
+			-t edgexfoundry/app-rfid-llrp-inventory:$(APPVERSION)-dev \
 			.
 
 run: build

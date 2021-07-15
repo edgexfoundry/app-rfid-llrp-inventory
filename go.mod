@@ -1,4 +1,4 @@
-module edgexfoundry-holding/rfid-llrp-inventory-service
+module edgexfoundry/app-rfid-llrp-inventory
 
 go 1.16
 

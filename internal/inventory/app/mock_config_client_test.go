@@ -6,7 +6,7 @@
 package inventoryapp
 
 import (
-	"edgexfoundry-holding/rfid-llrp-inventory-service/internal/inventory"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
 	"fmt"
 	"github.com/pelletier/go-toml"
 )
