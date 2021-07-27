@@ -125,7 +125,7 @@ func TestExtractRSSI(t *testing.T) {
 		},
 		{
 			name:   "OK - custom",
-			fields: fields{Custom: []Custom{{VendorID: uint32(PENImpinj), Subtype: ImpinjEnablePeakRSSI, Data: []byte{'1', '2'}}}},
+			fields: fields{Custom: []Custom{{VendorID: uint32(PENImpinj), Subtype: ImpinjPeakRSSI, Data: []byte{'1', '2'}}}},
 			want:   float64(int16(binary.BigEndian.Uint16([]byte{'1', '2'}))) / 100.0,
 			want1:  true,
 		},
