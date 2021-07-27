@@ -35,7 +35,7 @@ func wordsToHex(src []uint16) string {
 // and hence the returned value is a floats instead of an int.
 func (rt *TagReportData) ExtractRSSI() (float64, bool) {
 	for _, c := range rt.Custom {
-		if c.Is(PENImpinj, ImpinjEnablePeakRSSI) && len(c.Data) == 2 {
+		if c.Is(PENImpinj, ImpinjPeakRSSI) && len(c.Data) == 2 {
 			return float64(int16(binary.BigEndian.Uint16(c.Data))) / 100.0, true // dBm x100
 		}
 	}
@@ -63,6 +63,6 @@ func (rt *TagReportData) ReadDataAsHex() (data string, ok bool) {
 }
 
 // Is returns true if the Custom receiver is the specified Vendor and Subtype.
-func (c *Custom) Is(idType VendorPEN, subtype CustomParamSubtype) bool {
-	return VendorPEN(c.VendorID) == idType && c.Subtype == subtype
+func (c *Custom) Is(vendor VendorPEN, subtype CustomParamSubtype) bool {
+	return VendorPEN(c.VendorID) == vendor && c.Subtype == subtype
 }
