@@ -6,311 +6,266 @@
 package llrp
 
 import (
-	"encoding/binary"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-func TestWordsToHex(t *testing.T) {
-	var tests = []struct {
-		name string
-		x    []uint16
-		want string
-	}{
-		{
-			name: "OK - empty",
-			x:    []uint16{},
-			want: "",
-		},
-		{
-			name: "OK - range: 0-7",
-			x:    []uint16{0, 1, 2, 3, 4, 5, 6, 7},
-			want: "00000001000200030004000500060007",
-		},
-		{
-			name: "OK - range: 8-15",
-			x:    []uint16{8, 9, 10, 11, 12, 13, 14, 15},
-			want: "00080009000a000b000c000d000e000f",
-		},
-		{
-			name: "OK- range: f0-f7",
-			x:    []uint16{0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7},
-			want: "00f000f100f200f300f400f500f600f7",
-		},
-		{
-			name: "OK - range: f8-ff",
-			x:    []uint16{0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff},
-			want: "00f800f900fa00fb00fc00fd00fe00ff",
-		},
-		{
-			name: "OK - g",
-			x:    []uint16{'g'},
-			want: "0067",
-		},
-		{
-			name: "OK - range: e3, a1",
-			x:    []uint16{0xe3, 0xa1},
-			want: "00e300a1",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			res := wordsToHex(tt.x)
-			assert.Equal(t, tt.want, res)
-		})
-	}
-}
-
-func peakHelper(val float64) *PeakRSSI {
+// rssiPtr converts a float64 to a PeakRSSI pointer
+func rssiPtr(val float64) *PeakRSSI {
 	peak := PeakRSSI(val)
 	return &peak
 }
 
-func TestExtractRSSI(t *testing.T) {
-	type fields struct {
-		EPCData                                 EPCData
-		EPC96                                   EPC96
-		ROSpecID                                *ROSpecID
-		SpecIndex                               *SpecIndex
-		InventoryParameterSpecID                *InventoryParameterSpecID
-		AntennaID                               *AntennaID
-		PeakRSSI                                *PeakRSSI
-		ChannelIndex                            *ChannelIndex
-		FirstSeenUTC                            *FirstSeenUTC
-		FirstSeenUptime                         *FirstSeenUptime
-		LastSeenUTC                             *LastSeenUTC
-		LastSeenUptime                          *LastSeenUptime
-		TagSeenCount                            *TagSeenCount
-		C1G2PC                                  *C1G2PC
-		C1G2XPCW1                               *C1G2XPCW1
-		C1G2XPCW2                               *C1G2XPCW2
-		C1G2CRC                                 *C1G2CRC
-		AccessSpecID                            *AccessSpecID
-		C1G2ReadOpSpecResult                    *C1G2ReadOpSpecResult
-		C1G2WriteOpSpecResult                   *C1G2WriteOpSpecResult
-		C1G2KillOpSpecResult                    *C1G2KillOpSpecResult
-		C1G2LockOpSpecResult                    *C1G2LockOpSpecResult
-		C1G2BlockEraseOpSpecResult              *C1G2BlockEraseOpSpecResult
-		C1G2BlockWriteOpSpecResult              *C1G2BlockWriteOpSpecResult
-		C1G2RecommissionOpSpecResult            *C1G2RecommissionOpSpecResult
-		C1G2BlockPermalockOpSpecResult          *C1G2BlockPermalockOpSpecResult
-		C1G2GetBlockPermalockStatusOpSpecResult *C1G2GetBlockPermalockStatusOpSpecResult
-		ClientRequestOpSpecResult               *ClientRequestOpSpecResult
-		Custom                                  []Custom
+// int16ToBytes converts a 16-bit int to a 2-byte []byte
+func int16ToBytes(i int16) []byte {
+	return []byte{byte(i >> 8), byte(i)}
+}
+
+// makeCustomRSSI creates an ImpinjPeakRSSI Custom struct with the specified data bytes
+func makeCustomRSSI(data []byte) Custom {
+	return Custom{
+		VendorID: uint32(PENImpinj),
+		Subtype:  ImpinjPeakRSSI,
+		Data:     data,
 	}
+}
+
+func TestExtractRSSI(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		want   float64
-		want1  bool
+		name     string
+		data     TagReportData
+		expected float64
+		hasRSSI  bool
 	}{
 		{
-			name:   "OK",
-			fields: fields{PeakRSSI: new(PeakRSSI)},
-			want:   float64(0),
-			want1:  true,
+			name:     "default value",
+			data:     TagReportData{PeakRSSI: new(PeakRSSI)},
+			expected: float64(0),
+			hasRSSI:  true,
 		},
 		{
-			name:   "OK - peak value",
-			fields: fields{PeakRSSI: peakHelper(3)},
-			want:   float64(3),
-			want1:  true,
+			name:     "peak value only",
+			data:     TagReportData{PeakRSSI: rssiPtr(-35)},
+			expected: float64(-35),
+			hasRSSI:  true,
 		},
 		{
-			name:   "OK - nil",
-			fields: fields{PeakRSSI: nil},
-			want:   float64(0),
-			want1:  false,
+			name:    "nil",
+			data:    TagReportData{PeakRSSI: nil},
+			hasRSSI: false,
 		},
 		{
-			name:   "OK - custom",
-			fields: fields{Custom: []Custom{{VendorID: uint32(PENImpinj), Subtype: ImpinjPeakRSSI, Data: []byte{'1', '2'}}}},
-			want:   float64(int16(binary.BigEndian.Uint16([]byte{'1', '2'}))) / 100.0,
-			want1:  true,
+			name:     "custom only",
+			data:     TagReportData{Custom: []Custom{makeCustomRSSI(int16ToBytes(-4750))}},
+			expected: -47.5,
+			hasRSSI:  true,
+		},
+		{
+			name:    "custom nil, missing peak rssi",
+			data:    TagReportData{Custom: []Custom{makeCustomRSSI(nil)}},
+			hasRSSI: false,
+		},
+		{
+			name:    "custom and peak rssi both nil",
+			data:    TagReportData{PeakRSSI: nil, Custom: []Custom{makeCustomRSSI(nil)}},
+			hasRSSI: false,
+		},
+		{
+			name:     "custom nil, fallback to peak rssi",
+			data:     TagReportData{PeakRSSI: rssiPtr(-50), Custom: []Custom{makeCustomRSSI(nil)}},
+			expected: float64(-50),
+			hasRSSI:  true,
+		},
+		{
+			name:     "prefer custom over peak rssi",
+			data:     TagReportData{PeakRSSI: rssiPtr(-62), Custom: []Custom{makeCustomRSSI(int16ToBytes(-6150))}},
+			expected: -61.5,
+			hasRSSI:  true,
+		},
+		{
+			name:    "custom - wrong data length",
+			data:    TagReportData{Custom: []Custom{makeCustomRSSI([]byte{1, 2, 3, 4})}},
+			hasRSSI: false,
+		},
+		{
+			name: "custom - wrong subtype",
+			data: TagReportData{Custom: []Custom{{
+				VendorID: uint32(PENImpinj),
+				Subtype:  ImpinjEnablePeakRSSI, // note: wrong subtype
+				Data:     int16ToBytes(-6850),
+			}}},
+			hasRSSI: false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rt := &TagReportData{
-				EPCData:                                 tt.fields.EPCData,
-				EPC96:                                   tt.fields.EPC96,
-				ROSpecID:                                tt.fields.ROSpecID,
-				SpecIndex:                               tt.fields.SpecIndex,
-				InventoryParameterSpecID:                tt.fields.InventoryParameterSpecID,
-				AntennaID:                               tt.fields.AntennaID,
-				PeakRSSI:                                tt.fields.PeakRSSI,
-				ChannelIndex:                            tt.fields.ChannelIndex,
-				FirstSeenUTC:                            tt.fields.FirstSeenUTC,
-				FirstSeenUptime:                         tt.fields.FirstSeenUptime,
-				LastSeenUTC:                             tt.fields.LastSeenUTC,
-				LastSeenUptime:                          tt.fields.LastSeenUptime,
-				TagSeenCount:                            tt.fields.TagSeenCount,
-				C1G2PC:                                  tt.fields.C1G2PC,
-				C1G2XPCW1:                               tt.fields.C1G2XPCW1,
-				C1G2XPCW2:                               tt.fields.C1G2XPCW2,
-				C1G2CRC:                                 tt.fields.C1G2CRC,
-				AccessSpecID:                            tt.fields.AccessSpecID,
-				C1G2ReadOpSpecResult:                    tt.fields.C1G2ReadOpSpecResult,
-				C1G2WriteOpSpecResult:                   tt.fields.C1G2WriteOpSpecResult,
-				C1G2KillOpSpecResult:                    tt.fields.C1G2KillOpSpecResult,
-				C1G2LockOpSpecResult:                    tt.fields.C1G2LockOpSpecResult,
-				C1G2BlockEraseOpSpecResult:              tt.fields.C1G2BlockEraseOpSpecResult,
-				C1G2BlockWriteOpSpecResult:              tt.fields.C1G2BlockWriteOpSpecResult,
-				C1G2RecommissionOpSpecResult:            tt.fields.C1G2RecommissionOpSpecResult,
-				C1G2BlockPermalockOpSpecResult:          tt.fields.C1G2BlockPermalockOpSpecResult,
-				C1G2GetBlockPermalockStatusOpSpecResult: tt.fields.C1G2GetBlockPermalockStatusOpSpecResult,
-				ClientRequestOpSpecResult:               tt.fields.ClientRequestOpSpecResult,
-				Custom:                                  tt.fields.Custom,
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			rssi, hasRSSI := test.data.ExtractRSSI()
+			assert.Equal(t, test.hasRSSI, hasRSSI)
+			if test.hasRSSI { // only check expected rssi if we actually expect an rssi
+				assert.Equal(t, test.expected, rssi)
 			}
-			got, got1 := rt.ExtractRSSI()
-			assert.Equal(t, got, tt.want)
-			assert.Equal(t, got1, tt.want1)
 		})
 	}
 }
 
-func helper() *C1G2ReadOpSpecResult {
-	val := C1G2ReadOpSpecResult{C1G2ReadOpSpecResultType: 1, OpSpecID: impjDualTarget, Data: []uint16{1, 2}}
-	return &val
+func TestWordsToHex(t *testing.T) {
+	var tests = []struct {
+		name  string
+		words []uint16
+		want  string
+	}{
+		{
+			name:  "OK - empty",
+			words: []uint16{},
+			want:  "",
+		},
+		{
+			name:  "OK - range: 0-7",
+			words: []uint16{0, 1, 2, 3, 4, 5, 6, 7},
+			want:  "00000001000200030004000500060007",
+		},
+		{
+			name:  "OK - range: 8-15",
+			words: []uint16{8, 9, 10, 11, 12, 13, 14, 15},
+			want:  "00080009000a000b000c000d000e000f",
+		},
+		{
+			name:  "OK - range: f0-f7",
+			words: []uint16{0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7},
+			want:  "00f000f100f200f300f400f500f600f7",
+		},
+		{
+			name:  "OK - range: f8-ff",
+			words: []uint16{0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff},
+			want:  "00f800f900fa00fb00fc00fd00fe00ff",
+		},
+		{
+			name:  "OK - 0x3fad",
+			words: []uint16{0x3fad},
+			want:  "3fad",
+		},
+		{
+			name:  "OK - letter g",
+			words: []uint16{uint16('g')},
+			want:  "0067",
+		},
+		{
+			name:  "OK - 0xfa32 0x14ae",
+			words: []uint16{0xfa32, 0x14ae},
+			want:  "fa3214ae",
+		},
+		{
+			name:  "OK - range: e3, a1",
+			words: []uint16{0xe3, 0xa1},
+			want:  "00e300a1",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			res := wordsToHex(test.words)
+			assert.Equal(t, test.want, res)
+		})
+	}
+
+	// Re-use the input data for testing ReadDataAsHex as well
+	for _, test := range tests {
+		test := test
+		t.Run("ReadDataAsHex_"+test.name, func(t *testing.T) {
+			report := TagReportData{
+				C1G2ReadOpSpecResult: &C1G2ReadOpSpecResult{
+					C1G2ReadOpSpecResultType: 0,
+					OpSpecID:                 0,
+					Data:                     test.words,
+				},
+			}
+			actual, ok := report.ReadDataAsHex()
+			assert.Equal(t, actual, test.want)
+			assert.True(t, ok)
+		})
+	}
 }
 
 func TestReadDataAsHex(t *testing.T) {
-	type fields struct {
-		EPCData                                 EPCData
-		EPC96                                   EPC96
-		ROSpecID                                *ROSpecID
-		SpecIndex                               *SpecIndex
-		InventoryParameterSpecID                *InventoryParameterSpecID
-		AntennaID                               *AntennaID
-		PeakRSSI                                *PeakRSSI
-		ChannelIndex                            *ChannelIndex
-		FirstSeenUTC                            *FirstSeenUTC
-		FirstSeenUptime                         *FirstSeenUptime
-		LastSeenUTC                             *LastSeenUTC
-		LastSeenUptime                          *LastSeenUptime
-		TagSeenCount                            *TagSeenCount
-		C1G2PC                                  *C1G2PC
-		C1G2XPCW1                               *C1G2XPCW1
-		C1G2XPCW2                               *C1G2XPCW2
-		C1G2CRC                                 *C1G2CRC
-		AccessSpecID                            *AccessSpecID
-		C1G2ReadOpSpecResult                    *C1G2ReadOpSpecResult
-		C1G2WriteOpSpecResult                   *C1G2WriteOpSpecResult
-		C1G2KillOpSpecResult                    *C1G2KillOpSpecResult
-		C1G2LockOpSpecResult                    *C1G2LockOpSpecResult
-		C1G2BlockEraseOpSpecResult              *C1G2BlockEraseOpSpecResult
-		C1G2BlockWriteOpSpecResult              *C1G2BlockWriteOpSpecResult
-		C1G2RecommissionOpSpecResult            *C1G2RecommissionOpSpecResult
-		C1G2BlockPermalockOpSpecResult          *C1G2BlockPermalockOpSpecResult
-		C1G2GetBlockPermalockStatusOpSpecResult *C1G2GetBlockPermalockStatusOpSpecResult
-		ClientRequestOpSpecResult               *ClientRequestOpSpecResult
-		Custom                                  []Custom
-	}
-
+	// Note: See also `TestWordsToHex` for more tests of `ReadDataAsHex`
 	tests := []struct {
 		name     string
-		fields   fields
-		wantData string
+		report   TagReportData
+		expected string
 		wantOk   bool
 	}{
 		{
-			name:     "OK - nil",
-			fields:   fields{C1G2ReadOpSpecResult: nil},
-			wantData: "",
+			name:     "nil",
+			report:   TagReportData{C1G2ReadOpSpecResult: nil},
+			expected: "",
 			wantOk:   false,
 		},
 		{
-			name:     "OK - default values",
-			fields:   fields{C1G2ReadOpSpecResult: new(C1G2ReadOpSpecResult)},
-			wantData: wordsToHex([]uint16{}),
+			name:     "default values",
+			report:   TagReportData{C1G2ReadOpSpecResult: new(C1G2ReadOpSpecResult)},
+			expected: wordsToHex([]uint16{}),
 			wantOk:   true,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rt := &TagReportData{
-				EPCData:                                 tt.fields.EPCData,
-				EPC96:                                   tt.fields.EPC96,
-				ROSpecID:                                tt.fields.ROSpecID,
-				SpecIndex:                               tt.fields.SpecIndex,
-				InventoryParameterSpecID:                tt.fields.InventoryParameterSpecID,
-				AntennaID:                               tt.fields.AntennaID,
-				PeakRSSI:                                tt.fields.PeakRSSI,
-				ChannelIndex:                            tt.fields.ChannelIndex,
-				FirstSeenUTC:                            tt.fields.FirstSeenUTC,
-				FirstSeenUptime:                         tt.fields.FirstSeenUptime,
-				LastSeenUTC:                             tt.fields.LastSeenUTC,
-				LastSeenUptime:                          tt.fields.LastSeenUptime,
-				TagSeenCount:                            tt.fields.TagSeenCount,
-				C1G2PC:                                  tt.fields.C1G2PC,
-				C1G2XPCW1:                               tt.fields.C1G2XPCW1,
-				C1G2XPCW2:                               tt.fields.C1G2XPCW2,
-				C1G2CRC:                                 tt.fields.C1G2CRC,
-				AccessSpecID:                            tt.fields.AccessSpecID,
-				C1G2ReadOpSpecResult:                    tt.fields.C1G2ReadOpSpecResult,
-				C1G2WriteOpSpecResult:                   tt.fields.C1G2WriteOpSpecResult,
-				C1G2KillOpSpecResult:                    tt.fields.C1G2KillOpSpecResult,
-				C1G2LockOpSpecResult:                    tt.fields.C1G2LockOpSpecResult,
-				C1G2BlockEraseOpSpecResult:              tt.fields.C1G2BlockEraseOpSpecResult,
-				C1G2BlockWriteOpSpecResult:              tt.fields.C1G2BlockWriteOpSpecResult,
-				C1G2RecommissionOpSpecResult:            tt.fields.C1G2RecommissionOpSpecResult,
-				C1G2BlockPermalockOpSpecResult:          tt.fields.C1G2BlockPermalockOpSpecResult,
-				C1G2GetBlockPermalockStatusOpSpecResult: tt.fields.C1G2GetBlockPermalockStatusOpSpecResult,
-				ClientRequestOpSpecResult:               tt.fields.ClientRequestOpSpecResult,
-				Custom:                                  tt.fields.Custom,
-			}
-			gotData, gotOk := rt.ReadDataAsHex()
-			require.Equal(t, gotOk, tt.wantOk)
-			assert.Equal(t, gotData, tt.wantData)
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			actual, ok := test.report.ReadDataAsHex()
+			require.Equal(t, test.wantOk, ok)
+			assert.Equal(t, test.expected, actual)
 		})
 	}
 }
 
-func TestIs(t *testing.T) {
-	type fields struct {
-		VendorID uint32
-		Subtype  uint32
-		Data     []byte
-	}
-	type args struct {
-		idType  VendorPEN
-		subtype CustomParamSubtype
-	}
+func TestCustomIs(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
+		name    string
+		custom  Custom
+		vendor  VendorPEN
+		subtype CustomParamSubtype
+		success bool
 	}{
 		{
-			name:   "OK",
-			fields: fields{VendorID: uint32(PENImpinj), Subtype: ImpinjTagReportContentSelector, Data: impinjEnableBool16(ImpinjSearchMode)},
-			args:   args{idType: PENImpinj, subtype: ImpinjTagReportContentSelector},
-			want:   true,
+			name: "OK",
+			custom: Custom{
+				VendorID: uint32(PENImpinj),
+				Subtype:  ImpinjTagReportContentSelector,
+				Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
+			},
+			vendor:  PENImpinj,
+			subtype: ImpinjTagReportContentSelector,
+			success: true,
 		},
 		{
-			name:   "OK - mismatched subtype",
-			fields: fields{VendorID: uint32(PENImpinj), Subtype: ImpinjTagReportContentSelector, Data: impinjEnableBool16(ImpinjEnablePeakRSSI)},
-			args:   args{idType: PENImpinj, subtype: ImpinjPeakRSSI},
-			want:   false,
+			name: "mismatched subtype",
+			custom: Custom{
+				VendorID: uint32(PENImpinj),
+				Subtype:  ImpinjTagReportContentSelector,
+				Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
+			},
+			vendor:  PENImpinj,
+			subtype: ImpinjSearchMode,
+			success: false,
 		},
 		{
-			name:   "OK - mismatched idType",
-			fields: fields{VendorID: uint32(PENImpinj), Subtype: ImpinjTagReportContentSelector, Data: impinjEnableBool16(ImpinjEnablePeakRSSI)},
-			args:   args{idType: PENAlien, subtype: ImpinjTagReportContentSelector},
-			want:   false,
+			name: "mismatched vendor",
+			custom: Custom{
+				VendorID: uint32(PENImpinj),
+				Subtype:  ImpinjTagReportContentSelector,
+				Data:     impinjEnableBool16(ImpinjEnablePeakRSSI),
+			},
+			vendor:  PENAlien,
+			subtype: ImpinjTagReportContentSelector,
+			success: false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := &Custom{
-				VendorID: tt.fields.VendorID,
-				Subtype:  tt.fields.Subtype,
-				Data:     tt.fields.Data,
-			}
-			got := c.Is(tt.args.idType, tt.args.subtype)
-			assert.Equal(t, got, tt.want)
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			success := test.custom.Is(test.vendor, test.subtype)
+			assert.Equal(t, success, test.success)
 		})
 	}
 }

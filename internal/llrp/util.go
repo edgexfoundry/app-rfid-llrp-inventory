@@ -63,6 +63,6 @@ func (rt *TagReportData) ReadDataAsHex() (data string, ok bool) {
 }
 
 // Is returns true if the Custom receiver is the specified Vendor and Subtype.
-func (c *Custom) Is(idType VendorPEN, subtype CustomParamSubtype) bool {
-	return VendorPEN(c.VendorID) == idType && c.Subtype == subtype
+func (c *Custom) Is(vendor VendorPEN, subtype CustomParamSubtype) bool {
+	return VendorPEN(c.VendorID) == vendor && c.Subtype == subtype
 }
