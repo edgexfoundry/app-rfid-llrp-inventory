@@ -15,8 +15,7 @@
 
 .idea/
 vendor/
-rfid-inventory
-rfid-llrp-inventory
+app-rfid-llrp-inventory
 glide.lock
 go.sum
 

@@ -36,7 +36,7 @@ func addReaderHelper(t *testing.T) (*ReaderGroup, DSClient, func()) {
 
 	actualURL, err := url.Parse(ts.URL)
 	require.NoError(t, err)
-	ds := NewDSClient(actualURL, client)
+	ds := NewDSClient(actualURL, client, getTestingLogger())
 	rg := readerGroupHelper()
 	err = rg.AddReader(ds, "test")
 	require.NoError(t, err)
