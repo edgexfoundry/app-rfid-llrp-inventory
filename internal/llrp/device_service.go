@@ -157,11 +157,11 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	if err != nil {
 		return nil, errors.Wrapf(err, "device info request failed for device %s", device)
 	}
+	defer r.Body.Close()
 	if r.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("device info request failed with status %d", r.StatusCode)
 	}
 
-	defer r.Body.Close()
 	content, err := ioutil.ReadAll(io.LimitReader(r.Body, maxBody))
 	if err != nil {
 		return nil, errors.Wrap(err, "device info request failed")
@@ -307,25 +307,32 @@ func (ds DSClient) put(path string, data []byte) error {
 // try up to maxTries times and sleeps sleepInterval*tryCount in-between tries. It will return the
 // raw response and error objects of the final HTTP call that was completed.
 // It determines a successful try as anything returning 2xx http code.
+// Note: if err is nil, caller is expected to close response body
 func (ds DSClient) tryGet(path string) (resp *http.Response, err error) {
 	req, err := http.NewRequest(http.MethodGet, ds.baseURL+path, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error creating new http GET request for path %s", path)
 	}
 
-	for i := 0; i < maxTries; i++ {
-		if i > 0 { // do not sleep on first try
-			time.Sleep(sleepInterval * time.Duration(i))
-		}
+	// start at 1 since this is our first try
+	for i := 1; ; i++ {
 		resp, err = ds.httpClient.Do(req)
 		if err != nil {
 			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned an error: %v", path, err))
-			continue
-		}
-		if !(200 <= resp.StatusCode && resp.StatusCode < 300) {
+			if i < maxTries { // if we have tries left, sleep and retry
+				time.Sleep(sleepInterval * time.Duration(i))
+				continue
+			}
+		} else if !(200 <= resp.StatusCode && resp.StatusCode < 300) {
 			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned http error code %d", path, resp.StatusCode))
-			continue
+			if i < maxTries { // if we have tries left, sleep and retry
+				_ = resp.Body.Close() // close the body so that the request may be re-used
+				time.Sleep(sleepInterval * time.Duration(i))
+				continue
+			}
 		}
+		// if we reached here that means either the request was successful, or
+		// we have no more tries left, so exit loop
 		break
 	}
 

@@ -631,16 +631,19 @@ func TestTryGet(t *testing.T) {
 			ds := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			resp, err := ds.tryGet(tc.path)
+			if err == nil { // if err is nil, we must close body
+				defer resp.Body.Close()
+			}
 			if tc.expectErr {
-				require.Error(t, err)
+				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, resp)
 				if tc.expectedStatus != 0 {
-					require.Equal(t, tc.expectedStatus, resp.StatusCode)
+					assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 				}
 			}
-			require.Equal(t, tc.expectedTries, tries)
+			assert.Equal(t, tc.expectedTries, tries)
 		})
 	}
 }
