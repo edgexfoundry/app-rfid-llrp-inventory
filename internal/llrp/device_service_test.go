@@ -2,6 +2,7 @@ package llrp
 
 import (
 	"encoding/json"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func getTestingLogger() logger.LoggingClient {
+	if testing.Verbose() {
+		return logger.NewClientStdOut("test", false, "DEBUG")
+	}
+
+	return logger.NewMockClient()
+}
 
 func TestNewDSClient(t *testing.T) {
 
@@ -38,7 +47,7 @@ func TestNewDSClient(t *testing.T) {
 	}
 	for _, ts := range tests {
 		t.Run(ts.name, func(tt *testing.T) {
-			dsClient := NewDSClient(&ts.hostURL, ts.client)
+			dsClient := NewDSClient(&ts.hostURL, ts.client, getTestingLogger())
 			assert.Equalf(ts.exp, dsClient.baseURL, "invalid value for baseURL: expected %+v, got %+v", ts.exp, dsClient.baseURL)
 
 		})
@@ -85,7 +94,7 @@ func TestGetDevices(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			deviceList, err := GetDevices(s.URL, deviceServiceClient.httpClient)
 			if tc.respCode == http.StatusOK {
@@ -156,7 +165,7 @@ func TestNewReader(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			getReaderCapabilitiesResponse, err := deviceServiceClient.GetCapabilities(tc.deviceName)
 			require.NotNil(tt, getReaderCapabilitiesResponse, "err %s", err)
@@ -246,7 +255,7 @@ func TestGetCapabilities(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			getReaderCapabilitiesResponse, errMsg := deviceServiceClient.GetCapabilities(tc.deviceName)
 
@@ -310,7 +319,7 @@ func TestSetConfig(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			se := &SetReaderConfig{
 				ResetToFactoryDefaults:      tc.fields.ResetToFactoryDefaults,
@@ -378,7 +387,7 @@ func TestAddROSpec(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			errMsg := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
 			if tc.respCode == http.StatusOK {
@@ -440,7 +449,7 @@ func TestModifyROSpecState(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			errMsg := deviceServiceClient.modifyROSpecState(tc.roCmd, tc.deviceName, tc.id)
 			if tc.respCode == http.StatusOK {
@@ -496,7 +505,7 @@ func TestPut(t *testing.T) {
 
 			actualURL, err := url.Parse(s.URL)
 			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client())
+			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
 
 			if tc.serverShutDown {
 				s.Close()
@@ -515,6 +524,128 @@ func TestPut(t *testing.T) {
 
 	}
 
+}
+
+func TestTryGet(t *testing.T) {
+	testCases := []struct {
+		name           string
+		path           string
+		spoofCode      int
+		spoofCodes     []int
+		expectedTries  int
+		expectedStatus int
+		spoofConnErr   bool
+		expectErr      bool
+	}{
+		{
+			name:           "200 ok - first try",
+			spoofCode:      http.StatusOK,
+			expectedStatus: http.StatusOK,
+			expectedTries:  1,
+		},
+		{
+			name:           "204 no content - first try",
+			spoofCode:      http.StatusNoContent,
+			expectedStatus: http.StatusNoContent,
+			expectedTries:  1, // StatusNoContent (204) is a success code, so only 1 try
+		},
+		{
+			name:           "202 accepted - first try",
+			spoofCode:      http.StatusAccepted,
+			expectedStatus: http.StatusAccepted,
+			expectedTries:  1, // StatusAccepted (202) is a success code, so only 1 try
+		},
+		{
+			name:           "http 423, retry 200 ok",
+			spoofCodes:     []int{http.StatusLocked, http.StatusOK},
+			expectedStatus: http.StatusOK,
+			expectedTries:  2,
+		},
+		{
+			name: "http MovedPermanently errors",
+			// return StatusMovedPermanently, but do not set location header, causes handler error
+			spoofCode:     http.StatusMovedPermanently,
+			expectErr:     true,
+			expectedTries: maxTries,
+		},
+		{
+			name: "http 3xx is not success",
+			// 300, 303, 206
+			spoofCodes:     []int{http.StatusMultipleChoices, http.StatusSeeOther, http.StatusPartialContent},
+			expectedStatus: http.StatusPartialContent, // 206
+			expectedTries:  3,
+		},
+		{
+			name:           "http 502, http 504, retry 200 ok",
+			spoofCodes:     []int{http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusOK},
+			expectedStatus: http.StatusOK,
+			expectedTries:  3,
+		},
+		{
+			name:           "fail http 423 every try",
+			spoofCode:      http.StatusLocked,
+			expectedTries:  maxTries,
+			expectedStatus: http.StatusLocked,
+		},
+		{
+			name:          "invalid url error",
+			path:          string([]byte{0x7f}), // ASCII control character
+			expectErr:     true,
+			expectedTries: 0, // 0 tries as the request object is invalid
+		},
+		{
+			name:          "EOF connection error",
+			spoofConnErr:  true,
+			expectErr:     true,
+			expectedTries: maxTries,
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			// define the pointer here, so that it can be used in the handler below
+			var s *httptest.Server
+			var tries int
+
+			handler := func(w http.ResponseWriter, r *http.Request) {
+				tries++
+				if tc.spoofConnErr {
+					// forcefully close the client connection to spoof an error
+					s.CloseClientConnections()
+				} else if len(tc.spoofCodes) >= tries {
+					w.WriteHeader(tc.spoofCodes[tries-1])
+				} else if tc.spoofCode != 0 {
+					w.WriteHeader(tc.spoofCode)
+				} else {
+					assert.FailNow(t, "invalid test case configuration")
+				}
+			}
+
+			// spin up a fake test server
+			s = httptest.NewServer(http.HandlerFunc(handler))
+			defer s.Close()
+
+			actualURL, err := url.Parse(s.URL)
+			require.NoError(t, err)
+			ds := NewDSClient(actualURL, s.Client(), getTestingLogger())
+
+			resp, err := ds.tryGet(tc.path)
+			if err == nil { // if err is nil, we must close body
+				defer resp.Body.Close()
+			}
+			if tc.expectErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				if tc.expectedStatus != 0 {
+					assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+				}
+			}
+			assert.Equal(t, tc.expectedTries, tries)
+		})
+	}
 }
 
 const PENImpinjCap = `{

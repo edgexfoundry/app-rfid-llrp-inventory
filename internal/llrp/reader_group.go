@@ -7,6 +7,7 @@ package llrp
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/pkg/errors"
 	"io"
 	"strings"
@@ -149,6 +150,8 @@ func (rg *ReaderGroup) AddReader(ds DSClient, name string) error {
 	rg.mu.Lock()
 	rg.readers[name] = r
 	rg.mu.Unlock()
+
+	ds.lc.Info(fmt.Sprintf("Successfully added device %s to default group.", name))
 
 	return nil
 }

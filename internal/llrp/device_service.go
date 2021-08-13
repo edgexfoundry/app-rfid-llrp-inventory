@@ -8,12 +8,15 @@ package llrp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
 	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // These are the names of deviceResource and deviceCommands
@@ -35,19 +38,23 @@ const (
 	capReadingName = "ReaderCapabilities"
 
 	maxBody = 100 * 1024
+
+	maxTries      = 5
+	sleepInterval = 250 * time.Millisecond
 )
 
 // DSClient is a client to interact with the LLRP Device Service.
 type DSClient struct {
 	baseURL    string
 	httpClient *http.Client
+	lc         logger.LoggingClient
 }
 
 // NewDSClient returns a DSClient reachable at the given host URL,
 // using the given http Client, which of course may be the default.
 // TODO: Use new device service Clients from go-mod-core-clients when upgrading to V2 (Ireland)
 //		 https://github.com/edgexfoundry/app-rfid-llrp-inventory/pull/18#discussion_r592768121
-func NewDSClient(host *url.URL, c *http.Client) DSClient {
+func NewDSClient(host *url.URL, c *http.Client, lc logger.LoggingClient) DSClient {
 	base := url.URL{
 		Scheme: host.Scheme,
 		Opaque: host.Opaque,
@@ -59,6 +66,7 @@ func NewDSClient(host *url.URL, c *http.Client) DSClient {
 	return DSClient{
 		baseURL:    base.String(),
 		httpClient: c,
+		lc:         lc,
 	}
 }
 
@@ -145,16 +153,15 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 
 // GetCapabilities queries the device service for a device's capabilities.
 func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesResponse, error) {
-	r, err := ds.httpClient.Get(ds.baseURL + device + capDevCmd)
+	r, err := ds.tryGet(device + capDevCmd)
 	if err != nil {
-		return nil, errors.Wrap(err, "device info request failed")
+		return nil, errors.Wrapf(err, "device info request failed for device %s", device)
 	}
-
-	if r.StatusCode != 200 {
+	defer r.Body.Close()
+	if r.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("device info request failed with status %d", r.StatusCode)
 	}
 
-	defer r.Body.Close()
 	content, err := ioutil.ReadAll(io.LimitReader(r.Body, maxBody))
 	if err != nil {
 		return nil, errors.Wrap(err, "device info request failed")
@@ -294,4 +301,40 @@ func (ds DSClient) put(path string, data []byte) error {
 	}
 
 	return nil
+}
+
+// tryGet attempts to make an HTTP GET call to the device service at the specified path. It will
+// try up to maxTries times and sleeps sleepInterval*tryCount in-between tries. It will return the
+// raw response and error objects of the final HTTP call that was completed.
+// It determines a successful try as anything returning 2xx http code.
+// Note: if err is nil, caller is expected to close response body
+func (ds DSClient) tryGet(path string) (resp *http.Response, err error) {
+	req, err := http.NewRequest(http.MethodGet, ds.baseURL+path, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error creating new http GET request for path %s", path)
+	}
+
+	// start at 1 since this is our first try
+	for i := 1; ; i++ {
+		resp, err = ds.httpClient.Do(req)
+		if err != nil {
+			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned an error: %v", path, err))
+			if i < maxTries { // if we have tries left, sleep and retry
+				time.Sleep(sleepInterval * time.Duration(i))
+				continue
+			}
+		} else if !(200 <= resp.StatusCode && resp.StatusCode < 300) {
+			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned http error code %d", path, resp.StatusCode))
+			if i < maxTries { // if we have tries left, sleep and retry
+				_ = resp.Body.Close() // close the body so that the request may be re-used
+				time.Sleep(sleepInterval * time.Duration(i))
+				continue
+			}
+		}
+		// if we reached here that means either the request was successful, or
+		// we have no more tries left, so exit loop
+		break
+	}
+
+	return resp, err
 }

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 )
 
 const (
@@ -124,7 +125,10 @@ func (app *InventoryApp) Initialize() error {
 	app.devService = llrp.NewDSClient(&url.URL{
 		Scheme: devServURI.Scheme,
 		Host:   devServURI.Host,
-	}, http.DefaultClient)
+	}, &http.Client{
+		Timeout: 10 * time.Second,
+	},
+		app.lc)
 
 	dsName := app.config.ApplicationSettings.DeviceServiceName
 	if dsName == "" {
