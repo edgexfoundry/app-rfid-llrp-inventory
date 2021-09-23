@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # build stage
-ARG BASE=golang:1.16-alpine3.12
+ARG BASE=golang:1.16-alpine3.14
 FROM ${BASE} AS builder
 
 ARG ALPINE_PKG_BASE="make git gcc libc-dev libsodium-dev zeromq-dev"
@@ -35,7 +35,7 @@ ARG MAKE="make build"
 RUN $MAKE
 
 # final stage
-FROM alpine:3.12
+FROM alpine:3.14
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2020: Intel'
 LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
