@@ -17,7 +17,6 @@
 vendor/
 app-rfid-llrp-inventory
 glide.lock
-go.sum
 
 # snap files
 *.snap
@@ -37,7 +36,6 @@ main
 DEVNULL
 
 test.txt
-**/go.sum
 .vscode/*# Output of the go coverage tool, specifically when used with LiteIDE
 logs/*
 logs/

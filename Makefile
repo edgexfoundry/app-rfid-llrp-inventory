@@ -17,7 +17,7 @@ GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SD
 					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)"
 
-build: tidy
+build:
 	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
 
 tidy:
@@ -29,10 +29,9 @@ t:
 test:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) vet ./...
-	gofmt -l .
-	[ "`gofmt -l .`" = "" ]
+	gofmt -l $$(find . -type f -name '*.go'| grep -v "/vendor/")
+	[ "`gofmt -l $$(find . -type f -name '*.go'| grep -v "/vendor/")`" = "" ]
 	./bin/test-attribution.sh
-	./bin/test-go-mod-tidy.sh
 
 clean:
 	rm -f $(MICROSERVICE)
@@ -55,3 +54,6 @@ docker:
 
 run: build
 	./$(MICROSERVICE) -cp=consul.http://localhost:8500 -confdir=res
+
+vendor:
+	$(GO) mod vendor
