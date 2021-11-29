@@ -12,19 +12,20 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/json"
 	"fmt"
-	"github.com/edgexfoundry/app-functions-sdk-go/appcontext"
-	"github.com/edgexfoundry/go-mod-core-contracts/models"
-	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/requests"
+	"github.com/pkg/errors"
 )
 
 const (
-	eventDeviceName = "rfid-llrp-inventory"
-
 	resourceROAccessReport     = "ROAccessReport"
 	resourceReaderNotification = "ReaderEventNotification"
 	resourceInventoryEvent     = "InventoryEvent"
@@ -40,17 +41,14 @@ const (
 // handles events such as readers being connected and disconnected. The second event type is
 // ROAccessReport which is a wrapper around rfid tag read events. These tag readings are sent to
 // a channel which processes them as part of the main taskLoop.
-func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...interface{}) (bool, interface{}) {
-	if len(params) < 1 {
-		err := errors.Errorf("no Event received")
-		app.lc.Error("Processing error.", "error", err.Error())
-		return false, err
+func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data interface{}) (bool, interface{}) {
+	if data == nil {
+		return false, errors.New("processEdgeXEvent: No data received")
 	}
 
-	event, ok := params[0].(models.Event)
+	event, ok := data.(dtos.Event)
 	if !ok {
-		// You know what's cool in compiled languages? Type safety.
-		return false, errors.Errorf("unexpected type received, not an EdgeX Event")
+		return false, errors.New("processEdgeXEvent: didn't receive expected Event type")
 	}
 
 	if len(event.Readings) < 1 {
@@ -64,10 +62,10 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 
 	for i := range event.Readings {
 		reading := &event.Readings[i] // Readings is 169 bytes. This avoid the copy.
-		switch reading.Name {
+		switch reading.ResourceName {
 		default:
 			// this should never happen because it is pre-filtered by the SDK pipeline
-			app.lc.Error("Unknown reading name.", "reading", reading.Name)
+			app.lc.Error("Unknown reading name.", "reading", reading.ResourceName)
 			continue
 
 		case resourceReaderNotification:
@@ -79,9 +77,9 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 				continue
 			}
 
-			if err := app.handleReaderEvent(event.Device, notification); err != nil {
+			if err := app.handleReaderEvent(event.DeviceName, notification); err != nil {
 				app.lc.Error("Failed to handle ReaderEventNotification.",
-					"error", err.Error(), "device", event.Device)
+					"error", err.Error(), "device", event.DeviceName)
 			}
 
 		case resourceROAccessReport:
@@ -91,17 +89,17 @@ func (app *InventoryApp) processEdgeXEvent(_ *appcontext.Context, params ...inte
 			report := &llrp.ROAccessReport{}
 			if err := decoder.Decode(report); err != nil {
 				app.lc.Error("Failed to decode tag report",
-					"error", err.Error(), "device", event.Device)
+					"error", err.Error(), "device", event.DeviceName)
 				continue
 			}
 
 			if report.TagReportData == nil {
-				app.lc.Warn("No tag report data in report.", "device", event.Device)
+				app.lc.Warn("No tag report data in report.", "device", event.DeviceName)
 			} else {
 				// pass the tag report data to the reports channel to be processed by our taskLoop
 				app.reports <- reportData{report, inventory.NewReportInfo(reading)}
 				app.lc.Trace("New ROAccessReport.",
-					"device", event.Device, "tags", len(report.TagReportData))
+					"device", event.DeviceName, "tags", len(report.TagReportData))
 			}
 		}
 	}
@@ -156,18 +154,14 @@ func (app *InventoryApp) requestInventorySnapshot(w io.Writer) error {
 // this taskLoop ensures the modifications are done safely
 // without requiring a ton of lock contention on the inventory itself.
 func (app *InventoryApp) taskLoop(ctx context.Context) {
-	departedCheckSeconds := app.config.ApplicationSettings.DepartedCheckIntervalSeconds
+	departedCheckSeconds := app.config.AppCustom.AppSettings.DepartedCheckIntervalSeconds
 	aggregateDepartedTicker := time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
 	ageoutTicker := time.NewTicker(1 * time.Hour)
-	confErrCh := make(chan error)
-	confUpdateCh := make(chan interface{})
 	eventCh := make(chan []inventory.Event, eventChSz)
 
 	defer func() {
 		aggregateDepartedTicker.Stop()
 		ageoutTicker.Stop()
-		close(confErrCh)
-		close(confUpdateCh)
 	}()
 
 	// load tag data
@@ -185,8 +179,6 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 	if len(snapshot) > 0 {
 		app.lc.Info(fmt.Sprintf("Restored %d tags from cache.", len(snapshot)))
 	}
-
-	app.configClient.WatchForChanges(confUpdateCh, confErrCh, &app.config, "/")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -250,14 +242,14 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 				app.persistSnapshot(snapshot)
 			}
 
-		case rawConfig := <-confUpdateCh:
-			newConfig, ok := rawConfig.(*inventory.ConsulConfig)
+		case rawConfig := <-app.confUpdateCh:
+			newConfig, ok := rawConfig.(*inventory.CustomConfig)
 			if !ok {
 				app.lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
 				continue
 			}
 
-			if err := newConfig.ApplicationSettings.Validate(); err != nil {
+			if err := newConfig.AppSettings.Validate(); err != nil {
 				app.lc.Error("Invalid Consul configuration.", "error", err.Error())
 				continue
 			}
@@ -267,9 +259,9 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 			processor.UpdateConfig(*newConfig)
 
 			// check if we need to change the ticker interval
-			if departedCheckSeconds != newConfig.ApplicationSettings.DepartedCheckIntervalSeconds {
+			if departedCheckSeconds != newConfig.AppSettings.DepartedCheckIntervalSeconds {
 				aggregateDepartedTicker.Stop()
-				departedCheckSeconds = newConfig.ApplicationSettings.DepartedCheckIntervalSeconds
+				departedCheckSeconds = newConfig.AppSettings.DepartedCheckIntervalSeconds
 				aggregateDepartedTicker = time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
 				app.lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", departedCheckSeconds))
 			}
@@ -280,9 +272,6 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 				_, err = req.w.Write(data) // only write if there was no error already
 			}
 			req.result <- err
-
-		case err := <-confErrCh:
-			app.lc.Error("Configuration error.", "error", err.Error())
 		}
 	}
 }
@@ -313,8 +302,9 @@ func (app *InventoryApp) setDefaultBehavior(b llrp.Behavior) error {
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
 func (app *InventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
-	now := time.Now().UnixNano()
-	readings := make([]models.Reading, 0, len(events))
+	// These events are generated by the app-service itself, so we are using serviceKey
+	// for the profile, device, and source names.
+	edgeXEvent := dtos.NewEvent(serviceKey, serviceKey, serviceKey)
 
 	var errs []error
 	for _, event := range events {
@@ -325,27 +315,21 @@ func (app *InventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 		}
 
 		resourceName := resourceInventoryEvent + string(event.OfType())
-		app.edgexSdk.LoggingClient.Info("Sending Inventory Event.",
+		app.service.LoggingClient().Info("Sending Inventory Event.",
 			"type", resourceName, "payload", string(payload))
 
-		readings = append(readings, models.Reading{
-			Value:  string(payload),
-			Origin: now,
-			Device: eventDeviceName,
-			Name:   resourceName,
-		})
-	}
+		err = edgeXEvent.AddSimpleReading(resourceName, common.ValueTypeString, string(payload))
+		if err != nil {
+			errs = append(errs, errors.Wrapf(err, "error creating reading for %s", resourceName))
+			continue
+		}
 
-	edgeXEvent := &models.Event{
-		Device:   eventDeviceName,
-		Origin:   now,
-		Readings: readings,
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, coreDataPostTimeout)
 	defer cancel()
 
-	if _, err := app.edgexSdk.EdgexClients.EventClient.Add(ctx, edgeXEvent); err != nil {
+	if _, err := app.service.EventClient().Add(ctx, requests.NewAddEventRequest(edgeXEvent)); err != nil {
 		errs = append(errs, errors.Wrap(err, "unable to push inventory event(s) to core-data"))
 	}
 

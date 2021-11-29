@@ -2,20 +2,28 @@ package llrp
 
 import (
 	"encoding/json"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
 	"testing"
 
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces/mocks"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func getTestingLogger() logger.LoggingClient {
 	if testing.Verbose() {
-		return logger.NewClientStdOut("test", false, "DEBUG")
+		return logger.NewClient("test", "DEBUG")
 	}
 
 	return logger.NewMockClient()
@@ -26,15 +34,15 @@ func TestNewDSClient(t *testing.T) {
 	assert := assert.New(t)
 	type testCase struct {
 		name    string
-		hostURL url.URL
-		client  *http.Client
+		//hostURL url.URL
+		client  interfaces.CommandClient
 		exp     interface{}
 	}
 
 	tests := []testCase{
 		{
 			name:    "Sample URL Test",
-			hostURL: url.URL{Scheme: "https", Opaque: "", User: url.User("testUser"), Host: "testHost"},
+			//hostURL: url.URL{Scheme: "https", Opaque: "", User: url.User("testUser"), Host: "testHost"},
 			client:  http.DefaultClient,
 			exp:     "https://testUser@testHost" + basePath,
 		},
@@ -57,54 +65,45 @@ func TestNewDSClient(t *testing.T) {
 
 func TestGetDevices(t *testing.T) {
 
-	type device struct{ Name string }
-
 	type testCase struct {
 		testCaseName string
-		errMsg       string
-		respCode     int
-		devices      []device
+		errMsg       *string
+		devices      []dtos.Device
+	}
+
+	mockDeviceClient := &mocks.DeviceClient{}
+	errorMessage := "failed to get device list"
+	expectedDeviceListResponse := responses.MultiDevicesResponse{
+		Devices: []dtos.Device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BCclear-20"}},
 	}
 
 	testCases := []testCase{
 		{
-			testCaseName: "Test Unsuccessful HTTP GET Status Return",
-			respCode:     http.StatusBadRequest,
+			testCaseName: "Test Unsuccessful",
+			errMsg:       &errorMessage,
 			devices:      nil,
 		},
 		{
 			testCaseName: "Test Get Device List",
-			respCode:     http.StatusOK,
-			devices:      []device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BCclear-20"}},
+			errMsg:       nil,
+			devices:      expectedDeviceListResponse.Devices,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
-
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
-
-				jsonData, err := json.Marshal(tc.devices)
-				require.NoError(t, err)
-				w.Write(jsonData)
-
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			deviceList, err := GetDevices(s.URL, deviceServiceClient.httpClient)
-			if tc.respCode == http.StatusOK {
-				assert.NotNil(tt, deviceList, "Expected device list to be not empty")
+			if tc.errMsg == nil {
+				mockDeviceClient.On("DevicesByServiceName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(expectedDeviceListResponse, nil).Once()
 			} else {
-				assert.NotNil(tt, err, "Encountered Error: %s", err)
+				mockDeviceClient.On("DevicesByServiceName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(responses.MultiDevicesResponse{}, errors.NewCommonEdgeXWrapper(fmt.Errorf("My Error"))).Once()
 			}
 
-			s.Close()
-
+			deviceList, err := GetDevices(mockDeviceClient, "deviceService")
+			if tc.errMsg != nil {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), *tc.errMsg)
+				return
+			}
+			assert.Equal(t, tc.devices, deviceList)
 		})
 
 	}

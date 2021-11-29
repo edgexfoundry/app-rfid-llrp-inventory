@@ -9,15 +9,22 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
+	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 )
 
 const (
-	maxBodyBytes = 100 * 1024
+	maxBodyBytes   = 100 * 1024
+	readersRoute   = common.ApiBase + "/readers"
+	snapshotRoute  = common.ApiBase + "/inventory/snapshot"
+	cmdStartRoute  = common.ApiBase + "/command/reading/start"
+	cmdStopRoute   = common.ApiBase + "/command/reading/stop"
+	behaviorsRoute = common.ApiBase + "/behaviors/{name}"
 )
 
 func (app *InventoryApp) addRoutes() error {
@@ -26,27 +33,27 @@ func (app *InventoryApp) addRoutes() error {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/readers", http.MethodGet, app.getReaders); err != nil {
+		readersRoute, http.MethodGet, app.getReaders); err != nil {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/inventory/snapshot", http.MethodGet, app.getSnapshot); err != nil {
+		snapshotRoute, http.MethodGet, app.getSnapshot); err != nil {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/command/reading/start", http.MethodPost, app.startReading); err != nil {
+		cmdStartRoute, http.MethodPost, app.startReading); err != nil {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/command/reading/stop", http.MethodPost, app.stopReading); err != nil {
+		cmdStopRoute, http.MethodPost, app.stopReading); err != nil {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/behaviors/{name}", http.MethodGet, app.getBehavior); err != nil {
+		behaviorsRoute, http.MethodGet, app.getBehavior); err != nil {
 		return err
 	}
 	if err := app.addRoute(
-		"/api/v1/behaviors/{name}", http.MethodPut, app.setBehavior); err != nil {
+		behaviorsRoute, http.MethodPut, app.setBehavior); err != nil {
 		return err
 	}
 
@@ -54,7 +61,7 @@ func (app *InventoryApp) addRoutes() error {
 }
 
 func (app *InventoryApp) addRoute(path, method string, f http.HandlerFunc) error {
-	if err := app.edgexSdk.AddRoute(path, f, method); err != nil {
+	if err := app.service.AddRoute(path, f, method); err != nil {
 		return errors.Wrapf(err, "failed to add route, path=%s, method=%s", path, method)
 	}
 	return nil
