@@ -52,7 +52,7 @@ func main() {
 	var enable = true
 	var err error
 	var envJSON, prof string
-	var cli *hooks.CtlCli = hooks.NewSnapCtl() //check with lenny
+	var cli *hooks.CtlCli = hooks.NewSnapCtl()
 
 	status, err := cli.Config("debug")
 	if err != nil {

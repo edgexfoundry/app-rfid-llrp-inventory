@@ -64,7 +64,7 @@ func NewServiceConfig() ServiceConfig {
 				MobilityProfileThreshold:     6,
 				MobilityProfileHoldoffMillis: 500,
 				MobilityProfileSlope:         -0.008,
-				DeviceServiceName:            "edgex-device-llrp",
+				DeviceServiceName:            "device-rfid-llrp",
 				DepartedThresholdSeconds:     600,
 				DepartedCheckIntervalSeconds: 30,
 				AgeOutHours:                  336,

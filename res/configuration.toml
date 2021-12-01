@@ -31,6 +31,11 @@ Port = 8500
 Type = "consul"
 
 [Clients]
+  [Clients.core-data]
+  Protocol = "http"
+  Host = "localhost"
+  Port = 59880
+  
   [Clients.core-metadata]
   Protocol = "http"
   Host = "localhost"
@@ -40,6 +45,8 @@ Type = "consul"
   Protocol = "http"
   Host = "localhost"
   Port = 59882
+
+  
 
 # SecretStore is required when Store and Forward is enabled and running with security
 # so Database credentials can be pulled from Vault.
@@ -95,7 +102,7 @@ Type="edgex-messagebus"
 
   # See: https://github.com/edgexfoundry/app-rfid-llrp-inventory#configuration
   [AppCustom.AppSettings]
-  DeviceServiceName = "edgex-device-rfid-llrp"
+  DeviceServiceName = "device-rfid-llrp"
   AdjustLastReadOnByOrigin = true
   DepartedThresholdSeconds = 600
   DepartedCheckIntervalSeconds = 30
