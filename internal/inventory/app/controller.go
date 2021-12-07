@@ -6,10 +6,7 @@
 package inventoryapp
 
 import (
-	"bytes"
 	"context"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +14,9 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
@@ -55,11 +55,6 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 		return false, errors.New("event contains no Readings")
 	}
 
-	buff := bytes.Buffer{}
-	decoder := json.NewDecoder(&buff)
-	decoder.UseNumber()
-	decoder.DisallowUnknownFields()
-
 	for i := range event.Readings {
 		reading := &event.Readings[i] // Readings is 169 bytes. This avoid the copy.
 		switch reading.ResourceName {
@@ -69,11 +64,10 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 			continue
 
 		case resourceReaderNotification:
-			buff.Reset()
-			buff.WriteString(reading.Value)
 			notification := &llrp.ReaderEventNotification{}
-			if err := decoder.Decode(notification); err != nil {
-				app.lc.Error("Failed to decode reader event notification", "error", err.Error())
+			err := app.getReadingObjectValue(reading.ObjectValue, notification)
+			if err != nil {
+				app.lc.Errorf("Failed to decode reader event notification for device '%s': %s", event.DeviceName, err.Error())
 				continue
 			}
 
@@ -83,13 +77,10 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 			}
 
 		case resourceROAccessReport:
-			buff.Reset()
-			buff.WriteString(reading.Value)
-
 			report := &llrp.ROAccessReport{}
-			if err := decoder.Decode(report); err != nil {
-				app.lc.Error("Failed to decode tag report",
-					"error", err.Error(), "device", event.DeviceName)
+			err := app.getReadingObjectValue(reading.ObjectValue, report)
+			if err != nil {
+				app.lc.Errorf("Failed to decode tag report for device '%s': %s", event.DeviceName, err.Error())
 				continue
 			}
 
@@ -105,6 +96,19 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 	}
 
 	return false, nil
+}
+
+func (app *InventoryApp) getReadingObjectValue(value interface{}, target interface{}) error {
+	// Object reading is of type interface{}, so it gets un-marshaled into a map[string]interface{} when the reading
+	// is un-marshaled by the SDK since the SDK doesn't know the struct. It needs to be re-marshaled back to JSON and
+	// then un-marshaled into the proper target struct that is known by the App Service
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(data, target)
+	return err
 }
 
 // handleReaderEvent handles an llrp.ReaderEventNotification from the Device Service.

@@ -7,14 +7,15 @@ package inventoryapp
 
 import (
 	"context"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg"
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
@@ -100,9 +101,12 @@ func (app *InventoryApp) Initialize() error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to get existing device names for device service name %s", dsName)
 	}
+
+	app.lc.Debugf("Found %d devices", len(devices))
 	for _, device := range devices {
+		app.lc.Debugf("Attempting to add Reader for device '%s'", device.Name)
 		if err = app.defaultGrp.AddReader(app.devService, device.Name); err != nil {
-			return errors.Wrapf(err, "failed to setup device %s", device.Name)
+			app.lc.Errorf("Failed to setup device %s: %s", device.Name, err.Error())
 		}
 	}
 

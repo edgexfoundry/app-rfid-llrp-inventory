@@ -10,7 +10,7 @@ LogLevel = "INFO"
 [Service]
 HealthCheckInterval = "10s"
 Host = "localhost"
-Port = 48086
+Port = 59711
 ServerBindAddr = "" # if blank, uses default Go behavior https://golang.org/pkg/net/#Listen
 StartupMsg = "RFID LLRP Inventory Service"
 RequestTimeout = "30s"

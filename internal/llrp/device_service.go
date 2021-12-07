@@ -30,7 +30,7 @@ const (
 	startCmd     = "startROSpec"
 	deleteCmd    = "deleteROSpec"
 
-	enableImpinjCmd = "/enableImpinjExt"
+	enableImpinjCmd = "ImpinjCustomExtensionMessage"
 
 	capReadingName = "ReaderCapabilities"
 
@@ -120,9 +120,11 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	var resp *responses.EventResponse
 	try := 1
 
+	ds.lc.Debugf("Sending GET command '%s' to device '%s'", capDevCmd, device)
+
 	// need to retry because when an offline reader goes online, and is marked Enabled, it may retuurn an error when querying capabilities because it is not 100% ready
 	for try < maxTries {
-		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "false", "true")
+		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
 		if err != nil {
 			try++
 			time.Sleep(sleepInterval * time.Duration(try))
@@ -165,10 +167,15 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 		return errors.Wrap(err, "failed to marshal SetReaderConfig message")
 	}
 
-	var data map[string]interface{}
-	json.Unmarshal(confData, &data)
+	var configMapData map[string]interface{}
+	json.Unmarshal(confData, &configMapData)
+	commandData := map[string]interface{}{
+		"ReaderConfig": configMapData,
+	}
 
-	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, configDevCmd, data)
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", configDevCmd, device, commandData)
+
+	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, configDevCmd, commandData)
 	if err != nil {
 		return errors.WithMessage(err, "failed to set reader config")
 	}
@@ -182,10 +189,18 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 		return errors.Wrap(err, "failed to marshal ROSpec")
 	}
 
+	var roMapData map[string]interface{}
+	json.Unmarshal(roData, &roMapData)
+	commandData := map[string]interface{}{
+		"ROSpec": roMapData,
+	}
+
 	var data map[string]interface{}
 	json.Unmarshal(roData, &data)
 
-	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, addCmd, data)
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", addCmd, device, commandData)
+
+	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, addCmd, commandData)
 	if err != nil {
 		return errors.WithMessage(err, "failed to add ROSpec")
 	}
@@ -229,6 +244,8 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 
 	data["ROSpecID"] = strconv.FormatUint(uint64(id), 10)
 
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", roCmd, device, data)
+
 	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, roCmd, data)
 	if err != nil {
 		return errors.WithMessage(err, "failed to "+roCmd)
@@ -244,6 +261,9 @@ func (d *ImpinjDevice) EnableCustomExt(device string, ds DSClient) error {
 	data := make(map[string]string)
 
 	data["ImpinjCustomExtensionMessage"] = "AAAAAA=="
+
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", enableImpinjCmd, device, data)
+
 	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, enableImpinjCmd, data)
 	if err != nil {
 		return errors.WithMessage(err, "failed to enable Impinj extensions")
