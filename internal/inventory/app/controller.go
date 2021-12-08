@@ -19,7 +19,6 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/requests"
 	"github.com/pkg/errors"
@@ -312,22 +311,9 @@ func (app *InventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 
 	var errs []error
 	for _, event := range events {
-		payload, err := json.Marshal(event)
-		if err != nil {
-			errs = append(errs, errors.Wrap(err, "error marshalling event"))
-			continue
-		}
-
 		resourceName := resourceInventoryEvent + string(event.OfType())
-		app.service.LoggingClient().Info("Sending Inventory Event.",
-			"type", resourceName, "payload", string(payload))
-
-		err = edgeXEvent.AddSimpleReading(resourceName, common.ValueTypeString, string(payload))
-		if err != nil {
-			errs = append(errs, errors.Wrapf(err, "error creating reading for %s", resourceName))
-			continue
-		}
-
+		app.service.LoggingClient().Debugf("Sending Inventory Event of type %s: %v", resourceName, event)
+		edgeXEvent.AddObjectReading(resourceName, event)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, coreDataPostTimeout)
