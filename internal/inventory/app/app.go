@@ -26,10 +26,11 @@ import (
 const (
 	serviceKey = "app-rfid-llrp-inventory"
 
-	cacheFolder  = "cache"
-	tagCacheFile = "tags.json"
-	folderPerm   = 0755 // folders require the execute flag in order to create new files
-	filePerm     = 0644
+	cacheFolder      = "cache"
+	tagCacheFile     = "tags.json"
+	folderPerm       = 0755 // folders require the execute flag in order to create new files
+	filePerm         = 0644
+	aliasesConfigKey = "Aliases"
 )
 
 type InventoryApp struct {

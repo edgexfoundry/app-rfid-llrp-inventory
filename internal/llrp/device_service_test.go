@@ -439,19 +439,19 @@ const PENImpinjCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			}
 		],
 		"MaximumReceiveSensitivity": null
@@ -587,19 +587,19 @@ const PENAlienCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			}
 		],
 		"MaximumReceiveSensitivity": null
@@ -735,19 +735,19 @@ const PENZebraCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": "AQ=="
+				"AirProtocolIDs": [1]
 			}
 		],
 		"MaximumReceiveSensitivity": null

@@ -21,6 +21,7 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/requests"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -98,15 +99,8 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 }
 
 func (app *InventoryApp) getReadingObjectValue(value interface{}, target interface{}) error {
-	// Object reading is of type interface{}, so it gets un-marshaled into a map[string]interface{} when the reading
-	// is un-marshaled by the SDK since the SDK doesn't know the struct. It needs to be re-marshaled back to JSON and
-	// then un-marshaled into the proper target struct that is known by the App Service
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(data, target)
+	// Object value types come in as a map[string]interface{} which need to be marshalled from this rather than JSON
+	err := mapstructure.Decode(value, target)
 	return err
 }
 

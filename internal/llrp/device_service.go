@@ -15,6 +15,7 @@ import (
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -140,13 +141,9 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	caps := &GetReaderCapabilitiesResponse{}
 	for _, reading := range resp.Event.Readings {
 		if reading.ResourceName == capReadingName {
-			// reading objectvalue is an interface which will be marshalled into the objectvalue as a map[string]interface{}
-			// in order to get this into the reader capabilities struct we need to first marshal it back to JSON
-			data, err := json.Marshal(reading.ObjectValue)
+			// Object value types come in as a map[string]interface{} which need to be marshalled from this rather than JSON
+			err := mapstructure.Decode(reading.ObjectValue, &caps)
 			if err != nil {
-				return nil, errors.Wrap(err, "Marshal failed for reading object value (reader capabilities)")
-			}
-			if err := json.Unmarshal(data, &caps); err != nil {
 				return nil, errors.Wrap(err, "Unmarshal failed for reader capabilities")
 			}
 			break
