@@ -37,7 +37,7 @@ type ServiceConfig struct {
 }
 
 // UpdateFromRaw updates the service's full configuration from raw data received from
-// the Service Provider.This function implements the UpdatableConfig interface for ServiceConfig.
+// the Service Provider. This function implements the UpdatableConfig interface for ServiceConfig.
 func (c *ServiceConfig) UpdateFromRaw(rawConfig interface{}) bool {
 	configuration, ok := rawConfig.(*ServiceConfig)
 	if !ok {

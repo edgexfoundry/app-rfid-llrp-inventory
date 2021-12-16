@@ -79,15 +79,15 @@ func (app *InventoryApp) Initialize() error {
 	app.lc.Info("Starting.")
 
 	if err = app.service.LoadCustomConfig(&app.config, aliasesConfigKey); err != nil {
-		return errors.Wrap(err, "Failed to load custom configuration")
+		return errors.Wrap(err, "failed to load custom configuration")
 	}
 
 	if err = app.config.AppCustom.AppSettings.Validate(); err != nil {
-		return errors.Wrap(err, "Fail to validate custom config")
+		return errors.Wrap(err, "Failed to validate custom config")
 	}
 
 	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, "AppCustom", app.processConfigUpdates); err != nil {
-		return errors.Wrap(err, "Listen for custom changes Failed")
+		return errors.Wrap(err, "failed to listen for custom config changes")
 	}
 
 	app.defaultGrp = llrp.NewReaderGroup()
@@ -98,13 +98,13 @@ func (app *InventoryApp) Initialize() error {
 		return errors.New("missing device service name")
 	}
 
-	devices, err := llrp.GetDevices(app.service.DeviceClient(), dsName)
+	response, err := app.service.DeviceClient().DevicesByServiceName(context.Background(), dsName, 0, -1)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get existing device names for device service name %s", dsName)
 	}
 
-	app.lc.Debugf("Found %d devices", len(devices))
-	for _, device := range devices {
+	app.lc.Debugf("Found %d devices", len(response.Devices))
+	for _, device := range response.Devices {
 		app.lc.Debugf("Attempting to add Reader for device '%s'", device.Name)
 		if err = app.defaultGrp.AddReader(app.devService, device.Name); err != nil {
 			app.lc.Errorf("Failed to setup device %s: %s", device.Name, err.Error())

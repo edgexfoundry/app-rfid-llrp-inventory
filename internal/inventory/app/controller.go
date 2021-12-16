@@ -21,7 +21,6 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/requests"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -43,12 +42,12 @@ const (
 // a channel which processes them as part of the main taskLoop.
 func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data interface{}) (bool, interface{}) {
 	if data == nil {
-		return false, errors.New("processEdgeXEvent: No data received")
+		return false, errors.New("processEdgeXEvent: was called without any data")
 	}
 
 	event, ok := data.(dtos.Event)
 	if !ok {
-		return false, errors.New("processEdgeXEvent: didn't receive expected Event type")
+		return false, fmt.Errorf("processEdgeXEvent: received data of type %T instead of EdgeX Event type", data)
 	}
 
 	if len(event.Readings) < 1 {
@@ -99,8 +98,15 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 }
 
 func (app *InventoryApp) getReadingObjectValue(value interface{}, target interface{}) error {
-	// Object value types come in as a map[string]interface{} which need to be marshalled from this rather than JSON
-	err := mapstructure.Decode(value, target)
+	// Object reading is of type interface{}, so it gets un-marshaled into a map[string]interface{} when the reading
+	// is un-marshaled by the SDK since the SDK doesn't know the struct. It needs to be re-marshaled back to JSON and
+	// then un-marshaled into the proper target struct that is known by the App Service
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(data, target)
 	return err
 }
 
@@ -288,14 +294,6 @@ func (app *InventoryApp) persistSnapshot(snapshot []inventory.StaticTag) {
 	app.lc.Info("Persisted inventory snapshot.", "tags", len(snapshot))
 }
 
-// setDefaultBehavior sets the behavior associated with the default device group.
-func (app *InventoryApp) setDefaultBehavior(b llrp.Behavior) error {
-	app.devMu.Lock()
-	err := app.defaultGrp.SetBehavior(app.devService, b)
-	app.devMu.Unlock()
-	return err
-}
-
 // pushEventsToCoreData will send one or more Inventory Events as a single EdgeX Event with
 // an EdgeX Reading for each Inventory Event
 func (app *InventoryApp) pushEventsToCoreData(ctx context.Context, events []inventory.Event) error {
@@ -306,7 +304,7 @@ func (app *InventoryApp) pushEventsToCoreData(ctx context.Context, events []inve
 	var errs []error
 	for _, event := range events {
 		resourceName := resourceInventoryEvent + string(event.OfType())
-		app.service.LoggingClient().Debugf("Sending Inventory Event of type %s: %v", resourceName, event)
+		app.lc.Debugf("Sending Inventory Event of type %s: %+v", resourceName, event)
 		edgeXEvent.AddObjectReading(resourceName, event)
 	}
 

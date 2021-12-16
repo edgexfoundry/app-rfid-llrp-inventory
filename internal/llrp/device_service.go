@@ -13,9 +13,6 @@ import (
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +28,7 @@ const (
 	startCmd     = "startROSpec"
 	deleteCmd    = "deleteROSpec"
 
-	enableImpinjCmd = "ImpinjCustomExtensionMessage"
+	enableImpinjCmd = "EnableImpinjExtensions"
 
 	capReadingName = "ReaderCapabilities"
 
@@ -45,30 +42,16 @@ type DSClient struct {
 	cmdClient interfaces.CommandClient
 }
 
-// NewDSClient returns a DSClient reachable at the given host URL,
-// using the given http Client, which of course may be the default.
-// TODO: Use new device service Clients from go-mod-core-clients when upgrading to V2 (Ireland)
-//		 https://github.com/edgexfoundry/app-rfid-llrp-inventory/pull/18#discussion_r592768121
+// NewDSClient returns a DSClient which uses the command client to issue commands to the devices
 func NewDSClient(cmdClient interfaces.CommandClient, lc logger.LoggingClient) DSClient {
-
 	return DSClient{
 		cmdClient: cmdClient,
 		lc:        lc,
 	}
 }
 
-// GetDevices return a list of device names known to the EdgeX Metadata service.
-func GetDevices(client interfaces.DeviceClient, dsName string) ([]dtos.Device, error) {
-	response, err := client.DevicesByServiceName(context.Background(), dsName, 0, -1)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get device list")
-	}
-
-	return response.Devices, nil
-}
-
 // NewReader returns a TagReader instance for the given device name
-// by querying the LLRP Device Service for details about it.
+// by querying the LLRP Device Service for details about it, via command client.
 //
 // If the Device Service isn't tracking a device with the given name,
 // then this returns an error.
@@ -115,23 +98,17 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 	return tr, nil
 }
 
-// GetCapabilities queries the device service for a device's capabilities.
+// GetCapabilities queries for a device's capabilities.
 func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesResponse, error) {
-	var err error
-	var resp *responses.EventResponse
-	try := 1
-
 	ds.lc.Debugf("Sending GET command '%s' to device '%s'", capDevCmd, device)
 
-	// need to retry because when an offline reader goes online, and is marked Enabled, it may retuurn an error when querying capabilities because it is not 100% ready
-	for try < maxTries {
+	// implemented retry because when an offline reader goes online, and is marked Enabled, it may retuurn an error when querying capabilities because it is not 100% ready
+	resp, err := ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
+	for try := 1; err != nil && try < maxTries; try++ {
+		// when an offline reader comes back online, it may return an error querying the capabilities due to a
+		// slight delay when the device service updates the reader's OperatingState. So lets sleep a bit and retry.
+		time.Sleep(sleepInterval * time.Duration(try))
 		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
-		if err != nil {
-			try++
-			time.Sleep(sleepInterval * time.Duration(try))
-			continue
-		}
-		break
 	}
 
 	if err != nil {
@@ -141,8 +118,13 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	caps := &GetReaderCapabilitiesResponse{}
 	for _, reading := range resp.Event.Readings {
 		if reading.ResourceName == capReadingName {
-			// Object value types come in as a map[string]interface{} which need to be marshalled from this rather than JSON
-			err := mapstructure.Decode(reading.ObjectValue, &caps)
+			// reading objectvalue is an interface which will be marshalled into the objectvalue as a map[string]interface{}
+			// in order to get this into the reader capabilities struct we need to first marshal it back to JSON
+			data, err := json.Marshal(reading.ObjectValue)
+			if err != nil {
+				return nil, errors.Wrap(err, "Marshal failed for reading object value (reader capabilities)")
+			}
+			err = json.Unmarshal(data, &caps)
 			if err != nil {
 				return nil, errors.Wrap(err, "Unmarshal failed for reader capabilities")
 			}
@@ -157,7 +139,7 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	return caps, nil
 }
 
-// SetConfig requests the device service set a particular device's configuration.
+// SetConfig requests to set a particular device's configuration.
 func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 	confData, err := json.Marshal(conf)
 	if err != nil {
@@ -165,7 +147,11 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 	}
 
 	var configMapData map[string]interface{}
-	json.Unmarshal(confData, &configMapData)
+	err = json.Unmarshal(confData, &configMapData)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal SetReaderConfig message")
+	}
+
 	commandData := map[string]interface{}{
 		"ReaderConfig": configMapData,
 	}
@@ -187,13 +173,14 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 	}
 
 	var roMapData map[string]interface{}
-	json.Unmarshal(roData, &roMapData)
+	err = json.Unmarshal(roData, &roMapData)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal ROSpec")
+	}
+
 	commandData := map[string]interface{}{
 		"ROSpec": roMapData,
 	}
-
-	var data map[string]interface{}
-	json.Unmarshal(roData, &data)
 
 	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", addCmd, device, commandData)
 
@@ -234,8 +221,7 @@ func (ds DSClient) DeleteAllROSpecs(device string) error {
 	return ds.modifyROSpecState(deleteCmd, device, 0)
 }
 
-// modifyROSpecState requests the device service set the given device's
-// ROSpec to a particular state.
+// modifyROSpecState requests to set the given device's ROSpec to a particular state.
 func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 	data := make(map[string]string)
 
@@ -257,10 +243,9 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 func (d *ImpinjDevice) EnableCustomExt(device string, ds DSClient) error {
 	data := make(map[string]string)
 
-	data["ImpinjCustomExtensionMessage"] = "AAAAAA=="
+	ds.lc.Debugf("Sending SET command '%s' to device '%s'", enableImpinjCmd, device)
 
-	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", enableImpinjCmd, device, data)
-
+	// the Device profile for impinj has a defaultvalue, so passing empty map
 	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, enableImpinjCmd, data)
 	if err != nil {
 		return errors.WithMessage(err, "failed to enable Impinj extensions")

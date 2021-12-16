@@ -9,7 +9,6 @@ import (
 
 	llrpMocks "edgexfoundry/app-rfid-llrp-inventory/internal/llrp/mocks"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
@@ -27,53 +26,6 @@ func getTestingLogger() logger.LoggingClient {
 	}
 
 	return logger.NewMockClient()
-}
-
-func TestGetDevices(t *testing.T) {
-
-	type testCase struct {
-		testCaseName string
-		errMsg       *string
-		devices      []dtos.Device
-	}
-
-	mockDeviceClient := &mocks.DeviceClient{}
-	errorMessage := "failed to get device list"
-	expectedDeviceListResponse := responses.MultiDevicesResponse{
-		Devices: []dtos.Device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BCclear-20"}},
-	}
-
-	testCases := []testCase{
-		{
-			testCaseName: "Test Unsuccessful",
-			errMsg:       &errorMessage,
-			devices:      nil,
-		},
-		{
-			testCaseName: "Test Get Device List",
-			errMsg:       nil,
-			devices:      expectedDeviceListResponse.Devices,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testCaseName, func(tt *testing.T) {
-			if tc.errMsg == nil {
-				mockDeviceClient.On("DevicesByServiceName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(expectedDeviceListResponse, nil).Once()
-			} else {
-				mockDeviceClient.On("DevicesByServiceName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(responses.MultiDevicesResponse{}, errors.NewCommonEdgeXWrapper(fmt.Errorf("My Error"))).Once()
-			}
-
-			deviceList, err := GetDevices(mockDeviceClient, "deviceService")
-			if tc.errMsg != nil {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), *tc.errMsg)
-				return
-			}
-			assert.Equal(t, tc.devices, deviceList)
-		})
-
-	}
-
 }
 
 func createMockCapabilities(t *testing.T, capJson string) map[string]interface{} {
@@ -439,19 +391,19 @@ const PENImpinjCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			}
 		],
 		"MaximumReceiveSensitivity": null
@@ -587,19 +539,19 @@ const PENAlienCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			}
 		],
 		"MaximumReceiveSensitivity": null
@@ -735,19 +687,19 @@ const PENZebraCap = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			}
 		],
 		"MaximumReceiveSensitivity": null
