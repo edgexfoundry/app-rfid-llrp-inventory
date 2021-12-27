@@ -46,7 +46,7 @@ COPY --from=builder /app/res/ /res/
 COPY --from=builder /app/static/ /static/
 COPY --from=builder /app/app-rfid-llrp-inventory /app-rfid-llrp-inventory
 
-EXPOSE 48086
+EXPOSE 59711
 
 ENTRYPOINT ["/app-rfid-llrp-inventory"]
 CMD ["-cp=consul.http://edgex-core-consul:8500", "-registry", "-confdir=/res"]
