@@ -127,7 +127,7 @@
   <div class="b"><button type="button" class="btn btn-success" onclick="call('POST', '/api/v2/command/reading/start')">Start Reading</button></div>
   <div class="b"><button type="button" class="btn btn-danger" onclick="call('POST', '/api/v2/command/reading/stop')">Stop Reading</button></div>
   <div class="b"><button type="button" class="btn btn-light" onclick="call('GET', '/api/v2/inventory/snapshot')">Inventory Snapshot</button></div>
-  <div class="b"><a href="http://localhost:59880/api/v2/event/device/name/app-rfid-llrp-inventory" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
+  <div class="b"><a href="http://localhost:59880/api/v2/event/device/name/app-rfid-llrp-inventory?offset=0&limit=100" target="_blank"><button type="button" class="btn btn-light">EdgeX Inventory Events</button></a></div>
 
   <div id="output_log">
   </div>
