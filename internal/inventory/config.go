@@ -25,13 +25,13 @@ type ApplicationSettings struct {
 	AdjustLastReadOnByOrigin bool
 }
 
-// CustomConfig is the struct representation of all of the sections from the configuration.toml
-// that we are interested in syncing with Consul.
+// CustomConfig is the struct representation of the individual custom sections
 type CustomConfig struct {
 	AppSettings ApplicationSettings
 	Aliases     map[string]string
 }
 
+// ServiceConfig is the struct representation that contains the custom config section
 type ServiceConfig struct {
 	AppCustom CustomConfig
 }

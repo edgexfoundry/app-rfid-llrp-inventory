@@ -149,12 +149,12 @@ func TestGetCapabilities(t *testing.T) {
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
-			getReaderCapabilitiesResponse, errMsg := deviceServiceClient.GetCapabilities(tc.deviceName)
+			getReaderCapabilitiesResponse, err := deviceServiceClient.GetCapabilities(tc.deviceName)
 			if tc.errorExpected {
-				require.Error(tt, errMsg)
+				require.Error(tt, err)
 				return
 			}
-			require.NoError(tt, errMsg)
+			require.NoError(tt, err)
 			require.NotNil(tt, getReaderCapabilitiesResponse)
 			assert.Equal(tt, tc.expectedCap, getReaderCapabilitiesResponse)
 
@@ -230,11 +230,11 @@ func TestSetConfig(t *testing.T) {
 				Custom:                      tc.fields.Custom,
 			}
 
-			errMsg := deviceServiceClient.SetConfig(tc.deviceName, se)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			err := deviceServiceClient.SetConfig(tc.deviceName, se)
+			if tc.errorExpected {
+				assert.Error(tt, err)
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				assert.NoError(tt, err)
 			}
 
 		})
@@ -284,11 +284,11 @@ func TestAddROSpec(t *testing.T) {
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
-			errMsg := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			err := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
+			if tc.errorExpected {
+				assert.Error(tt, err)
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				assert.NoError(tt, err)
 			}
 		})
 
@@ -348,11 +348,11 @@ func TestModifyROSpecState(t *testing.T) {
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
-			errMsg := deviceServiceClient.modifyROSpecState(tc.roCmd, tc.deviceName, tc.id)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			err := deviceServiceClient.modifyROSpecState(tc.roCmd, tc.deviceName, tc.id)
+			if tc.errorExpected {
+				assert.Error(tt, err)
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				assert.NoError(tt, err)
 			}
 		})
 	}

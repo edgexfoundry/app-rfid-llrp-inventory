@@ -71,7 +71,7 @@ func (app *InventoryApp) Initialize() error {
 
 	app.service, ok = pkg.NewAppService(serviceKey)
 	if !ok {
-		return errors.New("Failed to create application service")
+		return errors.New("failed to create application service")
 	}
 
 	app.lc = app.service.LoggingClient() // ensure logging client is assigned before returning
@@ -83,7 +83,7 @@ func (app *InventoryApp) Initialize() error {
 	}
 
 	if err = app.config.AppCustom.AppSettings.Validate(); err != nil {
-		return errors.Wrap(err, "Failed to validate custom config")
+		return errors.Wrap(err, "failed to validate custom config")
 	}
 
 	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, "AppCustom", app.processConfigUpdates); err != nil {
@@ -146,7 +146,7 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	//
 	// see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
 	go func() {
-		signals := make(chan os.Signal)
+		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		s := <-signals
 

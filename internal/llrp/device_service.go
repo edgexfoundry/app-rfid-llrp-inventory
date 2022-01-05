@@ -102,7 +102,6 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesResponse, error) {
 	ds.lc.Debugf("Sending GET command '%s' to device '%s'", capDevCmd, device)
 
-	// implemented retry because when an offline reader goes online, and is marked Enabled, it may retuurn an error when querying capabilities because it is not 100% ready
 	resp, err := ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
 	for try := 1; err != nil && try < maxTries; try++ {
 		// when an offline reader comes back online, it may return an error querying the capabilities due to a
@@ -122,11 +121,11 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 			// in order to get this into the reader capabilities struct we need to first marshal it back to JSON
 			data, err := json.Marshal(reading.ObjectValue)
 			if err != nil {
-				return nil, errors.Wrap(err, "Marshal failed for reading object value (reader capabilities)")
+				return nil, errors.Wrap(err, "marshal failed for reading object value (reader capabilities)")
 			}
 			err = json.Unmarshal(data, &caps)
 			if err != nil {
-				return nil, errors.Wrap(err, "Unmarshal failed for reader capabilities")
+				return nil, errors.Wrap(err, "unmarshal failed for reader capabilities")
 			}
 			break
 		}

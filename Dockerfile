@@ -46,6 +46,11 @@ COPY --from=builder /app/res/ /res/
 COPY --from=builder /app/static/ /static/
 COPY --from=builder /app/app-rfid-llrp-inventory /app-rfid-llrp-inventory
 
+RUN mkdir -p /cache && \
+    chown -R 2002:2002 /cache
+
+VOLUME /cache
+
 EXPOSE 59711
 
 ENTRYPOINT ["/app-rfid-llrp-inventory"]

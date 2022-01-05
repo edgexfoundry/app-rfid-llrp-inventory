@@ -252,7 +252,7 @@ To get the list of LLRP devices or readers connected,
 `GET` to the `/api/v2/readers` endpoint:   
                                                        
 
-    curl -o- localhost:59711/api/v1/readers
+    curl -o- localhost:59711/api/v2/readers
 
 ```json
 {
@@ -268,7 +268,7 @@ If you already know the alias values you would like to use before deployment, th
 
 In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
 
-    [Aliases]
+    [AppCustom.Aliases]
     Reader-10-EF-25_1 = "Freezer"
     Reader-10-EF-25_2 = "Backroom"
 

@@ -669,19 +669,19 @@ const capabilities = `{
 		"PerAntennaAirProtocols": [
 			{
 				"AntennaID": 1,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 2,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 3,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			},
 			{
 				"AntennaID": 4,
-				"AirProtocolIDs": [1]
+				"AirProtocolIDs": "AQ=="
 			}
 		],
 		"MaximumReceiveSensitivity": null

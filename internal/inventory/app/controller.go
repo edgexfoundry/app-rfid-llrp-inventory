@@ -59,7 +59,7 @@ func (app *InventoryApp) processEdgeXEvent(_ interfaces.AppFunctionContext, data
 		switch reading.ResourceName {
 		default:
 			// this should never happen because it is pre-filtered by the SDK pipeline
-			app.lc.Error("Unknown reading name.", "reading", reading.ResourceName)
+			app.lc.Errorf("Unknown reading name %s.", reading.ResourceName)
 			continue
 
 		case resourceReaderNotification:
