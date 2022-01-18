@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +20,7 @@ const (
 
 func getTestingLogger() logger.LoggingClient {
 	if testing.Verbose() {
-		return logger.NewClientStdOut("test", false, "DEBUG")
+		return logger.NewClient("test", "DEBUG")
 	}
 
 	return logger.NewMockClient()
@@ -29,7 +29,7 @@ func getTestingLogger() logger.LoggingClient {
 func TestBasicArrival(t *testing.T) {
 	front := nextSensor()
 
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 
 	events := ds.readAll(t, readParams{
 		deviceName: front,
@@ -48,7 +48,7 @@ func TestBasicArrival(t *testing.T) {
 }
 
 func TestTagMoveWeakRssi(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -112,7 +112,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 
 	for _, antID := range antennaIds {
 		t.Run(fmt.Sprintf("Antenna-%d", antID), func(t *testing.T) {
-			ds := newTestDataset(NewConsulConfig(), 1)
+			ds := newTestDataset(NewServiceConfig(), 1)
 
 			// start all tags at initialAntenna
 			events := ds.readAll(t, readParams{
@@ -148,7 +148,7 @@ func TestMoveAntennaLocation(t *testing.T) {
 }
 
 func TestMoveBetweenSensors(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 
 	back1 := nextSensor()
 	back2 := nextSensor()
@@ -188,7 +188,7 @@ func TestMoveBetweenSensors(t *testing.T) {
 }
 
 func TestAgeOutTask_RequireDepartedState(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 	sensor := nextSensor()
 
 	// read past ageout threshold
@@ -219,7 +219,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 }
 
 func TestAgeOutThreshold(t *testing.T) {
-	consulConfig := NewConsulConfig()
+	serviceConfig := NewServiceConfig()
 	tests := []struct {
 		name         string
 		lastSeen     time.Time
@@ -228,7 +228,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	}{
 		{
 			name:         "Basic age out",
-			lastSeen:     time.Now().Add(-1 * time.Duration(2*consulConfig.ApplicationSettings.AgeOutHours) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(2*serviceConfig.AppCustom.AppSettings.AgeOutHours) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: true,
 		},
@@ -241,7 +241,7 @@ func TestAgeOutThreshold(t *testing.T) {
 		{
 			name: "Departed but not aged out",
 			// 1 hour less than the ageout timeout
-			lastSeen:     time.Now().Add(-1 * time.Duration(consulConfig.ApplicationSettings.AgeOutHours-1) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(serviceConfig.AppCustom.AppSettings.AgeOutHours-1) * time.Hour),
 			state:        Departed,
 			shouldAgeOut: false,
 		},
@@ -249,7 +249,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			ds := newTestDataset(consulConfig, 5)
+			ds := newTestDataset(serviceConfig, 5)
 			sensor := nextSensor()
 
 			_ = ds.readAll(t, readParams{
@@ -282,7 +282,7 @@ func TestAgeOutThreshold(t *testing.T) {
 }
 
 func TestAggregateDepartedTask(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 	sensor := nextSensor()
 
 	// read past departed threshold
@@ -328,7 +328,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 }
 
 func TestLastRead_AlwaysIncreasing(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 	sensor := nextSensor()
 
 	current := time.Now()
@@ -374,7 +374,7 @@ func TestLastRead_AlwaysIncreasing(t *testing.T) {
 }
 
 func TestAdjustLastReadOnByOrigin(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 2)
+	ds := newTestDataset(NewServiceConfig(), 2)
 	sensor := nextSensor()
 	origState := ds.tp.config.adjustLastReadOnByOrigin
 
@@ -419,7 +419,7 @@ func TestAdjustLastReadOnByOrigin(t *testing.T) {
 }
 
 func TestReaderAntennaAliasDefault(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 0)
+	ds := newTestDataset(NewServiceConfig(), 0)
 
 	tests := []struct {
 		deviceID  string
@@ -452,7 +452,7 @@ func TestReaderAntennaAliasDefault(t *testing.T) {
 }
 
 func TestReaderAntennaAliasExisting(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 0)
+	ds := newTestDataset(NewServiceConfig(), 0)
 	aliasesMap := map[string]string{
 		"Reader-3F7DAC_1":  "Freezer",
 		"Reader-150000_10": "BackRoom",
@@ -491,7 +491,7 @@ func TestReaderAntennaAliasExisting(t *testing.T) {
 }
 
 func TestEventLocationMatchesAlias(t *testing.T) {
-	ds := newTestDataset(NewConsulConfig(), 10)
+	ds := newTestDataset(NewServiceConfig(), 10)
 	sensor1 := nextSensor()
 	sensor2 := nextSensor()
 	alias1 := "Freezer"

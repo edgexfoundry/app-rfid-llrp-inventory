@@ -2,113 +2,37 @@ package llrp
 
 import (
 	"encoding/json"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"reflect"
 	"testing"
 
+	llrpMocks "edgexfoundry/app-rfid-llrp-inventory/internal/llrp/mocks"
+
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/errors"
+
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func getTestingLogger() logger.LoggingClient {
 	if testing.Verbose() {
-		return logger.NewClientStdOut("test", false, "DEBUG")
+		return logger.NewClient("test", "DEBUG")
 	}
 
 	return logger.NewMockClient()
 }
 
-func TestNewDSClient(t *testing.T) {
-
-	assert := assert.New(t)
-	type testCase struct {
-		name    string
-		hostURL url.URL
-		client  *http.Client
-		exp     interface{}
-	}
-
-	tests := []testCase{
-		{
-			name:    "Sample URL Test",
-			hostURL: url.URL{Scheme: "https", Opaque: "", User: url.User("testUser"), Host: "testHost"},
-			client:  http.DefaultClient,
-			exp:     "https://testUser@testHost" + basePath,
-		},
-		{
-			name:    "Default URL Test",
-			hostURL: url.URL{},
-			client:  http.DefaultClient,
-			exp:     basePath,
-		},
-	}
-	for _, ts := range tests {
-		t.Run(ts.name, func(tt *testing.T) {
-			dsClient := NewDSClient(&ts.hostURL, ts.client, getTestingLogger())
-			assert.Equalf(ts.exp, dsClient.baseURL, "invalid value for baseURL: expected %+v, got %+v", ts.exp, dsClient.baseURL)
-
-		})
-
-	}
-}
-
-func TestGetDevices(t *testing.T) {
-
-	type device struct{ Name string }
-
-	type testCase struct {
-		testCaseName string
-		errMsg       string
-		respCode     int
-		devices      []device
-	}
-
-	testCases := []testCase{
-		{
-			testCaseName: "Test Unsuccessful HTTP GET Status Return",
-			respCode:     http.StatusBadRequest,
-			devices:      nil,
-		},
-		{
-			testCaseName: "Test Get Device List",
-			respCode:     http.StatusOK,
-			devices:      []device{{Name: "SpeedwayR-19-FE-16"}, {Name: "SpeedwayR-19-BCclear-20"}},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testCaseName, func(tt *testing.T) {
-
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
-
-				jsonData, err := json.Marshal(tc.devices)
-				require.NoError(t, err)
-				w.Write(jsonData)
-
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			deviceList, err := GetDevices(s.URL, deviceServiceClient.httpClient)
-			if tc.respCode == http.StatusOK {
-				assert.NotNil(tt, deviceList, "Expected device list to be not empty")
-			} else {
-				assert.NotNil(tt, err, "Encountered Error: %s", err)
-			}
-
-			s.Close()
-
-		})
-
-	}
-
+func createMockCapabilities(t *testing.T, capJson string) map[string]interface{} {
+	cap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(capJson), &cap)
+	require.NoError(t, err)
+	return cap
 }
 
 func TestNewReader(t *testing.T) {
@@ -117,55 +41,47 @@ func TestNewReader(t *testing.T) {
 		testCaseName string
 		deviceName   string
 		respCode     int
-		capabilities string
+		capabilities map[string]interface{}
 	}
+
+	penICap := createMockCapabilities(t, PENImpinjCap)
+	penACap := createMockCapabilities(t, PENAlienCap)
+	penZCap := createMockCapabilities(t, PENZebraCap)
 
 	testCases := []testCase{
 		{
 			testCaseName: "Test New Reader Type for Device of Type PENImpinj",
 			deviceName:   "SpeedwayR-19-FE-16",
 			respCode:     http.StatusOK,
-			capabilities: PENImpinjCap,
+			capabilities: penICap,
 		},
 		{
 			testCaseName: "Test New Reader Type for Device of Type PENImpinj",
 			deviceName:   "SpeedwayR-19-FE-16",
 			respCode:     http.StatusOK,
-			capabilities: PENAlienCap,
+			capabilities: penACap,
 		},
 		{
 			testCaseName: "Test New Reader Type for Device of Type PENZebra",
 			deviceName:   "SpeedwayR-19-FE-16",
 			respCode:     http.StatusOK,
-			capabilities: PENZebraCap,
+			capabilities: penZCap,
 		},
 	}
+
+	mockClient := &llrpMocks.CommandClient{}
+	deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
+
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
 
-				type Reading struct {
-					Name, Value string
-				}
-				type edgexResp struct {
-					Readings []Reading
-				}
-				if tc.capabilities != "" {
-					resp := edgexResp{Readings: []Reading{{Name: capReadingName, Value: tc.capabilities}}}
+			tcEvent := dtos.NewEvent("a", tc.deviceName, capReadingName)
+			tcEvent.AddObjectReading(capReadingName, tc.capabilities)
+			mockResp := responses.NewEventResponse("a", "b", tc.respCode, tcEvent)
 
-					jsonData, err := json.Marshal(resp)
-					require.NoError(t, err)
-					w.Write(jsonData)
-				}
-
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
+			mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, nil)
+			mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
+			mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
 
 			getReaderCapabilitiesResponse, err := deviceServiceClient.GetCapabilities(tc.deviceName)
 			require.NotNil(tt, getReaderCapabilitiesResponse, "err %s", err)
@@ -180,12 +96,9 @@ func TestNewReader(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tagReader, _ := deviceServiceClient.NewReader(tc.deviceName)
-
+			tagReader, err := deviceServiceClient.NewReader(tc.deviceName)
+			require.NoError(t, err)
 			require.Equal(tt, reflect.TypeOf(tagReader), reflect.TypeOf(deviceType))
-
-			s.Close()
-
 		})
 	}
 
@@ -194,77 +107,56 @@ func TestNewReader(t *testing.T) {
 func TestGetCapabilities(t *testing.T) {
 
 	type testCase struct {
-		testCaseName string
-		deviceName   string
-		respCode     int
-		respBody     string
-		capabilities string
+		testCaseName  string
+		deviceName    string
+		capResponse   map[string]interface{}
+		expectedCap   *GetReaderCapabilitiesResponse
+		errorExpected bool
 	}
+	penICap := createMockCapabilities(t, PENImpinjCap)
+	expectedCap := GetReaderCapabilitiesResponse{}
+	err := json.Unmarshal([]byte(PENImpinjCap), &expectedCap)
+	require.NoError(t, err)
 
 	testCases := []testCase{
 		{
-			testCaseName: "Test Unsuccessful HTTP GET Status Return",
-			deviceName:   "SpeedwayR-19-FE-16",
-			respCode:     http.StatusBadRequest,
-			respBody:     "",
-			capabilities: "",
+			testCaseName:  "Test Unsuccessful HTTP GET Status Return",
+			deviceName:    "SpeedwayR-19-FE-16",
+			capResponse:   nil,
+			expectedCap:   nil,
+			errorExpected: true,
 		},
 		{
-			testCaseName: "Test Json Parsing Error",
-			deviceName:   "SpeedwayR-19-FE-16",
-			respCode:     http.StatusOK,
-			respBody:     "{[]}",
-			capabilities: "",
-		},
-		{
-			testCaseName: "Test Empty Response Body",
-			deviceName:   "SpeedwayR-19-FE-16",
-			respCode:     http.StatusOK,
-			respBody:     "",
-			capabilities: "",
-		},
-		{
-			testCaseName: "Test Get Reader Capabilities Response",
-			deviceName:   "SpeedwayR-19-FE-16",
-			respCode:     http.StatusOK,
-			capabilities: PENImpinjCap,
+			testCaseName:  "Test Get Reader Capabilities Response",
+			deviceName:    "SpeedwayR-19-FE-16",
+			capResponse:   penICap,
+			expectedCap:   &expectedCap,
+			errorExpected: false,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
-
-				type Reading struct {
-					Name, Value string
-				}
-				type edgexResp struct {
-					Readings []Reading
-				}
-				if tc.capabilities != "" {
-					resp := edgexResp{Readings: []Reading{{Name: capReadingName, Value: tc.capabilities}}}
-					jsonData, err := json.Marshal(resp)
-					require.NoError(t, err)
-					w.Write(jsonData)
-				} else {
-					w.Write([]byte(tc.respBody))
-				}
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			getReaderCapabilitiesResponse, errMsg := deviceServiceClient.GetCapabilities(tc.deviceName)
-
-			if getReaderCapabilitiesResponse == nil {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+			mockClient := &llrpMocks.CommandClient{}
+			if tc.errorExpected {
+				mockResp := responses.NewEventResponse("a", "b", http.StatusBadRequest, dtos.Event{})
+				mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
 			} else {
-				assert.True(tt, ((getReaderCapabilitiesResponse != nil) && (errMsg == nil)), "Expected response %v for getReaderCapabilitiesResponse, received nil")
+				tcEvent := dtos.NewEvent("a", tc.deviceName, capReadingName)
+				tcEvent.AddObjectReading(capReadingName, tc.capResponse)
+				mockResp := responses.NewEventResponse("a", "b", http.StatusOK, tcEvent)
+				mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, nil)
 			}
-			s.Close()
+
+			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
+
+			getReaderCapabilitiesResponse, err := deviceServiceClient.GetCapabilities(tc.deviceName)
+			if tc.errorExpected {
+				require.Error(tt, err)
+				return
+			}
+			require.NoError(tt, err)
+			require.NotNil(tt, getReaderCapabilitiesResponse)
+			assert.Equal(tt, tc.expectedCap, getReaderCapabilitiesResponse)
 
 		})
 
@@ -287,39 +179,42 @@ func TestSetConfig(t *testing.T) {
 		Custom                      []Custom
 	}
 	type testCase struct {
-		testCaseName string
-		deviceName   string
-		fields       fields
-		respCode     int
+		testCaseName  string
+		deviceName    string
+		fields        fields
+		respCode      int
+		errorExpected bool
 	}
 
 	testCases := []testCase{
 		{
-			testCaseName: "Test Unsuccessful Config Set",
-			deviceName:   "SpeedwayR-19-FE-16",
-			fields:       fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
-			respCode:     http.StatusBadRequest,
+			testCaseName:  "Test Unsuccessful Config Set",
+			deviceName:    "SpeedwayR-19-FE-16",
+			fields:        fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
+			respCode:      http.StatusBadRequest,
+			errorExpected: true,
 		},
 		{
-			testCaseName: "Test Successful Config Set",
-			deviceName:   "SpeedwayR-19-FE-16",
-			fields:       fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
-			respCode:     http.StatusOK,
+			testCaseName:  "Test Successful Config Set",
+			deviceName:    "SpeedwayR-19-FE-16",
+			fields:        fields{Custom: []Custom{{VendorID: 0, Subtype: ImpinjTagReportContentSelector, Data: []byte{'b'}}}},
+			respCode:      http.StatusOK,
+			errorExpected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
+			mockClient := &llrpMocks.CommandClient{}
+			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
+			if tc.errorExpected {
+				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
+			} else {
+				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
 			}
 
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
+			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
 			se := &SetReaderConfig{
 				ResetToFactoryDefaults:      tc.fields.ResetToFactoryDefaults,
@@ -335,17 +230,14 @@ func TestSetConfig(t *testing.T) {
 				Custom:                      tc.fields.Custom,
 			}
 
-			errMsg := deviceServiceClient.SetConfig(tc.deviceName, se)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			err := deviceServiceClient.SetConfig(tc.deviceName, se)
+			if tc.errorExpected {
+				assert.Error(tt, err)
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				assert.NoError(tt, err)
 			}
 
-			s.Close()
-
 		})
-
 	}
 
 }
@@ -355,49 +247,49 @@ func TestAddROSpec(t *testing.T) {
 		ROSpec ROSpec
 	}
 	type testCase struct {
-		testCaseName string
-		deviceName   string
-		fields       fields
-		respCode     int
+		testCaseName  string
+		deviceName    string
+		fields        fields
+		respCode      int
+		errorExpected bool
 	}
 
 	testCases := []testCase{
 		{
-			testCaseName: "Test Unsuccessful ROSpec Addition",
-			deviceName:   "SpeedwayR-19-FE-16",
-			fields:       fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
-			respCode:     http.StatusBadRequest,
+			testCaseName:  "Test Unsuccessful ROSpec Addition",
+			deviceName:    "SpeedwayR-19-FE-16",
+			fields:        fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
+			respCode:      http.StatusBadRequest,
+			errorExpected: true,
 		},
 		{
-			testCaseName: "Test Successful ROSpec Addition",
-			deviceName:   "SpeedwayR-19-FE-16",
-			fields:       fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
-			respCode:     http.StatusOK,
+			testCaseName:  "Test Successful ROSpec Addition",
+			deviceName:    "SpeedwayR-19-FE-16",
+			fields:        fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
+			respCode:      http.StatusOK,
+			errorExpected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			errMsg := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			mockClient := &llrpMocks.CommandClient{}
+			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
+			if tc.errorExpected {
+				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
 			}
 
-			s.Close()
+			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
+			err := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
+			if tc.errorExpected {
+				assert.Error(tt, err)
+			} else {
+				assert.NoError(tt, err)
+			}
 		})
 
 	}
@@ -407,245 +299,64 @@ func TestAddROSpec(t *testing.T) {
 func TestModifyROSpecState(t *testing.T) {
 
 	type testCase struct {
-		testCaseName string
-		roCmd        string
-		deviceName   string
-		id           uint32
-		respCode     int
+		testCaseName  string
+		roCmd         string
+		deviceName    string
+		id            uint32
+		respCode      int
+		errorExpected bool
 	}
 
 	testCases := []testCase{
 		{
-			testCaseName: "Test Enables ROSpec with the given ID on the given device",
-			roCmd:        "enableCmd",
-			deviceName:   "SpeedwayR-19-FE-16",
-			id:           19865325,
-			respCode:     http.StatusOK,
+			testCaseName:  "Test Enables ROSpec with the given ID on the given device",
+			roCmd:         "enableCmd",
+			deviceName:    "SpeedwayR-19-FE-16",
+			id:            19865325,
+			respCode:      http.StatusOK,
+			errorExpected: false,
 		},
 		{
-			testCaseName: "Test Delete All ROSpec on a device",
-			roCmd:        "deleteCmd",
-			deviceName:   "SpeedwayR-19-FE-16",
-			id:           0,
-			respCode:     http.StatusOK,
+			testCaseName:  "Test Delete All ROSpec on a device",
+			roCmd:         "deleteCmd",
+			deviceName:    "SpeedwayR-19-FE-16",
+			id:            0,
+			respCode:      http.StatusOK,
+			errorExpected: false,
 		},
 		{
-			testCaseName: "Test Unsuccessful Delete of All ROSpec on a device",
-			roCmd:        "deleteCmd",
-			deviceName:   "SpeedwayR-19-FE-16",
-			id:           0,
-			respCode:     http.StatusBadRequest,
+			testCaseName:  "Test Unsuccessful Delete of All ROSpec on a device",
+			roCmd:         "deleteCmd",
+			deviceName:    "SpeedwayR-19-FE-16",
+			id:            0,
+			respCode:      http.StatusBadRequest,
+			errorExpected: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.respCode)
-			}
+			mockClient := &llrpMocks.CommandClient{}
+			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			errMsg := deviceServiceClient.modifyROSpecState(tc.roCmd, tc.deviceName, tc.id)
-			if tc.respCode == http.StatusOK {
-				assert.Nil(tt, errMsg, "Encountered Error: %s", errMsg)
+			if tc.errorExpected {
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
 			} else {
-				assert.NotNil(tt, errMsg, "Encountered Error: %s", errMsg)
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
 			}
 
-			s.Close()
+			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
-		})
-
-	}
-
-}
-
-func TestPut(t *testing.T) {
-	type testCase struct {
-		testCaseName   string
-		path           string
-		data           []byte
-		serverShutDown bool
-		respCode       int
-	}
-
-	testCases := []testCase{
-		{
-			testCaseName: "Test Unsuccessful HTTP PUT Status",
-			path:         "SpeedwayR-19-FE-16" + configDevCmd,
-			respCode:     http.StatusBadRequest,
-		},
-		{
-			testCaseName: "Test Successful HTTP PUT Statud",
-			path:         "SpeedwayR-19-FE-16" + configDevCmd,
-			respCode:     http.StatusOK,
-		},
-		{
-			testCaseName:   "Test Server Shutdown",
-			path:           "SpeedwayR-19-FE-16" + configDevCmd,
-			serverShutDown: true,
-			respCode:       http.StatusInternalServerError,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testCaseName, func(tt *testing.T) {
-
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				r.Method = "PUT"
-				w.WriteHeader(tc.respCode)
-			}
-
-			s := httptest.NewServer(http.HandlerFunc(handler))
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			deviceServiceClient := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			if tc.serverShutDown {
-				s.Close()
-			}
-
-			err = deviceServiceClient.put(tc.path, tc.data)
-			if tc.respCode != http.StatusOK {
-				assert.NotNil(tt, err, "Encountered Error: %s", err)
+			err := deviceServiceClient.modifyROSpecState(tc.roCmd, tc.deviceName, tc.id)
+			if tc.errorExpected {
+				assert.Error(tt, err)
 			} else {
-				assert.Nil(tt, err, "Encountered Error: %s", err)
+				assert.NoError(tt, err)
 			}
-
-			s.Close()
-
-		})
-
-	}
-
-}
-
-func TestTryGet(t *testing.T) {
-	testCases := []struct {
-		name           string
-		path           string
-		spoofCode      int
-		spoofCodes     []int
-		expectedTries  int
-		expectedStatus int
-		spoofConnErr   bool
-		expectErr      bool
-	}{
-		{
-			name:           "200 ok - first try",
-			spoofCode:      http.StatusOK,
-			expectedStatus: http.StatusOK,
-			expectedTries:  1,
-		},
-		{
-			name:           "204 no content - first try",
-			spoofCode:      http.StatusNoContent,
-			expectedStatus: http.StatusNoContent,
-			expectedTries:  1, // StatusNoContent (204) is a success code, so only 1 try
-		},
-		{
-			name:           "202 accepted - first try",
-			spoofCode:      http.StatusAccepted,
-			expectedStatus: http.StatusAccepted,
-			expectedTries:  1, // StatusAccepted (202) is a success code, so only 1 try
-		},
-		{
-			name:           "http 423, retry 200 ok",
-			spoofCodes:     []int{http.StatusLocked, http.StatusOK},
-			expectedStatus: http.StatusOK,
-			expectedTries:  2,
-		},
-		{
-			name: "http MovedPermanently errors",
-			// return StatusMovedPermanently, but do not set location header, causes handler error
-			spoofCode:     http.StatusMovedPermanently,
-			expectErr:     true,
-			expectedTries: maxTries,
-		},
-		{
-			name: "http 3xx is not success",
-			// 300, 303, 206
-			spoofCodes:     []int{http.StatusMultipleChoices, http.StatusSeeOther, http.StatusPartialContent},
-			expectedStatus: http.StatusPartialContent, // 206
-			expectedTries:  3,
-		},
-		{
-			name:           "http 502, http 504, retry 200 ok",
-			spoofCodes:     []int{http.StatusBadGateway, http.StatusGatewayTimeout, http.StatusOK},
-			expectedStatus: http.StatusOK,
-			expectedTries:  3,
-		},
-		{
-			name:           "fail http 423 every try",
-			spoofCode:      http.StatusLocked,
-			expectedTries:  maxTries,
-			expectedStatus: http.StatusLocked,
-		},
-		{
-			name:          "invalid url error",
-			path:          string([]byte{0x7f}), // ASCII control character
-			expectErr:     true,
-			expectedTries: 0, // 0 tries as the request object is invalid
-		},
-		{
-			name:          "EOF connection error",
-			spoofConnErr:  true,
-			expectErr:     true,
-			expectedTries: maxTries,
-		},
-	}
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			// define the pointer here, so that it can be used in the handler below
-			var s *httptest.Server
-			var tries int
-
-			handler := func(w http.ResponseWriter, r *http.Request) {
-				tries++
-				if tc.spoofConnErr {
-					// forcefully close the client connection to spoof an error
-					s.CloseClientConnections()
-				} else if len(tc.spoofCodes) >= tries {
-					w.WriteHeader(tc.spoofCodes[tries-1])
-				} else if tc.spoofCode != 0 {
-					w.WriteHeader(tc.spoofCode)
-				} else {
-					assert.FailNow(t, "invalid test case configuration")
-				}
-			}
-
-			// spin up a fake test server
-			s = httptest.NewServer(http.HandlerFunc(handler))
-			defer s.Close()
-
-			actualURL, err := url.Parse(s.URL)
-			require.NoError(t, err)
-			ds := NewDSClient(actualURL, s.Client(), getTestingLogger())
-
-			resp, err := ds.tryGet(tc.path)
-			if err == nil { // if err is nil, we must close body
-				defer resp.Body.Close()
-			}
-			if tc.expectErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, resp)
-				if tc.expectedStatus != 0 {
-					assert.Equal(t, tc.expectedStatus, resp.StatusCode)
-				}
-			}
-			assert.Equal(t, tc.expectedTries, tries)
 		})
 	}
+
 }
 
 const PENImpinjCap = `{

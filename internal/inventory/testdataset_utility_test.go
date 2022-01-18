@@ -10,12 +10,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -43,7 +44,7 @@ type testDataset struct {
 	epcs []string
 }
 
-func newTestDataset(cfg ConsulConfig, tagCount int) *testDataset {
+func newTestDataset(cfg ServiceConfig, tagCount int) *testDataset {
 	lc := getTestingLogger()
 	ds := testDataset{
 		tp:   NewTagProcessor(lc, cfg, nil),

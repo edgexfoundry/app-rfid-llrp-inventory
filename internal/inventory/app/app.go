@@ -7,46 +7,42 @@ package inventoryapp
 
 import (
 	"context"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"fmt"
-	"github.com/edgexfoundry/app-functions-sdk-go/appsdk"
-	"github.com/edgexfoundry/app-functions-sdk-go/pkg/transforms"
-	"github.com/edgexfoundry/go-mod-bootstrap/bootstrap/flags"
-	"github.com/edgexfoundry/go-mod-configuration/configuration"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.com/pkg/errors"
 	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
-	"reflect"
-	"strings"
 	"sync"
 	"syscall"
-	"time"
+
+	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
+
+	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg"
+	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
+	"github.com/pkg/errors"
 )
 
 const (
-	serviceKey = "rfid-llrp-inventory"
+	serviceKey = "app-rfid-llrp-inventory"
 
-	cacheFolder  = "cache"
-	tagCacheFile = "tags.json"
-	folderPerm   = 0755 // folders require the execute flag in order to create new files
-	filePerm     = 0644
+	cacheFolder      = "cache"
+	tagCacheFile     = "tags.json"
+	folderPerm       = 0755 // folders require the execute flag in order to create new files
+	filePerm         = 0644
+	aliasesConfigKey = "Aliases"
 )
 
 type InventoryApp struct {
-	edgexSdk     *appsdk.AppFunctionsSDK
+	service      interfaces.ApplicationService
 	lc           logger.LoggingClient
 	devMu        sync.RWMutex
 	devService   llrp.DSClient
 	defaultGrp   *llrp.ReaderGroup
 	snapshotReqs chan snapshotDest
 	reports      chan reportData
-	configClient configuration.Client
-	config       inventory.ConsulConfig
+	config       inventory.ServiceConfig
+	confUpdateCh chan interface{}
 }
 
 type reportData struct {
@@ -63,154 +59,63 @@ func NewInventoryApp() *InventoryApp {
 	return &InventoryApp{
 		snapshotReqs: make(chan snapshotDest),
 		reports:      make(chan reportData),
+		confUpdateCh: make(chan interface{}),
 	}
 }
 
 // Initialize will initialize the AppFunctionsSDK and Logging Client. It also reads the user's
 // configuration and sets up the API routes.
 func (app *InventoryApp) Initialize() error {
-	app.edgexSdk = &appsdk.AppFunctionsSDK{ServiceKey: serviceKey}
-	err := app.edgexSdk.Initialize()
-	app.lc = app.edgexSdk.LoggingClient // ensure logging client is assigned before returning
-	if err != nil {
-		return errors.Wrap(err, "SDK initialization failed")
+	var ok bool
+	var err error
+
+	app.service, ok = pkg.NewAppService(serviceKey)
+	if !ok {
+		return errors.New("failed to create application service")
 	}
+
+	app.lc = app.service.LoggingClient() // ensure logging client is assigned before returning
 
 	app.lc.Info("Starting.")
 
-	sdkFlags := getSdkFlags()
-
-	appSettings := app.edgexSdk.ApplicationSettings()
-	if appSettings == nil {
-		return errors.New("missing application settings")
-	}
-	if app.configClient, err = getConfigClient(sdkFlags); err != nil {
-		return errors.Wrap(err, "failed to create config client")
+	if err = app.service.LoadCustomConfig(&app.config, aliasesConfigKey); err != nil {
+		return errors.Wrap(err, "failed to load custom configuration")
 	}
 
-	// todo: switch to using SDK's custom config capability when upgrade to Ireland
-	app.config, err = inventory.ParseConsulConfig(app.edgexSdk.LoggingClient, app.edgexSdk.ApplicationSettings())
-	if errors.Is(err, inventory.ErrUnexpectedConfigItems) {
-		// warn on unexpected config items, but do not exit
-		app.lc.Warn(err.Error())
-		err = nil
-	} else if err != nil {
-		return errors.Wrap(err, "config parse error")
+	if err = app.config.AppCustom.AppSettings.Validate(); err != nil {
+		return errors.Wrap(err, "failed to validate custom config")
 	}
 
-	// todo: switch to using SDK's custom config capability when upgrade to Ireland
-	if err = app.bootstrapAliasConfig(sdkFlags); err != nil {
-		// simply log error loading alias config, but do not exit
-		app.lc.Error(err.Error())
-	}
-
-	// todo: switch to using EdgeX clients for accessing Core Metadata APIs when upgrade to Ireland
-	metadataURI, err := url.Parse(strings.TrimSpace(app.config.ApplicationSettings.MetadataServiceURL))
-	if err != nil {
-		return errors.Wrap(err, "invalid metadata service URL")
-	}
-	if metadataURI.Scheme == "" || metadataURI.Host == "" {
-		return fmt.Errorf("invalid metadata service URL, endpoint=%s", metadataURI.String())
-	}
-
-	devServURI, err := url.Parse(strings.TrimSpace(app.config.ApplicationSettings.DeviceServiceURL))
-	if err != nil {
-		return errors.Wrap(err, "invalid device service URL")
-	}
-	if devServURI.Scheme == "" || devServURI.Host == "" {
-		return fmt.Errorf("invalid device service URL, endpoint=%s", devServURI.String())
+	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, "AppCustom", app.processConfigUpdates); err != nil {
+		return errors.Wrap(err, "failed to listen for custom config changes")
 	}
 
 	app.defaultGrp = llrp.NewReaderGroup()
-	app.devService = llrp.NewDSClient(&url.URL{
-		Scheme: devServURI.Scheme,
-		Host:   devServURI.Host,
-	}, &http.Client{
-		Timeout: 10 * time.Second,
-	},
-		app.lc)
+	app.devService = llrp.NewDSClient(app.service.CommandClient(), app.lc)
 
-	dsName := app.config.ApplicationSettings.DeviceServiceName
+	dsName := app.config.AppCustom.AppSettings.DeviceServiceName
 	if dsName == "" {
 		return errors.New("missing device service name")
 	}
-	metadataURI.Path = "/api/v1/device/servicename/" + dsName
-	deviceNames, err := llrp.GetDevices(metadataURI.String(), http.DefaultClient)
+
+	response, err := app.service.DeviceClient().DevicesByServiceName(context.Background(), dsName, 0, -1)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get existing device names. path=%s", metadataURI.String())
+		return errors.Wrapf(err, "failed to get existing device names for device service name %s", dsName)
 	}
-	for _, name := range deviceNames {
-		if err = app.defaultGrp.AddReader(app.devService, name); err != nil {
-			return errors.Wrapf(err, "failed to setup device %s", name)
+
+	app.lc.Debugf("Found %d devices", len(response.Devices))
+	for _, device := range response.Devices {
+		app.lc.Debugf("Attempting to add Reader for device '%s'", device.Name)
+		if err = app.defaultGrp.AddReader(app.devService, device.Name); err != nil {
+			app.lc.Errorf("Failed to setup device %s: %s", device.Name, err.Error())
 		}
 	}
 
 	return app.addRoutes()
 }
 
-// bootstrapAliasConfig loads the aliases from the user's configuration toml and pushes them
-// to the config provider if and only if the Aliases key is not present, or the -o/--overwrite
-// flag is passed via the command line
-// todo: switch to using SDK's custom config capability when upgrade to Ireland
-func (app *InventoryApp) bootstrapAliasConfig(sdkFlags flags.Common) error {
-	overwrite := sdkFlags.OverwriteConfig()
-	app.lc.Debug(fmt.Sprintf("Bootstrapping %s config. -o/--overwrite: %v", aliasesConfigKey, overwrite))
-	// skip checking the existing status if overwrite is enabled
-	if !overwrite {
-		// Note: We need to use `GetConfiguration` and manually check for the existence of Aliases
-		// within the configuration provider because of two reasons:
-		//
-		// 1. `HasConfiguration` only checks if the root configuration item for this service
-		//    exists or not. Here we are specifically checking to see if the `Aliases` section
-		//    is present within that configuration.
-		//
-		// 2. `ConfigurationValueExists` and `GetConfigurationValue` both internally
-		//    use a method that only returns values for single keys. They return nil for a key that
-		//    has a collection of children keys or is an empty parent/folder key. This is Consul
-		//    implementation specific.
-		res, err := app.configClient.GetConfiguration(&inventory.ConsulConfig{})
-		if err != nil {
-			return errors.Wrapf(err, "error checking config provider for existing %s key", aliasesConfigKey)
-		}
-		cfg, ok := res.(*inventory.ConsulConfig)
-		if !ok {
-			return fmt.Errorf("error converting consul configuration into ConsulConfig struct. type=%v", reflect.TypeOf(res))
-		}
-		if cfg.Aliases != nil {
-			app.lc.Info(fmt.Sprintf("%s config already exists in config provider, not overriding", aliasesConfigKey))
-			return nil
-		}
-
-		app.lc.Info(fmt.Sprintf("No existing configuration found for key %s, will atempt to load it from toml",
-			aliasesConfigKey))
-	}
-
-	// load just the aliases section from the toml file. we only need to load the file if
-	// we know for sure we are going to send the config up to the config provider
-	aliases, err := loadAliasesFromTomlFile(app.lc, sdkFlags)
-	if err != nil {
-		return errors.Wrapf(err, "error loading %s section from toml file", aliasesConfigKey)
-	} else if aliases == nil {
-		app.lc.Info(fmt.Sprintf("No key/value pairs found in %s section, adding empty folder.", aliasesConfigKey))
-		// Note: a key that ends with a '/' is considered a folder/parent key (Consul specific)
-		if err = app.configClient.PutConfigurationValue(aliasesConfigKey+"/", nil); err != nil {
-			return errors.Wrapf(err, "error putting empty %s folder into config provider", aliasesConfigKey)
-		}
-		app.lc.Info(fmt.Sprintf("Successfully pushed empty %s configuration into config provider.", aliasesConfigKey))
-		return nil
-	}
-
-	app.lc.Info(fmt.Sprintf("Pushing %s configuration into config provider: %+v", aliasesConfigKey, aliases))
-
-	// send the data to the configuration provider. note that PutConfigurationToml is used in order to
-	// re-use some of the internal parsing logic which is not directly exposed, such as converting
-	// a map into separate config key/value pairs.
-	if err = app.configClient.PutConfigurationToml(aliases, overwrite); err != nil {
-		return errors.Wrapf(err, "error putting %s toml into config provider", aliasesConfigKey)
-	}
-
-	app.lc.Info(fmt.Sprintf("Successfully pushed %s configuration into config provider.", aliasesConfigKey))
-	return nil
+func (app *InventoryApp) processConfigUpdates(rawWritableConfig interface{}) {
+	app.confUpdateCh <- rawWritableConfig
 }
 
 // RunUntilCancelled sets up the function pipeline and runs it. This function will not return
@@ -241,7 +146,7 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	//
 	// see: https://github.com/edgexfoundry/app-functions-sdk-go/issues/500
 	go func() {
-		signals := make(chan os.Signal)
+		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		s := <-signals
 
@@ -250,14 +155,13 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	}()
 
 	// Subscribe to events.
-	err := app.edgexSdk.SetFunctionsPipeline(
-		transforms.NewFilter([]string{resourceROAccessReport, resourceReaderNotification}).FilterByValueDescriptor,
+	err := app.service.SetFunctionsPipeline(
 		app.processEdgeXEvent)
 	if err != nil {
 		return errors.Wrap(err, "failed to build pipeline")
 	}
 
-	if err = app.edgexSdk.MakeItRun(); err != nil {
+	if err = app.service.MakeItRun(); err != nil {
 		return errors.Wrap(err, "failed to run pipeline")
 	}
 

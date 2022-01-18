@@ -9,12 +9,12 @@ SNAP_CURRENT=${SNAP/%$SNAP_REVISION/current}
 # install all the config files from $SNAP/config/SERVICE/res/configuration.toml 
 # into $SNAP_DATA/config
 mkdir -p "$SNAP_DATA/config"
-if [ ! -f "$SNAP_DATA/config/rfid-llrp-inventory/res/configuration.toml" ]; then
-    mkdir -p "$SNAP_DATA/config/rfid-llrp-inventory/res"
-    cp "$SNAP/config/rfid-llrp-inventory/res/configuration.toml" "$SNAP_DATA/config/rfid-llrp-inventory/res/configuration.toml"
+if [ ! -f "$SNAP_DATA/config/app-rfid-llrp-inventory/res/configuration.toml" ]; then
+    mkdir -p "$SNAP_DATA/config/app-rfid-llrp-inventory/res"
+    cp "$SNAP/config/app-rfid-llrp-inventory/res/configuration.toml" "$SNAP_DATA/config/app-rfid-llrp-inventory/res/configuration.toml"
     # do replacement of the $SNAP, $SNAP_DATA, $SNAP_COMMON environment variables in the config files
     sed -i -e "s@\$SNAP_COMMON@$SNAP_COMMON@g" \
         -e "s@\$SNAP_DATA@$SNAP_DATA_CURRENT@g" \
         -e "s@\$SNAP@$SNAP_CURRENT@g" \
-        "$SNAP_DATA/config/rfid-llrp-inventory/res/configuration.toml"
+        "$SNAP_DATA/config/app-rfid-llrp-inventory/res/configuration.toml"
 fi

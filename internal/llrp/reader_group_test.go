@@ -2,15 +2,20 @@ package llrp
 
 import (
 	"bytes"
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp/mocks"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"sync"
 	"testing"
+
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func readerGroupHelper() *ReaderGroup {
@@ -29,14 +34,23 @@ func addReaderHelper(t *testing.T) (*ReaderGroup, DSClient, func()) {
 		}
 		resp2 := edgexResp{Readings: []Reading{{Name: capReadingName, Value: capabilities}}}
 		b2, err := json.Marshal(resp2)
+		require.NoError(t, err)
 		_, err = w.Write(b2)
 		require.NoError(t, err)
 	}))
-	client := ts.Client()
-
-	actualURL, err := url.Parse(ts.URL)
+	mockCap := GetReaderCapabilitiesResponse{}
+	err := json.Unmarshal([]byte(capabilities), &mockCap)
 	require.NoError(t, err)
-	ds := NewDSClient(actualURL, client, getTestingLogger())
+
+	mockClient := mocks.CommandClient{}
+	tcEvent := dtos.NewEvent("a", "SpeedwayR-19-FE-16", capReadingName)
+	tcEvent.AddObjectReading(capReadingName, mockCap)
+	mockResp := responses.NewEventResponse("a", "b", http.StatusOK, tcEvent)
+	mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, nil)
+	mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
+	mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
+
+	ds := NewDSClient(&mockClient, getTestingLogger())
 	rg := readerGroupHelper()
 	err = rg.AddReader(ds, "test")
 	require.NoError(t, err)

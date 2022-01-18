@@ -6,8 +6,9 @@
 package main
 
 import (
-	inventoryapp "edgexfoundry/app-rfid-llrp-inventory/internal/inventory/app"
 	"os"
+
+	inventoryapp "edgexfoundry/app-rfid-llrp-inventory/internal/inventory/app"
 )
 
 func main() {

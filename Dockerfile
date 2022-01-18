@@ -46,7 +46,12 @@ COPY --from=builder /app/res/ /res/
 COPY --from=builder /app/static/ /static/
 COPY --from=builder /app/app-rfid-llrp-inventory /app-rfid-llrp-inventory
 
-EXPOSE 48086
+RUN mkdir -p /cache && \
+    chown -R 2002:2002 /cache
+
+VOLUME /cache
+
+EXPOSE 59711
 
 ENTRYPOINT ["/app-rfid-llrp-inventory"]
 CMD ["-cp=consul.http://edgex-core-consul:8500", "-registry", "-confdir=/res"]

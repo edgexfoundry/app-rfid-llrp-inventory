@@ -6,38 +6,31 @@
 package llrp
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/edgexfoundry/go-mod-core-contracts/clients/logger"
-	"github.com/pkg/errors"
-	"io"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
+	"github.com/pkg/errors"
 )
 
 // These are the names of deviceResource and deviceCommands
 // this expects the devices are using in their registered deviceProfiles.
 const (
-	basePath = "/api/v1/device/name/" // paths are {base/}{device}{/target}
+	capDevCmd    = "ReaderCapabilities"
+	configDevCmd = "ReaderConfig"
+	addCmd       = "ROSpec"
+	enableCmd    = "enableROSpec"
+	disableCmd   = "disableROSpec"
+	stopCmd      = "stopROSpec"
+	startCmd     = "startROSpec"
+	deleteCmd    = "deleteROSpec"
 
-	capDevCmd    = "/capabilities"
-	configDevCmd = "/config"
-	addCmd       = "/roSpec"
-	enableCmd    = "/enableROSpec"
-	disableCmd   = "/disableROSpec"
-	stopCmd      = "/stopROSpec"
-	startCmd     = "/startROSpec"
-	deleteCmd    = "/deleteROSpec"
-
-	enableImpinjCmd = "/enableImpinjExt"
+	enableImpinjCmd = "EnableImpinjExtensions"
 
 	capReadingName = "ReaderCapabilities"
-
-	maxBody = 100 * 1024
 
 	maxTries      = 5
 	sleepInterval = 250 * time.Millisecond
@@ -45,66 +38,20 @@ const (
 
 // DSClient is a client to interact with the LLRP Device Service.
 type DSClient struct {
-	baseURL    string
-	httpClient *http.Client
-	lc         logger.LoggingClient
+	lc        logger.LoggingClient
+	cmdClient interfaces.CommandClient
 }
 
-// NewDSClient returns a DSClient reachable at the given host URL,
-// using the given http Client, which of course may be the default.
-// TODO: Use new device service Clients from go-mod-core-clients when upgrading to V2 (Ireland)
-//		 https://github.com/edgexfoundry/app-rfid-llrp-inventory/pull/18#discussion_r592768121
-func NewDSClient(host *url.URL, c *http.Client, lc logger.LoggingClient) DSClient {
-	base := url.URL{
-		Scheme: host.Scheme,
-		Opaque: host.Opaque,
-		User:   host.User,
-		Host:   host.Host,
-		Path:   basePath,
-	}
-
+// NewDSClient returns a DSClient which uses the command client to issue commands to the devices
+func NewDSClient(cmdClient interfaces.CommandClient, lc logger.LoggingClient) DSClient {
 	return DSClient{
-		baseURL:    base.String(),
-		httpClient: c,
-		lc:         lc,
+		cmdClient: cmdClient,
+		lc:        lc,
 	}
-}
-
-// GetDevices return a list of device names known to the EdgeX Metadata service.
-func GetDevices(metadataDevicesURL string, client *http.Client) ([]string, error) {
-	req, err := http.NewRequest(http.MethodGet, metadataDevicesURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("GET returned unexpected status: %d", resp.StatusCode)
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	ds := &[]struct{ Name string }{}
-	if err := json.Unmarshal(respBody, ds); err != nil {
-		return nil, errors.Wrap(err, "failed to parse EdgeX device list")
-	}
-
-	deviceList := make([]string, len(*ds))
-	for i, dev := range *ds {
-		deviceList[i] = dev.Name
-	}
-	return deviceList, nil
 }
 
 // NewReader returns a TagReader instance for the given device name
-// by querying the LLRP Device Service for details about it.
+// by querying the LLRP Device Service for details about it, via command client.
 //
 // If the Device Service isn't tracking a device with the given name,
 // then this returns an error.
@@ -151,39 +98,34 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 	return tr, nil
 }
 
-// GetCapabilities queries the device service for a device's capabilities.
+// GetCapabilities queries for a device's capabilities.
 func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesResponse, error) {
-	r, err := ds.tryGet(device + capDevCmd)
-	if err != nil {
-		return nil, errors.Wrapf(err, "device info request failed for device %s", device)
-	}
-	defer r.Body.Close()
-	if r.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("device info request failed with status %d", r.StatusCode)
+	ds.lc.Debugf("Sending GET command '%s' to device '%s'", capDevCmd, device)
+
+	resp, err := ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
+	for try := 1; err != nil && try < maxTries; try++ {
+		// when an offline reader comes back online, it may return an error querying the capabilities due to a
+		// slight delay when the device service updates the reader's OperatingState. So lets sleep a bit and retry.
+		time.Sleep(sleepInterval * time.Duration(try))
+		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
 	}
 
-	content, err := ioutil.ReadAll(io.LimitReader(r.Body, maxBody))
 	if err != nil {
 		return nil, errors.Wrap(err, "device info request failed")
 	}
 
-	type edgexResp struct {
-		Readings []struct {
-			Name, Value string
-		}
-	}
-
-	var resp edgexResp
-	if err := json.Unmarshal(content, &resp); err != nil {
-		return nil, errors.Wrap(err, "device info request failed")
-	}
-
-	var caps *GetReaderCapabilitiesResponse
-	for _, reading := range resp.Readings {
-		if reading.Name == capReadingName {
-			caps = &GetReaderCapabilitiesResponse{}
-			if err := json.Unmarshal([]byte(reading.Value), caps); err != nil {
-				return nil, errors.Wrap(err, "device info request failed")
+	caps := &GetReaderCapabilitiesResponse{}
+	for _, reading := range resp.Event.Readings {
+		if reading.ResourceName == capReadingName {
+			// reading objectvalue is an interface which will be marshalled into the objectvalue as a map[string]interface{}
+			// in order to get this into the reader capabilities struct we need to first marshal it back to JSON
+			data, err := json.Marshal(reading.ObjectValue)
+			if err != nil {
+				return nil, errors.Wrap(err, "marshal failed for reading object value (reader capabilities)")
+			}
+			err = json.Unmarshal(data, &caps)
+			if err != nil {
+				return nil, errors.Wrap(err, "unmarshal failed for reader capabilities")
 			}
 			break
 		}
@@ -196,20 +138,30 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	return caps, nil
 }
 
-// SetConfig requests the device service set a particular device's configuration.
+// SetConfig requests to set a particular device's configuration.
 func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 	confData, err := json.Marshal(conf)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal SetReaderConfig message")
 	}
 
-	edgexReq, err := json.Marshal(struct{ ReaderConfig string }{string(confData)})
+	var configMapData map[string]interface{}
+	err = json.Unmarshal(confData, &configMapData)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal ReaderConfig edgex request")
+		return errors.Wrap(err, "failed to unmarshal SetReaderConfig message")
 	}
 
-	return errors.WithMessage(ds.put(device+configDevCmd, edgexReq),
-		"failed to set reader config")
+	commandData := map[string]interface{}{
+		"ReaderConfig": configMapData,
+	}
+
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", configDevCmd, device, commandData)
+
+	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, configDevCmd, commandData)
+	if err != nil {
+		return errors.WithMessage(err, "failed to set reader config")
+	}
+	return nil
 }
 
 // AddROSpec adds an ROSpec on the given device.
@@ -219,13 +171,23 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 		return errors.Wrap(err, "failed to marshal ROSpec")
 	}
 
-	edgexReq, err := json.Marshal(struct{ ROSpec string }{string(roData)})
+	var roMapData map[string]interface{}
+	err = json.Unmarshal(roData, &roMapData)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal ReaderConfig edgex request")
+		return errors.Wrap(err, "failed to unmarshal ROSpec")
 	}
 
-	return errors.WithMessage(ds.put(device+addCmd, edgexReq),
-		"failed to add ROSpec")
+	commandData := map[string]interface{}{
+		"ROSpec": roMapData,
+	}
+
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", addCmd, device, commandData)
+
+	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, addCmd, commandData)
+	if err != nil {
+		return errors.WithMessage(err, "failed to add ROSpec")
+	}
+	return nil
 }
 
 // EnableROSpec enables the ROSpec with the given ID on the given device.
@@ -258,83 +220,35 @@ func (ds DSClient) DeleteAllROSpecs(device string) error {
 	return ds.modifyROSpecState(deleteCmd, device, 0)
 }
 
-// modifyROSpecState requests the device service set the given device's
-// ROSpec to a particular state.
+// modifyROSpecState requests to set the given device's ROSpec to a particular state.
 func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
-	edgexReq, err := json.Marshal(struct{ ROSpecID string }{strconv.FormatUint(uint64(id), 10)})
+	data := make(map[string]string)
+
+	data["ROSpecID"] = strconv.FormatUint(uint64(id), 10)
+
+	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", roCmd, device, data)
+
+	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, roCmd, data)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal ROSpec")
-	}
-
-	// this uses roCmd[1:] because it starts with "/"
-	return errors.WithMessage(ds.put(device+roCmd, edgexReq),
-		"failed to "+roCmd[1:])
-}
-
-// EnableCustomExt enables custom Impinj extensions.
-// Note that the device in question must be registered
-// with a device profile that has an enableImpinjExt deviceCommand.
-func (d *ImpinjDevice) EnableCustomExt(name string, ds DSClient) error {
-	enableExtension := ds.put(name+enableImpinjCmd,
-		[]byte(`{"ImpinjCustomExtensionMessage":"AAAAAA=="}`))
-	msg := "failed to enable Impinj extensions"
-	return errors.WithMessage(enableExtension, msg)
-}
-
-// put PUTs the data to the device service path.
-func (ds DSClient) put(path string, data []byte) error {
-	req, err := http.NewRequest("PUT", ds.baseURL+path, bytes.NewReader(data))
-	if err != nil {
-		return errors.Wrap(err, "failed to create device service request")
-	}
-
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	resp, err := ds.httpClient.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to PUT to device service")
-	}
-
-	resp.Body.Close()
-
-	if !(200 <= resp.StatusCode && resp.StatusCode < 300) {
-		return errors.Errorf("unexpected status code: %d", resp.StatusCode)
+		return errors.WithMessage(err, "failed to "+roCmd)
 	}
 
 	return nil
 }
 
-// tryGet attempts to make an HTTP GET call to the device service at the specified path. It will
-// try up to maxTries times and sleeps sleepInterval*tryCount in-between tries. It will return the
-// raw response and error objects of the final HTTP call that was completed.
-// It determines a successful try as anything returning 2xx http code.
-// Note: if err is nil, caller is expected to close response body
-func (ds DSClient) tryGet(path string) (resp *http.Response, err error) {
-	req, err := http.NewRequest(http.MethodGet, ds.baseURL+path, nil)
+// EnableCustomExt enables custom Impinj extensions.
+// Note that the device in question must be registered
+// with a device profile that has an enableImpinjExt deviceCommand.
+func (d *ImpinjDevice) EnableCustomExt(device string, ds DSClient) error {
+	data := make(map[string]string)
+
+	ds.lc.Debugf("Sending SET command '%s' to device '%s'", enableImpinjCmd, device)
+
+	// the Device profile for impinj has a defaultvalue, so passing empty map
+	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, enableImpinjCmd, data)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error creating new http GET request for path %s", path)
+		return errors.WithMessage(err, "failed to enable Impinj extensions")
 	}
 
-	// start at 1 since this is our first try
-	for i := 1; ; i++ {
-		resp, err = ds.httpClient.Do(req)
-		if err != nil {
-			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned an error: %v", path, err))
-			if i < maxTries { // if we have tries left, sleep and retry
-				time.Sleep(sleepInterval * time.Duration(i))
-				continue
-			}
-		} else if !(200 <= resp.StatusCode && resp.StatusCode < 300) {
-			ds.lc.Error(fmt.Sprintf("device service HTTP GET %s attempt returned http error code %d", path, resp.StatusCode))
-			if i < maxTries { // if we have tries left, sleep and retry
-				_ = resp.Body.Close() // close the body so that the request may be re-used
-				time.Sleep(sleepInterval * time.Duration(i))
-				continue
-			}
-		}
-		// if we reached here that means either the request was successful, or
-		// we have no more tries left, so exit loop
-		break
-	}
-
-	return resp, err
+	return nil
 }

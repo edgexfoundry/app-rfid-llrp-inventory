@@ -21,17 +21,21 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventArrived`**
 ```json
 {
+  "apiVersion": "v2",
   "id": "6def8859-5a12-4c83-b68c-256303146682",
-  "device": "rfid-llrp-inventory",
-  "created": 1598043284110,
+  "deviceName": "rfid-llrp-inventory",
+  "profileName": "rfid-llrp-inventory",
+  "sourceName" : "rfid-llrp-inventory",
   "origin": 1598043284109799400,
   "readings": [
     {
+      "apiVersion": "v2",
       "id": "8d15d035-402f-4abc-85fc-a7ed7213122a",
-      "created": 1598043284110,
       "origin": 1598043284109799400,
-      "device": "rfid-llrp-inventory",
-      "name": "InventoryEventArrived",
+      "deviceName": "rfid-llrp-inventory",
+      "resourceName": "InventoryEventArrived",
+      "profileName": "rfid-llrp-inventory",
+      "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-25_1\"}"
     }
   ]
@@ -41,17 +45,21 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventMoved`**
 ```json
 {
+  "apiVersion": "v2",
   "id": "c78c304e-1906-4d17-bf26-5075756a231f",
-  "device": "rfid-llrp-inventory",
-  "created": 1598401259699,
+  "deviceName": "rfid-llrp-inventory",
+  "profileName": "rfid-llrp-inventory",
+  "sourceName" : "rfid-llrp-inventory",
   "origin": 1598401259697580500,
   "readings": [
     {
+      "apiVersion": "v2",
       "id": "323694d9-1a48-417a-9f43-25998536ae8f",
-      "created": 1598401259699,
       "origin": 1598401259697580500,
-      "device": "rfid-llrp-inventory",
-      "name": "InventoryEventMoved",
+      "deviceName": "rfid-llrp-inventory",
+      "resourceName": "InventoryEventMoved",
+      "profileName": "rfid-llrp-inventory",
+      "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
   ]
@@ -61,25 +69,31 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventDeparted`**
 ```json
 {
+  "apiVersion": "v2",
   "id": "4d042708-c5de-41fa-827a-3f24b364c6de",
-  "device": "rfid-llrp-inventory",
-  "created": 1598062424895,
+  "deviceName": "rfid-llrp-inventory",
+  "profileName": "rfid-llrp-inventory",
+  "sourceName" : "rfid-llrp-inventory",
   "origin": 1598062424894043600,
   "readings": [
     {
+      "apiVersion": "v2",
       "id": "928ff90d-02d1-43be-81a6-a0d75886b0e4",
-      "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-llrp-inventory",
-      "name": "InventoryEventDeparted",
+      "deviceName": "rfid-llrp-inventory",
+      "resourceName": "InventoryEventDeparted",
+      "profileName": "rfid-llrp-inventory",
+      "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-25_1\"}"
     },
     {
+      "apiVersion": "v2",
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
-      "created": 1598062424895,
       "origin": 1598062424894043600,
-      "device": "rfid-llrp-inventory",
-      "name": "InventoryEventDeparted",
+      "deviceName": "rfid-llrp-inventory",
+      "resourceName": "InventoryEventDeparted",
+      "profileName": "rfid-llrp-inventory",
+      "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc688\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392512,\"last_known_location\":\"POS Terminals\"}"
     }
   ]
@@ -144,7 +158,7 @@ especially useful when using a dual-linear antenna and mapping both polarities t
 
 ### Configuration
 
-The following configuration options affect how the tag location algorithm works under the hood.
+The following configuration options in the `[ApplicationSettings]` section affect how the tag location algorithm works under the hood.
 
 - **`AdjustLastReadOnByOrigin`** *`[bool]`*: If `true`, this will override the tag read timestamps sent from the sensor
         with an adjusted one based on the UTC time the `LLRP Device Service` received the message from the device (aka `Origin`). 
@@ -196,7 +210,7 @@ The location will change when the following equation is true:
 ![Mobility Profile Diagram](images/mobility-profile.png)
 
 #### Configure Mobility Profile
-_Note: All values can be modified via `ApplicationSettings` inside [Edgex Consul][consul_app_settings]._
+_Note: All values can be modified via the `[ApplicationSettings]` section.
 
 - **`MobilityProfileSlope`** *`[float]`*: Used to determine the offset applied to older RSSI values (aka rate of decay)
   - units: `dBm per millisecond`
@@ -233,12 +247,13 @@ Every device(reader) + antenna port represents a tag location and can be assigne
 such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by the 
 application has a format of `<deviceName>_<antennaId>` e.g.
 `Reader-10-EF-25_1` where `Reader-10-EF-25` is the deviceName and `1` is the antennaId.
- 
+
 To get the list of LLRP devices or readers connected,
-`GET` to the `/api/v1/readers` endpoint:   
+`GET` to the `/api/v2/readers` endpoint:   
                                                        
-    curl -o- localhost:48086/api/v1/readers
-    
+
+    curl -o- localhost:59711/api/v2/readers
+
 ```json
 {
   "Readers": [
@@ -249,25 +264,20 @@ To get the list of LLRP devices or readers connected,
 
 ### Via configuration.toml (before deployment)
 If you already know the alias values you would like to use before deployment, they can be defined in your
-`configuration.toml` file. There is a section called `[Aliases]` that is defaulted to empty.
+`configuration.toml` file. There is a section called `[Aliases]` under the `[AppCustom]` section that is defaulted to empty.
 
 In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
 
-    [Aliases]
+    [AppCustom.Aliases]
     Reader-10-EF-25_1 = "Freezer"
     Reader-10-EF-25_2 = "Backroom"
-
-#### EdgeX Hanoi implementation
-When EdgeX Ireland is released, this service will be updated to use `AppCustom` in order to configure
-Aliases via TOML. For now, this is the way the code has been implemented:
 
 ##### Configuration for Normal Service Startup
 If an existing `Aliases` folder key (even if empty) is found in Consul, nothing is done. Data in Consul
 will be left as-is.
 
 If no existing `Aliases` folder key is found in Consul:
-- If an `[Aliases]` section is **not present** in the user's TOML file, nothing will be done or added to Consul.
-- If an `[Aliases]` section is **present, but empty** in the user's TOML file, an empty `Aliases` folder key will be added to Consul.
+- If an `[Aliases]` section is **not present** or **is empty** in the user's TOML file, nothing will be done or added to Consul.
 - If an `[Aliases]` section is **present and contains data**, this data will be uploaded to Consul.
 
 ##### Overwrite Config in Consul (During Development)
@@ -281,8 +291,8 @@ from the TOML file and uploaded to Consul, overwriting existing Aliases with the
 
 ###### Scenario
 Consul already contains the following key/values:
-- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `POS`
-- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `POS`
+- `rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
 
 The user passes `-o/--overwrite` flag, with the following TOML file:
 
@@ -296,9 +306,11 @@ The user passes `-o/--overwrite` flag, with the following TOML file:
 
 ###### Outcome
 The following key/value pairs will exist in Consul:
-- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_1` = `Freezer`
-- `rfid-llrp-inventory/Aliases/Reader-10-EF-25_2` = `Backroom`
-- `rfid-llrp-inventory/Aliases/Reader-20-20-20_1` = `Store`
+- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `Freezer`
+- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_2` = `Backroom`
+- `rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
+
+> Note that there is a config watcher for the `[AppCustom]` section that notifies the app of changes. This config watcher will load all the aliases from Consul on startup. 
 
 
 ### Via Consul (after deployment)
@@ -309,6 +321,7 @@ can be done regardless of whether `configuration.toml` specified initial aliases
 - If one does not exist, create a folder named `Aliases` under [Edgex Consul][consul_root].
   A folder is created by ending the key with a `/` like so: `Aliases/`
   
+
 ![Creating Aliases folder](images/consul_alias_folder.png)
 
 - Add Key Value pairs. Key is the default alias which is `<deviceName>_<antennaId>`. The value must be the alias value. 
@@ -321,11 +334,11 @@ can be done regardless of whether `configuration.toml` specified initial aliases
 ![Aliases created](images/aliases.png)
 
 Everytime the user creates/updates the Aliases folder, the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
-  
-`GET` to the `/api/v1/inventory/snapshot` endpoint:   
+
+`GET` to the `/api/v2/inventory/snapshot` endpoint:   
                                                        
-    curl -o- localhost:48086/api/v1/inventory/snapshot
-    
+    curl -o- localhost:59711/api/v2/inventory/snapshot
+
 ```json
  [
    {
@@ -356,8 +369,8 @@ Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). E
     curl \
       --request PUT \
       --data "Freezer" \
-      http://localhost:8500/v1/kv/edgex/appservices/1.0/rfid-llrp-inventory/Aliases/SpeedwayR-10-EF-25_1
-          
+      http://localhost:8500/v1/kv/edgex/appservices/2.0/rfid-llrp-inventory/AppCustom/Aliases/SpeedwayR-10-EF-25_1
+
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,
 and so you can direct those Readers through that service.
@@ -415,16 +428,16 @@ Here's how the service works with Behaviors:
 To start all Readers reading with the current behavior, 
 `POST` to the `/command/reading/start` endpoint:
 
-    curl -o- -X POST localhost:48086/api/v1/command/reading/start
+    curl -o- -X POST localhost:59711/api/v2/command/reading/start
 
 To stop reading,
 `POST` to the `/command/reading/stop` endpoint:
 
-    curl -o- -X POST localhost:48086/api/v1/command/reading/stop
+    curl -o- -X POST localhost:59711/api/v2/command/reading/stop
 
 To view the `default` Behavior:
 
-    curl -o- localhost:48086/api/v1/behaviors/default
+    curl -o- localhost:59711/api/v2/behaviors/default
 
 ```json
 {
@@ -445,7 +458,7 @@ The following example uses `jq` to generate the `JSON` Behavior structure,
 the details of which are explained below.
 This particular Behavior enables a `Fast` scan at `30 dBm`:
 
-    curl -o- localhost:48086/api/v1/behaviors/default -XPUT \
+    curl -o- localhost:59711/api/v2/behaviors/default -XPUT \
         --data @<(jq -n '{ScanType: "Fast", Power: {Max: 3000}}')
 
 
@@ -453,9 +466,9 @@ If you attempt to set the Behavior to something that can't be supported
 all the Readers to which it should apply, 
 you'll receive an error response, and the Behavior won't change:
 
-    curl -o- -XPUT localhost:48086/api/v1/behaviors/default \
+    curl -o- -XPUT localhost:59711/api/v2/behaviors/default \
         --data @<(jq -n '{ScanType: "Fast"}')
-
+    
     new behavior is invalid for "Speedway": target power (0.00 dBm)
     is lower than the lowest supported (10.00 dBm): behavior cannot be satisfied
 
@@ -540,12 +553,12 @@ for which devices are registered with the LLRP Device Service.
 
 #### All Devices
 All devices must be registered with a `deviceProfile` that provides the following:
- 
+
 - The following `deviceResources` must be available:
     - EdgeX `"String"` types, the values of which 
-    encode json-representations of LLRP messages and/or parameters
-    that can be marshaled by Go's standard `json` package
-    into [the Go structs defined in the LLRP package](internal/llrp/llrp_structs.go):
+      encode json-representations of LLRP messages and/or parameters
+      that can be marshaled by Go's standard `json` package
+      into [the Go structs defined in the LLRP package](internal/llrp/llrp_structs.go):
         - `ReaderCapabilities` with a `readWrite` of `"R"` or `"RW"`
             encoding an LLRP `GetReaderCapabilitiesResponse` message.
         - `ReaderConfig` with a `readWrite` of `"W"` or `"RW"`
@@ -580,7 +593,7 @@ with a `set` that targets that `deviceResource`.
 
 When this service sees an Impinj device, 
 it sends a `PUT` request with `{"ImpinjCustomExtensionMessage": "AAAAAA=="}` 
-to `{deviceService}/api/v1/commands/{deviceName}/enableImpinjExt`;
+to `{deviceService}/api/v2/commands/{deviceName}/enableImpinjExt`;
 if that `deviceCommand` and `deviceResource` exist,
 the Device Service will send a `CustomMessage` to the reader,
 enabling this service to send Impinj's `CustomParameter`s.
@@ -592,8 +605,8 @@ this service will receive a 404 from the Device Service,
 preventing it from operating as designed. 
 
 [device_service_profiles]: https://github.com/edgexfoundry/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
-[consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/
-[consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/1.0/rfid-llrp-inventory/ApplicationSettings/
+[consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/
+[consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/AppCustom/ApplicationSettings/
 
 ## Snap Build and Install
 The service can also be run as snap - [Snap documentation](https://snapcraft.io/docs)
@@ -601,7 +614,7 @@ The service can also be run as snap - [Snap documentation](https://snapcraft.io/
 #### Pre-requisites
   - Edgex core services
   - Edgex LLRP device service
-  
+
 #### Build Snap Package
 Execute the following commands from the project's root directory.
   - `snapcraft clean`
@@ -610,13 +623,13 @@ Execute the following commands from the project's root directory.
 
 #### Install Snap Package
   - `sudo snap install --dangerous *.snap` 
-  
+
 Two options are available for installing snap - `--dangerous` & `--devmode`
-  
+
 If additional permissions are required then use the `--devmode` option else use `--dangerous`.
 
 Note: If application is confined and want to install a local version, then use `--dangerous` option. Specifying `--devmode`, implies `--dangerous` option.
-  
+
 #### Other helpful Snap commands:
  -  List installed snap packages: `snap list`
  -  List of snap services: `snap services`
