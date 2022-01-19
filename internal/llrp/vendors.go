@@ -49,18 +49,6 @@ const (
 type impinjSearchMode = uint16
 
 const (
-	// impSearchReaderSelected is the "default" search mode.
-	// There's no way to know exactly what it will do.
-	impSearchReaderSelected = impinjSearchMode(0)
-
-	// impjSingleTarget is Impinj's "Single Target".
-	// It's just a normal Query with the Target field set to A.
-	impjSingleTarget = impinjSearchMode(1)
-
-	// impjSingleTargetReset is Impinj's "Single Target Reset".
-	// It's just a normal Query with the Target field set to B.
-	impjSingleTargetReset = impinjSearchMode(5)
-
 	// impjSingleTargetSuppressed is Impinj's
 	// "Single Target Inventory with Suppression (aka TagFocus)".
 	// This is identical to "Single Target",

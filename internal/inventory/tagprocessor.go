@@ -93,8 +93,8 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (
 		}
 	}
 
-	for _, rt := range r.TagReportData {
-		if event := tp.processData(&rt, info); event != nil {
+	for i := range r.TagReportData {
+		if event := tp.processData(&r.TagReportData[i], info); event != nil {
 			events = append(events, event)
 		}
 	}

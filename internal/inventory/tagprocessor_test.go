@@ -286,7 +286,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 	sensor := nextSensor()
 
 	// read past departed threshold
-	events := ds.readAll(t, readParams{
+	_ = ds.readAll(t, readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
@@ -294,7 +294,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 	})
 
 	// expect all tags to depart, and their stats to be set to Departed
-	events, _ = ds.tp.AggregateDeparted()
+	events, _ := ds.tp.AggregateDeparted()
 	if err := ds.verifyEventPattern(events, ds.size(), DepartedType); err != nil {
 		t.Error(err)
 	}

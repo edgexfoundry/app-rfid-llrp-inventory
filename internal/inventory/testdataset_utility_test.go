@@ -172,14 +172,6 @@ func (ds *testDataset) verifyTag(epc string, expectedState TagState, expectedLoc
 	return nil
 }
 
-func (ds *testDataset) verifyStateOf(epc string, expectedState TagState) error {
-	return ds.verifyTag(epc, expectedState, "")
-}
-
-func (ds *testDataset) verifyState(epc string, expectedState TagState) error {
-	return ds.verifyTag(epc, expectedState, "")
-}
-
 func (ds *testDataset) verifyStateAll(expectedState TagState) error {
 	return ds.verifyAll(expectedState, "")
 }

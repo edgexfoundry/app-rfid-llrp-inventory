@@ -650,9 +650,6 @@ type TagMobility uint16
 
 const (
 	tagMobilityUnknown = TagMobility(0)
-	tagsAreStatic      = TagMobility(500)
-	tagsMayMove        = TagMobility(5000)
-	tagsAreInMotion    = TagMobility(10000)
 )
 
 // Environment describes the expected operating environment.
