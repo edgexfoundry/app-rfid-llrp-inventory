@@ -6,10 +6,11 @@
 package inventory
 
 import (
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/models"
@@ -287,7 +288,7 @@ func logTagStats(tp *TagProcessor, tag *Tag, readLocation string, incomingMean f
 }
 
 func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *tagStats, tag *Tag) {
-	now := UnixMilliNow()
+	now := time.Now().UnixMilli()
 	tp.lc.Debug("read timing",
 		"now", now,
 		"referenceTimestamp", info.referenceTimestamp,
@@ -303,7 +304,7 @@ func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *tagStats, t
 func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 	// subtract the ageOutHours to get the minimum allowed LastRead timestamp.
 	// anything older than that is considered aged-out.
-	minTimestamp := UnixMilli(time.Now().Add(time.Hour * -time.Duration(tp.config.ageOutHours)))
+	minTimestamp := time.Now().Add(time.Hour * -time.Duration(tp.config.ageOutHours)).UnixMilli()
 
 	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
