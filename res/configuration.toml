@@ -73,6 +73,11 @@ Type="edgex-messagebus"
     Port = 6379
     Protocol = "redis"
     SubscribeTopics="edgex/events/#/#/#/ROAccessReport,edgex/events/#/#/#/ReaderEventNotification"
+    [Trigger.EdgexMessageBus.PublishHost]
+    Host = "localhost"
+    Port = 6379
+    Protocol = "redis"
+    PublishTopic="edgex/events/device/{profilename}/{devicename}/{sourcename}" # publish to same topic format the Device Services use
     [Trigger.EdgexMessageBus.Optional]
     authmode = "usernamepassword"  # required for redis messagebus (secure or insecure).
     secretname = "redisdb"

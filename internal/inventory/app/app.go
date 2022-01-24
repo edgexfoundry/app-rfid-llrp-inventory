@@ -43,6 +43,7 @@ type InventoryApp struct {
 	reports      chan reportData
 	config       inventory.ServiceConfig
 	confUpdateCh chan interface{}
+	publisher    interfaces.BackgroundPublisher
 }
 
 type reportData struct {
@@ -88,6 +89,11 @@ func (app *InventoryApp) Initialize() error {
 
 	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, "AppCustom", app.processConfigUpdates); err != nil {
 		return errors.Wrap(err, "failed to listen for custom config changes")
+	}
+
+	app.publisher, err = app.service.AddBackgroundPublisher(1)
+	if err != nil {
+		return errors.Wrap(err, "failed to add BackGroundPublisher")
 	}
 
 	app.defaultGrp = llrp.NewReaderGroup()
