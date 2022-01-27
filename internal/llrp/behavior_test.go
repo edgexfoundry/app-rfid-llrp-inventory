@@ -293,7 +293,7 @@ func TestImpinjDevice_NewConfig(t *testing.T) {
 		// If we search for a power just above this one,
 		// we should get back the same power value,
 		// assuming power values are more than 0.01 dBm apart.
-		pIdx, pValue = d.findPower(pwrAtI.TransmitPowerValue + 1)
+		pIdx, _ = d.findPower(pwrAtI.TransmitPowerValue + 1)
 		assert.Equal(t, pwrAtI.Index, pIdx)
 		pIdx, pValue = d.findPower(pwrAtI.TransmitPowerValue + 1)
 		assert.NotZero(t, pIdx)

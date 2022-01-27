@@ -36,7 +36,6 @@ const (
 type InventoryApp struct {
 	service      interfaces.ApplicationService
 	lc           logger.LoggingClient
-	devMu        sync.RWMutex
 	devService   llrp.DSClient
 	defaultGrp   *llrp.ReaderGroup
 	snapshotReqs chan snapshotDest
