@@ -32,7 +32,6 @@ const (
 	resourceReaderNotification = "ReaderEventNotification"
 	resourceInventoryEvent     = "InventoryEvent"
 
-	coreDataPostTimeout = 3 * time.Minute
 	eventChSz           = 100
 )
 
@@ -310,7 +309,6 @@ func (app *InventoryApp) publishEvents(events []inventory.Event) error {
 		edgeXEvent.AddObjectReading(resourceName, event)
 	}
 
-	// TODO : wrap in AddEvent request.
 	addRequest := requests.NewAddEventRequest(edgeXEvent)
 	payload, err := json.Marshal(addRequest)
 	if err != nil {
