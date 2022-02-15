@@ -19,7 +19,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -27,31 +26,11 @@ import (
 	hooks "github.com/canonical/edgex-snap-hooks/v2"
 )
 
-// validateProfile processes the snap 'profile' configure option, ensuring that the directory
-// and associated configuration.toml file in $SNAP_DATA both exist.
-func validateProfile(prof string) error {
-	hooks.Debug(fmt.Sprintf("edgex-asc:configure:validateProfile: profile is %s", prof))
-
-	if prof == "" {
-		return nil
-	}
-
-	path := fmt.Sprintf("%s/config/res/%s/configuration.toml", hooks.SnapData, prof)
-	hooks.Debug(fmt.Sprintf("edgex-asc:configure:validateProfile: checking if %s exists", path))
-
-	_, err := os.Stat(path)
-	if err != nil {
-		return errors.New(fmt.Sprintf("profile %s has no configuration.toml", prof))
-	}
-
-	return nil
-}
-
 func main() {
 	var debug = false
 	var enable = true
 	var err error
-	var envJSON, prof string
+	var envJSON string
 	var cli *hooks.CtlCli = hooks.NewSnapCtl()
 
 	status, err := cli.Config("debug")
@@ -69,33 +48,19 @@ func main() {
 
 	}
 
-	prof, err = cli.Config(hooks.ProfileConfig)
-	if err != nil {
-		hooks.Error(fmt.Sprintf("Error reading config 'profile': %v", err))
-		os.Exit(1)
-	}
-
-	err = validateProfile(prof)
-	if err != nil {
-		hooks.Error(fmt.Sprintf("Error validating profile: %v", err))
-		os.Exit(1)
-	}
-
 	envJSON, err = cli.Config(hooks.EnvConfig)
 	if err != nil {
 		hooks.Error(fmt.Sprintf("Reading config 'env' failed: %v", err))
 		os.Exit(1)
 	}
 
-	err = hooks.HandleEdgeXConfig("app-service-configurable", envJSON, nil)
+	err = hooks.HandleEdgeXConfig("app-rfid-llrp-inventory", envJSON, nil)
 	if err != nil {
 		hooks.Error(fmt.Sprintf("HandleEdgeXConfig failed: %v", err))
 		os.Exit(1)
 	}
 
 	// If autostart is not explicitly set, default to "no"
-	// as only example service configuration and profiles
-	// are provided by default.
 	autostart, err := cli.Config(hooks.AutostartConfig)
 	if err != nil {
 		hooks.Error(fmt.Sprintf("Reading config 'autostart' failed: %v", err))
@@ -108,10 +73,7 @@ func main() {
 
 	autostart = strings.ToLower(autostart)
 	if autostart == "true" || autostart == "yes" {
-		if prof == "" {
-			hooks.Warn(fmt.Sprintf("autostart is %s, but no profile set", autostart))
-			enable = false
-		}
+		enable = false
 	} else if autostart == "false" || autostart == "no" {
 		enable = false
 	} else {
@@ -120,7 +82,6 @@ func main() {
 	}
 
 	// service is stopped/disabled by default in the install hook
-	// only enable if profile exists and autostart is set
 	if enable {
 		err = cli.Start("app-rfid-llrp-inventory", true)
 		if err != nil {
