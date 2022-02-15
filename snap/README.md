@@ -3,8 +3,6 @@
 
 This folder contains snap packaging for the EdgeX Foundry's RFID-LLRP Inventory application service.
 
-The project maintains a rolling release of the snap on the `edge` channel that is rebuilt and published at least once daily.
-
 The snap currently supports both `amd64` and `arm64` platforms.
 
 ## Installation
@@ -38,113 +36,128 @@ $ sudo snap install edgex-app-rfid-llrp-inventory --edge
 
 **Note** - the snap has only been tested on Ubuntu Core, Desktop, and Server.
 
-## Using the EdgeX App Service Configurable snap
+## Snap configuration
 
-  
-### Configuration Overrides
-Configuration changes can be accomplished via the snap's configure hook. If the service has already been started,
-updating a setting requires the service to be restarted. 
+EdgeX services implement a service dependency check on startup which ensures that all of the runtime dependencies of a particular service are met before the service transitions to active state.
 
-The following syntax is used to specify service-specific configuration overrides:
+Snapd doesn't support orchestration between services in different snaps. It is therefore possible on a reboot for a device service to come up faster than all of the required services running 
+in the main edgexfoundry snap. If this happens, it's possible that the device service repeatedly fails startup, and if it exceeds the systemd default limits, then it might be left in a failed state. 
+This situation might be more likely on constrained hardware (e.g. RPi).
 
-```env.<stanza>.<config option>```
-
-For instance, to setup an override of the service's Port use:
-
-```$ sudo snap set env.service.port=2112```
-
-And restart the service:
-
-```$ sudo snap restart edgex-app-rfid-llrp-inventory``
-
-**Note** - at this time changes to configuration values in the [Writable] section are not supported.
-
-For details on the mapping of configuration options to Config options, please refer to "Service Environment Configuration Overrides".
-
-### Startup environment variables
-
-EdgeX services by default wait 60s for dependencies (e.g. Core Data) to become available, and will exit after this time if the dependencies aren't met. The following options can be used to override this startup behavior on systems where it takes longer than expected for the dependent services provided by the edgexfoundry snap to start. Note, both options below are specified as a number of seconds.
+This snap therefore implements a basic retry loop with a maximum duration and sleep interval. If the dependent services are not available, the service sleeps for the defined interval (default: 1s) 
+and then tries again up to a maximum duration (default: 60s). These values can be overridden with the following commands:
     
-To change the default startup duration (60 seconds), for a service to complete the startup, aka bootstrap, phase of execution by using the following command:
+To change the maximum duration, use the following command:
 
 ```bash
 $ sudo snap set edgex-app-rfid-llrp-inventory startup-duration=60
 ```
 
-The following environment variable overrides the retry startup interval or sleep time before a failure is retried during the start-up, aka bootstrap, phase of execution by using the following command:
+To change the interval between retries, use the following command:
 
 ```bash
 $ sudo snap set edgex-app-rfid-llrp-inventory startup-interval=1
 ```
 
-**Note** - Should the environment variables be modified after the service has started, the service must be restarted.
+The service can then be started as follows. The "--enable" option
+ensures that as well as starting the service now, it will be automatically started on boot:
+
+```bash
+$ sudo snap start --enable edgex-device-rfid-llrp.device-rfid-llrp
+```
+
+### Aliases setup
+
+The `AppConfig.Aliases` setting needs to be provided for the service to work.  See [Setting the Aliases](https://github.com/edgexfoundry/app-rfid-llrp-inventory#setting-the-aliases).
+
+This can either be by
+
+1. using a content interface to provide a `configuration.toml` file with the correct aliases, or
+
+2. during development, set the values manually in Consul. 
 
 
-## Service Environment Configuration Overrides
-**Note** - all of the configuration options below must be specified with the prefix: 'env.'
+### Using a content interface to set device configuration
+
+The `device-config` content interface allows another snap to seed this snap with configuration directories under `$SNAP_DATA/config/app-rfid-llrp-inventory`.
+
+Note that the `device-config` content interface does NOT support seeding of the Secret Store Token because that file is expected at a different path.
+
+Please refer to [edgex-config-provider](https://github.com/canonical/edgex-config-provider), for an example and further instructions.
+
+
+### Rich Configuration
+While it's possible on Ubuntu Core to provide additional profiles via gadget 
+snap content interface, quite often only minor changes to existing profiles are required. 
+
+These changes can be accomplished via support for EdgeX environment variable 
+configuration overrides via the snap's configure hook.
+If the service has already been started, setting one of these overrides currently requires the
+service to be restarted via the command-line or snapd's REST API. 
+If the overrides are provided via the snap configuration defaults capability of a gadget snap, 
+the overrides will be picked up when the services are first started.
+
+The following syntax is used to specify service-specific configuration overrides:
+
 
 ```
-[Service]
-service.boot-timeout            // Service.BootTimeout
-service.health-check-interval   // Service.HealthCheckInterval
-service.host                    // Service.Host
-service.server-bind-addr        // Service.ServerBindAddr
-service.port                    // Service.Port
-service.protocol                // Service.Protocol
-service.max-result-count        // Service.MaxResultCount
-service.max-request-size        // Service.MaxRequestSize
-service.startup-msg             // Service.StartupMsg
-service.request-timeout         // Service.RequestTimeout
+env.<stanza>.<config option>
+```
+For instance, to setup an override of the service's Port use:
+```
+$ sudo snap set edgex-device-rfid-llrp env.service.port=2112
+```
+And restart the service:
+```
+$ sudo snap restart edgex-device-rfid-llrp.device-rfid-llrp
+```
 
-[Clients.core-command]
-clients.core-command.port       // Clients.core-command.Port
+## Service Environment Configuration Overrides
 
-[Clients.core-data]
-clients.core-data.port          // Clients.core-data.Port
+### [Service]
+|snap set|configuration.yaml setting|
+|---|---|
+|env.service.boot-timeout|Service.BootTimeout|
+|env.service.health-check-interval|Service.HealthCheckInterval|
+|env.service.host|Service.Host|
+|env.service.server-bind-addr|Service.ServerBindAddr|
+|env.service.port|Service.Port|
+|env.service.protocol|Service.Protocol|
+|env.service.max-result-count|Service.MaxResultCount|
+|env.service.max-request-size|Service.MaxRequestSize|
+|env.service.startup-msg|Service.StartupMsg|
+|env.service.request-timeout|Service.RequestTimeout|
 
-[Clients.core-metadata]
-clients.core-metadata.port      // Clients.core-metadata.Port
+### [Clients]
+|snap set|configuration.yaml setting|
+|---|---|
+|env.clients.core-command.port|Clients.core-command.Port|
+|env.clients.core-data.port|Clients.core-data.Port|
+|env.clients.core-metadata.port|Clients.core-metadata.Port|
+|env.clients.support-notifications.port|Clients.support-notifications.Port|
 
-[Clients.support-notifications]
-clients.support-notifications.port  // Clients.support-notifications.Port
+### [Trigger]
+|snap set|configuration.yaml setting|
+|---|---|
+|env.trigger.edgex-message-bus.type|Trigger.EdgexMessageBus.Type|
+|env.trigger.edgex-message-bus.subscribe-host.port|Trigger.EdgexMessageBus.SubscribeHost.Port|
+|env.trigger.edgex-message-bus.subscribe-host.protocol|Trigger.EdgexMessageBus.SubscribeHost.Protocol|
+|env.trigger.edgex-message-bus.subscribe-host.subscribe-topics|Trigger.EdgexMessageBus.SubscribeHost.SubscribeTopics|
+|env.trigger.edgex-message-bus.publish-host.port|Trigger.EdgexMessageBus.PublishHost.Port|
+|env.trigger.edgex-message-bus.publish-host.protocol|Trigger.EdgexMessageBus.PublishHost.Protocol|
+|env.trigger.edgex-message-bus.publish-host.publish-topic|Trigger.EdgexMessageBus.PublishHost.PublishTopic|
 
-[Triger]
-[Trigger.EdgexMessageBus]
-trigger.edgex-message-bus.type                             // Trigger.EdgexMessageBus.Type
-
-[Trigger.EdgexMessageBus.SubscribeHost]
-trigger.edgex-message-bus.subscribe-host.port              // Trigger.EdgexMessageBus.SubscribeHost.Port
-trigger.edgex-message-bus.subscribe-host.protocol          // Trigger.EdgexMessageBus.SubscribeHost.Protocol
-trigger.edgex-message-bus.subscribe-host.subscribe-topics  // Trigger.EdgexMessageBus.SubscribeHost.SubscribeTopics
-
-[Trigger.EdgexMessageBus.PublishHost]
-trigger.edgex-message-bus.publish-host.port                // Trigger.EdgexMessageBus.PublishHost.Port
-trigger.edgex-message-bus.publish-host.protocol            // Trigger.EdgexMessageBus.PublishHost.Protocol
-trigger.edgex-message-bus.publish-host.publish-topic       // Trigger.EdgexMessageBus.PublishHost.PublishTopic
-
-
-[AppCustom]
-  # Every device(reader) + antenna port represents a tag location and can be assigned an alias
-  # such as Freezer, Backroom etc. to give more meaning to the data. The default alias set by
-  # the application has a format of <deviceName>_<antennaId> e.g. Reader-10-EF-25_1 where
-  # Reader-10-EF-25 is the deviceName and 1 is the antennaId.
-  # See also: https://github.com/edgexfoundry/app-rfid-llrp-inventory#setting-the-aliases
-  #
-  # In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
-  # Reader-10-EF-25_1 = "Freezer"
-  # Reader-10-EF-25_2 = "Backroom"
-  [AppCustom.Aliases]
-
-  # See: https://github.com/edgexfoundry/app-rfid-llrp-inventory#configuration
-  [AppCustom.AppSettings]
-  DeviceServiceName = "device-rfid-llrp"
-  AdjustLastReadOnByOrigin = true
-  DepartedThresholdSeconds = 600
-  DepartedCheckIntervalSeconds = 30
-  AgeOutHours = 336
-  MobilityProfileThreshold = 6.0
-  MobilityProfileHoldoffMillis = 500.0
-  MobilityProfileSlope = -0.008
+### [AppCustom]
+|snap set|configuration.yaml setting|
+|---|---|
+|env.appcustom.appsettings.device-service-name|AppCustom.AppSettings.DeviceServiceName|
+|env.appcustom.appsettings.adjust-last-read-on-by-origin|AppCustom.AppSettings.AdjustLastReadOnByOrigin|
+|env.appcustom.appsettings.departed-threshold-seconds|AppCustom.AppSettings.DepartedThresholdSeconds|
+|env.appcustom.appsettings.departed-check-interval-seconds|AppCustom.AppSettings.DepartedCheckIntervalSeconds|
+|env.appcustom.appsettings.age-out-hours|AppCustom.AppSettings.AgeOutHours|
+|env.appcustom.appsettings.mobility-profile-threshold|AppCustom.AppSettings.MobilityProfileThreshold|
+|env.appcustom.appsettings.mobility-profile-holdof-millis|AppCustom.AppSettings.MobilityProfileHoldoffMillis|
+|env.appcustom.appsettings.mobility-profile-slope|AppCustom.AppSettings.MobilityProfileSlope|
 
 
 

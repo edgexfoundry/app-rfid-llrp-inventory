@@ -1,6 +1,6 @@
 name: edgex-app-rfid-llrp-inventory
 base: core20
-adopt-info: app-rfid-llrp-inventory
+adopt-info: metadata
 license: Apache-2.0
 
 architectures:
@@ -23,6 +23,11 @@ slots:
     content: edgex-secretstore-token
     source:
       write: [$SNAP_DATA/app-rfid-llrp-inventory]
+
+plugs:
+  device-config:
+    interface: content
+    target: $SNAP_DATA/config/app-rfid-llrp-inventory
  
 apps:
   app-rfid-llrp-inventory:

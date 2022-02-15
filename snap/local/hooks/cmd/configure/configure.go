@@ -24,69 +24,79 @@ import (
 	"strings"
 
 	hooks "github.com/canonical/edgex-snap-hooks/v2"
+	local "github.com/edgexfoundry/app-rfid-llrp-inventory/hooks"
 )
+
+var cli *hooks.CtlCli = hooks.NewSnapCtl()
 
 func main() {
 	var debug = false
-	var enable = true
 	var err error
 	var envJSON string
-	var cli *hooks.CtlCli = hooks.NewSnapCtl()
 
 	status, err := cli.Config("debug")
 	if err != nil {
-		fmt.Println(fmt.Sprintf("edgex-asc:configure: can't read value of 'debug': %v", err))
+		fmt.Println(fmt.Sprintf("edgex-app-rfid-llrp-inventory:configure: can't read value of 'debug': %v", err))
 		os.Exit(1)
 	}
 	if status == "true" {
 		debug = true
 	}
 
-	if err = hooks.Init(debug, "app-rfid-llrp-inventory"); err != nil {
+	if err = hooks.Init(debug, "edgex-app-rfid-llrp-inventory"); err != nil {
 		fmt.Println(fmt.Sprintf("edgex-app-rfid-llrp-inventory:configure: initialization failure: %v", err))
 		os.Exit(1)
 
 	}
 
+	// read env var override configuration
 	envJSON, err = cli.Config(hooks.EnvConfig)
 	if err != nil {
 		hooks.Error(fmt.Sprintf("Reading config 'env' failed: %v", err))
 		os.Exit(1)
 	}
 
-	err = hooks.HandleEdgeXConfig("app-rfid-llrp-inventory", envJSON, nil)
-	if err != nil {
-		hooks.Error(fmt.Sprintf("HandleEdgeXConfig failed: %v", err))
-		os.Exit(1)
+	if envJSON != "" {
+		hooks.Debug(fmt.Sprintf("edgex-app-rfid-llrp-inventory:configure: envJSON: %s", envJSON))
+		err = hooks.HandleEdgeXConfig("app-rfid-llrp-inventory", envJSON, local.ConfToEnv)
+		if err != nil {
+			hooks.Error(fmt.Sprintf("HandleEdgeXConfig failed: %v", err))
+			os.Exit(1)
+		}
 	}
 
 	// If autostart is not explicitly set, default to "no"
+	// as only example service configuration and profiles
+	// are provided by default.
 	autostart, err := cli.Config(hooks.AutostartConfig)
 	if err != nil {
 		hooks.Error(fmt.Sprintf("Reading config 'autostart' failed: %v", err))
 		os.Exit(1)
 	}
 	if autostart == "" {
-		hooks.Debug("edgex-app-rfid-llrp-inventory: autostart is NOT set, initializing to 'no'")
+		hooks.Debug("edgex-app-rfid-llrp-inventory autostart is NOT set, initializing to 'no'")
 		autostart = "no"
 	}
-
 	autostart = strings.ToLower(autostart)
-	if autostart == "true" || autostart == "yes" {
-		enable = false
-	} else if autostart == "false" || autostart == "no" {
-		enable = false
-	} else {
-		hooks.Error(fmt.Sprintf("Invalid value for 'autostart' : %s", autostart))
-		os.Exit(1)
-	}
+
+	hooks.Debug(fmt.Sprintf("edgex-app-rfid-llrp-inventory autostart is %s", autostart))
 
 	// service is stopped/disabled by default in the install hook
-	if enable {
+	switch autostart {
+	case "true":
+		fallthrough
+	case "yes":
 		err = cli.Start("app-rfid-llrp-inventory", true)
 		if err != nil {
 			hooks.Error(fmt.Sprintf("Can't start service - %v", err))
 			os.Exit(1)
 		}
+	case "false":
+		// no action necessary
+	case "no":
+		// no action necessary
+	default:
+		hooks.Error(fmt.Sprintf("Invalid value for 'autostart' : %s", autostart))
+		os.Exit(1)
 	}
 }

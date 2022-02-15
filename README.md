@@ -13,6 +13,10 @@ make build
 ```bash
 make docker
 ```
+**Build Snap**
+
+The service can also be run as snap. See the [snap](snap) directory.
+
 
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
@@ -607,33 +611,4 @@ preventing it from operating as designed.
 [device_service_profiles]: https://github.com/edgexfoundry/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
 [consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/
 [consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/AppCustom/ApplicationSettings/
-
-## Snap Build and Install
-The service can also be run as snap - [Snap documentation](https://snapcraft.io/docs)
-
-#### Pre-requisites
-  - Edgex core services
-  - Edgex LLRP device service
-
-#### Build Snap Package
-Execute the following commands from the project's root directory.
-  - `snapcraft clean`
-  - `snapcraft` (build happens on the VM) or `snapcraft --destructive-mode` (build happens on the host)
-  -  On success, this creates a `*.snap` package under the root directory. 
-
-#### Install Snap Package
-  - `sudo snap install --dangerous *.snap` 
-
-Two options are available for installing snap - `--dangerous` & `--devmode`
-
-If additional permissions are required then use the `--devmode` option else use `--dangerous`.
-
-Note: If application is confined and want to install a local version, then use `--dangerous` option. Specifying `--devmode`, implies `--dangerous` option.
-
-#### Other helpful Snap commands:
- -  List installed snap packages: `snap list`
- -  List of snap services: `snap services`
- -  View logs: `journalctl -fu snap.edgex-rfid-llrp-inventory.rfid-llrp-inventory`
- -  Stop the snap service: `sudo snap stop edgex-rfid-llrp-inventory.rfid-llrp-inventory`
- -  Remove the snap package: `sudo snap remove edgex-rfid-llrp-inventory`
 
