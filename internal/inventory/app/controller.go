@@ -32,7 +32,7 @@ const (
 	resourceReaderNotification = "ReaderEventNotification"
 	resourceInventoryEvent     = "InventoryEvent"
 
-	eventChSz           = 100
+	eventChSz = 100
 )
 
 // processEdgeXEvent is our core processing logic for EdgeX events after they are first

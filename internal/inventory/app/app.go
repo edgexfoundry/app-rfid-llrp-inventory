@@ -93,7 +93,7 @@ func (app *InventoryApp) Initialize() error {
 
 	app.publisher, err = app.service.AddBackgroundPublisher(1)
 	if err != nil {
-		return errors.Wrap(err, "failed to add BackGroundPublisher")
+		return errors.Wrap(err, "failed to add BackgroundPublisher")
 	}
 
 	app.defaultGrp = llrp.NewReaderGroup()
