@@ -46,7 +46,7 @@ func main() {
 	var err error
 
 	if err = hooks.Init(false, "edgex-app-rfid-llrp-inventory"); err != nil {
-		fmt.Printf("edgex-app-rfid-llrp-inventory:install: initialization failure: %v", err)
+		fmt.Printf("edgex-app-rfid-llrp-inventory:install: initialization failure: %v\n", err)
 		os.Exit(1)
 
 	}
