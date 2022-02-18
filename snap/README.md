@@ -63,7 +63,7 @@ The service can then be started as follows. The "--enable" option
 ensures that as well as starting the service now, it will be automatically started on boot:
 
 ```bash
-$ sudo snap start --enable edgex-device-rfid-llrp.device-rfid-llrp
+$ sudo snap start --enable edgex-app-rfid-llrp-inventory
 ```
 
 ### Aliases setup
