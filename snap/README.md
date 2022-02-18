@@ -109,7 +109,7 @@ $ sudo snap set edgex-app-rfid-llrp-inventory env.service.port=2112
 ```
 And restart the service:
 ```
-$ sudo snap restart edgex-device-rfid-llrp.device-rfid-llrp
+$ sudo snap restart edgex-app-rfid-llrp-inventory
 ```
 
 ## Service Environment Configuration Overrides
