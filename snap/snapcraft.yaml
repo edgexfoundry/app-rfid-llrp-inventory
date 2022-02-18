@@ -31,7 +31,6 @@ plugs:
  
 apps:
   app-rfid-llrp-inventory:
-    adapter: full
     command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
     command-chain:
       - bin/startup-env-var.sh
@@ -41,8 +40,7 @@ apps:
       CONF_ARG: "--confdir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
       SECRETSTORE_TOKENFILE: $SNAP_DATA/app-rfid-llrp-inventory/secrets-token.json
-    passthrough:
-      install-mode: disable
+    install-mode: disable
     plugs: [network, network-bind]
 
 parts:

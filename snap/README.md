@@ -117,12 +117,10 @@ $ sudo snap restart edgex-app-rfid-llrp-inventory
 ### [Service]
 |snap set|configuration.yaml setting|
 |---|---|
-|env.service.boot-timeout|Service.BootTimeout|
 |env.service.health-check-interval|Service.HealthCheckInterval|
 |env.service.host|Service.Host|
 |env.service.server-bind-addr|Service.ServerBindAddr|
 |env.service.port|Service.Port|
-|env.service.protocol|Service.Protocol|
 |env.service.max-result-count|Service.MaxResultCount|
 |env.service.max-request-size|Service.MaxRequestSize|
 |env.service.startup-msg|Service.StartupMsg|
