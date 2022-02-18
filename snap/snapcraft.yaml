@@ -14,7 +14,7 @@ confinement: strict
 # 2: fuji
 # 3: geneva, hanoi
 # 4: ireland, 
-#5:  jakarta
+# 5: jakarta
 epoch: 5
 
 slots:
