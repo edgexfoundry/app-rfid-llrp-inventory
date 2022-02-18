@@ -105,7 +105,7 @@ env.<stanza>.<config option>
 ```
 For instance, to setup an override of the service's Port use:
 ```
-$ sudo snap set edgex-device-rfid-llrp env.service.port=2112
+$ sudo snap set edgex-app-rfid-llrp-inventory env.service.port=2112
 ```
 And restart the service:
 ```
