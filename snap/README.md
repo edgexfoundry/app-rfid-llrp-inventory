@@ -79,9 +79,9 @@ This can either be by
 
 ### Using a content interface to set device configuration
 
-The `device-config` content interface allows another snap to seed this snap with configuration directories under `$SNAP_DATA/config/app-rfid-llrp-inventory`.
+The `app-config` content interface allows another snap to seed this snap with configuration directories under `$SNAP_DATA/config/app-rfid-llrp-inventory`.
 
-Note that the `device-config` content interface does NOT support seeding of the Secret Store Token because that file is expected at a different path.
+Note that the `app-config` content interface does NOT support seeding of the Secret Store Token because that file is expected at a different path.
 
 Please refer to [edgex-config-provider](https://github.com/canonical/edgex-config-provider), for an example and further instructions.
 
