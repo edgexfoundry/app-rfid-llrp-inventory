@@ -20,63 +20,38 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	hooks "github.com/canonical/edgex-snap-hooks/v2"
 )
 
-var cli *hooks.CtlCli = hooks.NewSnapCtl()
+var RES_DIR = "/config/app-rfid-llrp-inventory/res"
 
-// installProfiles copies the profile configuration.toml files from $SNAP to $SNAP_DATA.
-func installProfiles() error {
-	dataConfP := fmt.Sprintf("%s/config/res", hooks.SnapData)
-	snapConfP := fmt.Sprintf("%s/config/res", hooks.Snap)
+func installFile(path string) error {
+	destFile := hooks.SnapData + RES_DIR + path
+	srcFile := hooks.Snap + RES_DIR + path
 
-	configFiles, err := filepath.Glob(filepath.Join(snapConfP, "*", "configuration.toml"))
+	err := os.MkdirAll(filepath.Dir(destFile), 0755)
 	if err != nil {
-		panic(fmt.Sprintf("internal error: bad glob pattern: %v", err))
+		return err
 	}
+	err = hooks.CopyFile(srcFile, destFile)
 
-	for _, snapConfFile := range configFiles {
-		// build the destination SNAP_DATA file by getting the directory name that the glob matched
-		dirMatch := filepath.Base(filepath.Dir(snapConfFile))
-		if dirMatch == "sample" {
-			// TODO: what about sample config dirs ?
-			continue
-		}
+	return err
 
-		dataDestFile := filepath.Join(dataConfP, dirMatch, "configuration.toml")
-		b, err := ioutil.ReadFile(snapConfFile)
-		if err != nil {
-			return err
-		}
-
-		err = os.MkdirAll(filepath.Dir(dataDestFile), 0755)
-		if err != nil {
-			return err
-		}
-
-		err = ioutil.WriteFile(dataDestFile, b, 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func main() {
 	var err error
 
 	if err = hooks.Init(false, "edgex-app-rfid-llrp-inventory"); err != nil {
-		fmt.Println(fmt.Sprintf("edgex-app-rfid-llrp-inventory:install: initialization failure: %v", err))
+		fmt.Printf("edgex-app-rfid-llrp-inventory:install: initialization failure: %v\n", err)
 		os.Exit(1)
 
 	}
 
-	err = installProfiles()
+	err = installFile("/configuration.toml")
 	if err != nil {
 		hooks.Error(fmt.Sprintf("edgex-app-rfid-llrp-inventory:install: %v", err))
 		os.Exit(1)

@@ -1,19 +1,8 @@
 name: edgex-app-rfid-llrp-inventory
-base: core18
-adopt-info: app-rfid-llrp-inventory
-version: "replace-me"
-version-script: |
-  VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
-  echo $VERSION-$(date +%Y%m%d)+$(git rev-parse --short HEAD)
-  
+base: core20
+adopt-info: metadata
 license: Apache-2.0
-title: EdgeX RFID LLRP Inventory
-summary: EdgeX Application Service for inventory management
-description: |
-  Edgex application service for processing tag reads,
-  producing events such as 'Arrived', 'Moved', 'Departed', configure and manage the LLRP readers via commands
 
-# TODO: add armhf here when that's supported
 architectures:
   - build-on: arm64
   - build-on: amd64
@@ -21,7 +10,11 @@ architectures:
 grade: stable
 confinement: strict
 
-# delhi: 0, edinburgh: 1, fuji: 2, geneva: 3, ireland: 4, jakarta: 5
+# 1: edinburgh
+# 2: fuji
+# 3: geneva, hanoi
+# 4: ireland, 
+# 5: jakarta
 epoch: 5
 
 slots:
@@ -31,22 +24,37 @@ slots:
     source:
       write: [$SNAP_DATA/app-rfid-llrp-inventory]
 
+plugs:
+  app-config:
+    interface: content
+    target: $SNAP_DATA/config/app-rfid-llrp-inventory
+ 
 apps:
   app-rfid-llrp-inventory:
-    adapter: full
     command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
+    command-chain:
+      - bin/startup-env-var.sh
     daemon: simple
     environment:
-      CONFIG_PRO_ARG: "-cp=consul.http://localhost:8500"
+      CONFIG_PRO_ARG: "-cp=consul://localhost:8500"
       CONF_ARG: "--confdir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
       SECRETSTORE_TOKENFILE: $SNAP_DATA/app-rfid-llrp-inventory/secrets-token.json
-    passthrough:
-      install-mode: disable
+    install-mode: disable
     plugs: [network, network-bind]
 
 parts:
+  hooks:
+    source: snap/local/hooks
+    plugin: make
+    override-build: |
+      cd $SNAPCRAFT_PART_SRC
+      make build
+      install -DT ./cmd/configure/configure "$SNAPCRAFT_PART_INSTALL/snap/hooks/configure"
+      install -DT ./cmd/install/install "$SNAPCRAFT_PART_INSTALL/snap/hooks/install"
+
   app-rfid-llrp-inventory:
+    after: [metadata]
     source: .
     plugin: make
     build-packages: [gcc, git, libzmq3-dev, pkg-config]
@@ -56,32 +64,41 @@ parts:
     override-build: |
       cd $SNAPCRAFT_PART_SRC
 
-      if git describe ; then
-        VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
-        snapcraftctl set-version ${VERSION}
-        # This is used in the Makefile:
-        echo $VERSION > ./VERSION
-      fi
+      # the version is needed for the build
+      cat ./VERSION
 
       make build
 
       install -DT "./app-rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
+      install -DT "./Attribution.txt" "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/Attribution.txt"
+      install -DT "./LICENSE" "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/LICENSE"
+
       install -DT "./res/configuration.toml" \
          "$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res/configuration.toml"
-      install -DT "./Attribution.txt" \
-         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/Attribution.txt"
-      install -DT "./LICENSE" \
-         "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/LICENSE"
 
-  config-common:
+  runtime-helpers:
     plugin: dump
     source: snap/local/runtime-helpers
 
-  hooks:
-    source: snap/local/hooks
-    plugin: make
+  metadata:
+    plugin: nil
+    source: https://github.com/canonical/edgex-snap-metadata.git
+    source-branch: appstream
+    source-depth: 1
     override-build: |
-      cd $SNAPCRAFT_PART_SRC
-      make build
-      install -DT ./cmd/configure/configure "$SNAPCRAFT_PART_INSTALL/snap/hooks/configure"
-      install -DT ./cmd/install/install "$SNAPCRAFT_PART_INSTALL/snap/hooks/install"
+      # install the icon at the default internal path
+      install -DT edgex-snap-icon.png \
+        $SNAPCRAFT_PART_INSTALL/meta/gui/icon.png      
+      # change to this project's repo to get the version
+      cd $SNAPCRAFT_PROJECT_DIR
+      if git describe ; then
+        VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
+      else
+        VERSION="0.0.0"
+      fi
+      
+      # write version to file for the build
+      echo $VERSION > ./VERSION
+      # set the version of this snap
+      snapcraftctl set-version $VERSION
+    parse-info: [edgex-app-rfid-llrp-inventory.metainfo.xml]
