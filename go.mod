@@ -5,9 +5,10 @@ go 1.17
 require (
 	github.com/edgexfoundry/app-functions-sdk-go/v2 v2.1.0
 	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.1.0
+	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 )
 
 require (
@@ -31,7 +32,6 @@ require (
 	github.com/go-playground/validator/v10 v10.9.0 // indirect
 	github.com/go-redis/redis/v7 v7.3.0 // indirect
 	github.com/gomodule/redigo v2.0.0+incompatible // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/consul/api v1.9.1 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
