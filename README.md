@@ -27,18 +27,18 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 {
   "apiVersion": "v2",
   "id": "6def8859-5a12-4c83-b68c-256303146682",
-  "deviceName": "rfid-llrp-inventory",
-  "profileName": "rfid-llrp-inventory",
-  "sourceName" : "rfid-llrp-inventory",
+  "deviceName": "app-rfid-llrp-inventory",
+  "profileName": "app-rfid-llrp-inventory",
+  "sourceName" : "app-rfid-llrp-inventory",
   "origin": 1598043284109799400,
   "readings": [
     {
       "apiVersion": "v2",
       "id": "8d15d035-402f-4abc-85fc-a7ed7213122a",
       "origin": 1598043284109799400,
-      "deviceName": "rfid-llrp-inventory",
+      "deviceName": "app-rfid-llrp-inventory",
       "resourceName": "InventoryEventArrived",
-      "profileName": "rfid-llrp-inventory",
+      "profileName": "app-rfid-llrp-inventory",
       "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598043284104,\"location\":\"SpeedwayR-10-EF-25_1\"}"
     }
@@ -51,18 +51,18 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 {
   "apiVersion": "v2",
   "id": "c78c304e-1906-4d17-bf26-5075756a231f",
-  "deviceName": "rfid-llrp-inventory",
-  "profileName": "rfid-llrp-inventory",
-  "sourceName" : "rfid-llrp-inventory",
+  "deviceName": "app-rfid-llrp-inventory",
+  "profileName": "app-rfid-llrp-inventory",
+  "sourceName" : "app-rfid-llrp-inventory",
   "origin": 1598401259697580500,
   "readings": [
     {
       "apiVersion": "v2",
       "id": "323694d9-1a48-417a-9f43-25998536ae8f",
       "origin": 1598401259697580500,
-      "deviceName": "rfid-llrp-inventory",
+      "deviceName": "app-rfid-llrp-inventory",
       "resourceName": "InventoryEventMoved",
-      "profileName": "rfid-llrp-inventory",
+      "profileName": "app-rfid-llrp-inventory",
       "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598401259691,\"old_location\":\"Freezer\",\"new_location\":\"Kitchen\"}"
     }
@@ -75,18 +75,18 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 {
   "apiVersion": "v2",
   "id": "4d042708-c5de-41fa-827a-3f24b364c6de",
-  "deviceName": "rfid-llrp-inventory",
-  "profileName": "rfid-llrp-inventory",
-  "sourceName" : "rfid-llrp-inventory",
+  "deviceName": "app-rfid-llrp-inventory",
+  "profileName": "app-rfid-llrp-inventory",
+  "sourceName" : "app-rfid-llrp-inventory",
   "origin": 1598062424894043600,
   "readings": [
     {
       "apiVersion": "v2",
       "id": "928ff90d-02d1-43be-81a6-a0d75886b0e4",
       "origin": 1598062424894043600,
-      "deviceName": "rfid-llrp-inventory",
+      "deviceName": "app-rfid-llrp-inventory",
       "resourceName": "InventoryEventDeparted",
-      "profileName": "rfid-llrp-inventory",
+      "profileName": "app-rfid-llrp-inventory",
       "valueType": "String",
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-25_1\"}"
     },
@@ -295,8 +295,8 @@ from the TOML file and uploaded to Consul, overwriting existing Aliases with the
 
 ###### Scenario
 Consul already contains the following key/values:
-- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `POS`
-- `rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
+- `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `POS`
+- `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
 
 The user passes `-o/--overwrite` flag, with the following TOML file:
 
@@ -310,9 +310,9 @@ The user passes `-o/--overwrite` flag, with the following TOML file:
 
 ###### Outcome
 The following key/value pairs will exist in Consul:
-- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `Freezer`
-- `rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_2` = `Backroom`
-- `rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
+- `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `Freezer`
+- `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_2` = `Backroom`
+- `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
 
 > Note that there is a config watcher for the `[AppCustom]` section that notifies the app of changes. This config watcher will load all the aliases from Consul on startup. 
 
@@ -373,7 +373,7 @@ Aliases can also be set via [Consul's API](https://www.consul.io/api-docs/kv). E
     curl \
       --request PUT \
       --data "Freezer" \
-      http://localhost:8500/v1/kv/edgex/appservices/2.0/rfid-llrp-inventory/AppCustom/Aliases/SpeedwayR-10-EF-25_1
+      http://localhost:8500/v1/kv/edgex/appservices/2.0/app-rfid-llrp-inventory/AppCustom/Aliases/SpeedwayR-10-EF-25_1
 
 ## Behaviors
 The code processes ROAccessReports coming from the LLRP Device Service,
@@ -609,6 +609,6 @@ this service will receive a 404 from the Device Service,
 preventing it from operating as designed. 
 
 [device_service_profiles]: https://github.com/edgexfoundry/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
-[consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/
-[consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/rfid-llrp-inventory/AppCustom/ApplicationSettings/
+[consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/app-rfid-llrp-inventory/
+[consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/app-rfid-llrp-inventory/AppCustom/ApplicationSettings/
 
