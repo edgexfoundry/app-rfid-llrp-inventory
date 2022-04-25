@@ -24,6 +24,8 @@ import (
 	"strings"
 
 	hooks "github.com/canonical/edgex-snap-hooks/v2"
+	"github.com/canonical/edgex-snap-hooks/v2/log"
+	"github.com/canonical/edgex-snap-hooks/v2/options"
 	local "github.com/edgexfoundry/app-rfid-llrp-inventory/hooks"
 )
 
@@ -47,6 +49,12 @@ func main() {
 		fmt.Println(fmt.Sprintf("edgex-app-rfid-llrp-inventory:configure: initialization failure: %v", err))
 		os.Exit(1)
 
+	}
+
+	log.SetComponentName("configure")
+	if err := options.ProcessAppConfig("app-rfid-llrp-inventory"); err != nil {
+		hooks.Error(fmt.Sprintf("could not process options: %v", err))
+		os.Exit(1)
 	}
 
 	// read env var override configuration
