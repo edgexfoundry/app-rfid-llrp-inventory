@@ -1,6 +1,13 @@
 .PHONY: build test unittest lint clean update fmt docker run
 
 GO=CGO_ENABLED=1 GO111MODULE=on go
+
+# see https://shibumi.dev/posts/hardening-executables
+CGO_CPPFLAGS="-D_FORTIFY_SOURCE=2"
+CGO_CFLAGS="-O2 -pipe -fno-plt"
+CGO_CXXFLAGS="-O2 -pipe -fno-plt"
+CGO_LDFLAGS="-Wl,-O1,–sort-common,–as-needed,-z,relro,-z,now"
+
 ARCH=$(shell uname -m)
 
 MICROSERVICE=app-rfid-llrp-inventory
@@ -18,8 +25,15 @@ GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SD
 					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)"
 
+GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SDKVersion=$(SDKVERSION) \
+					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
+					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly
+CGOFLAGS=-ldflags "-linkmode=external -X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.SDKVersion=$(SDKVERSION) \
+					-X github.com/edgexfoundry/app-functions-sdk-go/v2/internal.ApplicationVersion=$(APPVERSION) \
+					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly -buildmode=pie
+
 build:
-	$(GO) build $(GOFLAGS) -o $(MICROSERVICE)
+	$(GO) build $(CGOFLAGS) -o $(MICROSERVICE)
 
 tidy:
 	go mod tidy
