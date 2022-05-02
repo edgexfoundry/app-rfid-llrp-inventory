@@ -2,7 +2,6 @@ package llrp
 
 import (
 	"bytes"
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp/mocks"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/responses"
