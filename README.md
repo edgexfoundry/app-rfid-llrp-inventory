@@ -13,9 +13,14 @@ make build
 ```bash
 make docker
 ```
-**Build Snap**
 
-The service can also be run as snap. See the [snap](snap) directory.
+## Packaging
+
+This component is packaged as docker image and snap.
+
+For docker, please refer to the [Dockerfile](Dockerfile) and [Docker Compose Builder] scripts.
+
+For the snap, refer to the [snap](snap) directory.
 
 
 ## Inventory Events
@@ -611,4 +616,4 @@ preventing it from operating as designed.
 [device_service_profiles]: https://github.com/edgexfoundry/device-rfid-llrp-go#device-profiles-custom-llrp-messages-and-service-limitations
 [consul_root]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/app-rfid-llrp-inventory/
 [consul_app_settings]: http://localhost:8500/ui/dc1/kv/edgex/appservices/2.0/app-rfid-llrp-inventory/AppCustom/ApplicationSettings/
-
+[Docker Compose Builder]: https://github.com/edgexfoundry/edgex-compose/tree/main/compose-builder
