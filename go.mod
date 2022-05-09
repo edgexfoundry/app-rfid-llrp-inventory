@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go/v2 v2.2.0-dev.53
-	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.2.0-dev.27
+	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.2.0-dev.28
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1

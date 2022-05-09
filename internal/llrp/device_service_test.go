@@ -7,8 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	llrpMocks "edgexfoundry/app-rfid-llrp-inventory/internal/llrp/mocks"
-
+	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/interfaces/mocks"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
 	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos/common"
@@ -69,7 +68,7 @@ func TestNewReader(t *testing.T) {
 		},
 	}
 
-	mockClient := &llrpMocks.CommandClient{}
+	mockClient := &mocks.CommandClient{}
 	deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
 	for _, tc := range testCases {
@@ -136,7 +135,7 @@ func TestGetCapabilities(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
-			mockClient := &llrpMocks.CommandClient{}
+			mockClient := &mocks.CommandClient{}
 			if tc.errorExpected {
 				mockResp := responses.NewEventResponse("a", "b", http.StatusBadRequest, dtos.Event{})
 				mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
@@ -206,7 +205,7 @@ func TestSetConfig(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			mockClient := &llrpMocks.CommandClient{}
+			mockClient := &mocks.CommandClient{}
 			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 			if tc.errorExpected {
 				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
@@ -274,7 +273,7 @@ func TestAddROSpec(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			mockClient := &llrpMocks.CommandClient{}
+			mockClient := &mocks.CommandClient{}
 			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 			if tc.errorExpected {
 				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
@@ -337,7 +336,7 @@ func TestModifyROSpecState(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.testCaseName, func(tt *testing.T) {
 
-			mockClient := &llrpMocks.CommandClient{}
+			mockClient := &mocks.CommandClient{}
 			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 
 			if tc.errorExpected {
