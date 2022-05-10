@@ -1,10 +1,26 @@
-# App RFID LLRP Inventory 
-
-<a name="x.y.z"></a>
+# App RFID LLRP Inventory
 
 ## Change Logs for EdgeX Dependencies
 
 - [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md)
+
+## [v2.2.0] - Kamakura - 2022-05-11 (Only compatible with the 2.x releases)
+
+### Features ✨
+
+- enable security hardening ([#67](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/67)) ([#5dcf95f](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/5dcf95f))
+
+- Update to latest go-mod-messaging w/o ZMQ on windows ([#1009](https://github.com/edgexfoundry/app-functions-sdk-go/issues/1009)) ([#d30acd6](https://github.com/edgexfoundry/app-functions-sdk-go/commits/d30acd6))
+
+  ```
+  BREAKING CHANGE:
+  ZeroMQ no longer supported on native Windows for EdgeX
+  MessageBus
+  ```
+
+### Documentation 📖
+
+- **snap:** Move usage instructions to docs ([#79](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/79)) ([#9387e44](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/9387e44))
 
 ## [v2.1.0] - Jakarta - 2022-04-27 (Only compatible with the 2.x releases)
 
