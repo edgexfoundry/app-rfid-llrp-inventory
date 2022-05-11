@@ -40,7 +40,7 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
 LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
 
 RUN sed -e 's/dl-cdn[.]alpinelinux.org/nl.alpinelinux.org/g' -i~ /etc/apk/repositories
-RUN apk --no-cache add ca-certificates zeromq
+RUN apk --no-cache add ca-certificates zeromq dumb-init
 
 COPY --from=builder /app/Attribution.txt /Attribution.txt
 COPY --from=builder /app/LICENSE /LICENSE
