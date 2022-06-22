@@ -26,11 +26,11 @@ import (
 const (
 	serviceKey = "app-rfid-llrp-inventory"
 
-	cacheFolder      = "cache"
-	tagCacheFile     = "tags.json"
-	folderPerm       = 0755 // folders require the execute flag in order to create new files
-	filePerm         = 0644
-	aliasesConfigKey = "Aliases"
+	cacheFolder  = "cache"
+	tagCacheFile = "tags.json"
+	folderPerm   = 0755 // folders require the execute flag in order to create new files
+	filePerm     = 0644
+	customKey    = "AppCustom"
 )
 
 type InventoryApp struct {
@@ -78,7 +78,7 @@ func (app *InventoryApp) Initialize() error {
 
 	app.lc.Info("Starting.")
 
-	if err = app.service.LoadCustomConfig(&app.config, "AppCustom"); err != nil {
+	if err = app.service.LoadCustomConfig(&app.config, customKey); err != nil {
 		return errors.Wrap(err, "failed to load custom configuration")
 	}
 
@@ -86,7 +86,7 @@ func (app *InventoryApp) Initialize() error {
 		return errors.Wrap(err, "failed to validate custom config")
 	}
 
-	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, "AppCustom", app.processConfigUpdates); err != nil {
+	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, customKey, app.processConfigUpdates); err != nil {
 		return errors.Wrap(err, "failed to listen for custom config changes")
 	}
 
