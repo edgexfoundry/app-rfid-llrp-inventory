@@ -78,7 +78,7 @@ func (app *InventoryApp) Initialize() error {
 
 	app.lc.Info("Starting.")
 
-	if err = app.service.LoadCustomConfig(&app.config, aliasesConfigKey); err != nil {
+	if err = app.service.LoadCustomConfig(&app.config, "AppCustom"); err != nil {
 		return errors.Wrap(err, "failed to load custom configuration")
 	}
 
