@@ -33,7 +33,7 @@ CGOFLAGS=-ldflags "-linkmode=external -X github.com/edgexfoundry/app-functions-s
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly -buildmode=pie
 
 build:
-	$(GO) build -x $(CGOFLAGS) -o $(MICROSERVICE)
+	$(GO) build $(CGOFLAGS) -o $(MICROSERVICE)
 
 tidy:
 	go mod tidy
@@ -42,11 +42,11 @@ t:
 	[ -z "$$(gofmt -p -l . || echo 'err')" ]
 
 unittest:
-	$(GO) test -x ./... -coverprofile=coverage.out ./...
+	$(GO) test ./... -coverprofile=coverage.out ./...
 
 lint:
 	@which golangci-lint >/dev/null || echo "WARNING: go linter not installed. To install, run\n  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b \$$(go env GOPATH)/bin v1.42.1"
-	@if [ "z${ARCH}" = "zx86_64" ] && which golangci-lint >/dev/null ; then golangci-lint run --config .golangci.yml ; else echo "WARNING: Linting skipped (not on x86_64 or linter not installed)"; fi
+	@if [ "z${ARCH}" = "zx86_64" ] && which golangci-lint >/dev/null ; then golangci-lint run --verbose --config .golangci.yml ; else echo "WARNING: Linting skipped (not on x86_64 or linter not installed)"; fi
 
 test: unittest lint
 	$(GO) vet ./...
