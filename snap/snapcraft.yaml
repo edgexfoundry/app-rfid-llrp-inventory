@@ -20,7 +20,6 @@ epoch: 5
 slots:
   edgex-secretstore-token:
     interface: content
-    content: edgex-secretstore-token
     source:
       write: [$SNAP_DATA/app-rfid-llrp-inventory]
 
@@ -33,7 +32,8 @@ apps:
   app-rfid-llrp-inventory:
     command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
     command-chain:
-      - bin/startup-env-var.sh
+      - bin/source-env-file.sh
+      - bin/security-secret-store-env-var.sh
     daemon: simple
     environment:
       CONFIG_PRO_ARG: "-cp=consul://localhost:8500"
@@ -44,16 +44,15 @@ apps:
     plugs: [network, network-bind]
 
 parts:
-  hooks:
-    source: snap/local/hooks
+  helper-go:
+    source: snap/local/helper-go
     plugin: make
     build-snaps:
       - go/1.18/stable
     override-build: |
       cd $SNAPCRAFT_PART_SRC
       make build
-      install -DT ./cmd/configure/configure "$SNAPCRAFT_PART_INSTALL/snap/hooks/configure"
-      install -DT ./cmd/install/install "$SNAPCRAFT_PART_INSTALL/snap/hooks/install"
+      install -DT ./helper-go $SNAPCRAFT_PART_INSTALL/bin/helper-go
 
   app-rfid-llrp-inventory:
     after: [metadata]
@@ -69,18 +68,26 @@ parts:
       # the version is needed for the build
       cat ./VERSION
 
+      make tidy
       make build
 
       install -DT "./app-rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
-      install -DT "./Attribution.txt" "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/Attribution.txt"
-      install -DT "./LICENSE" "$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory/LICENSE"
+      
+      RES=$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res
+      mkdir -p $RES
+      cp res/configuration.toml $RES
+      
+      DOC=$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory
+      mkdir -p $DOC
+      cp Attribution.txt $DOC/Attribution.txt
+      cp LICENSE $DOC/LICENSE
 
-      install -DT "./res/configuration.toml" \
-         "$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res/configuration.toml"
-
-  runtime-helpers:
+  local-bin:
     plugin: dump
-    source: snap/local/runtime-helpers
+    source: snap/local/bin
+    organize:
+      source-env-file.sh: bin/source-env-file.sh
+      security-secret-store-env-var.sh: bin/security-secret-store-env-var.sh
 
   metadata:
     plugin: nil

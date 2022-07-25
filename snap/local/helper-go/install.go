@@ -1,7 +1,5 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
 /*
- * Copyright (C) 2021 Canonical Ltd
+ * Copyright (C) 2022 Canonical Ltd
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at
@@ -19,41 +17,31 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
 	hooks "github.com/canonical/edgex-snap-hooks/v2"
+	"github.com/canonical/edgex-snap-hooks/v2/env"
+	"github.com/canonical/edgex-snap-hooks/v2/log"
 )
 
-var RES_DIR = "/config/app-rfid-llrp-inventory/res"
+// installConfig copies all config files from $SNAP to $SNAP_DATA
+func installConfig() error {
+	path := "/config/app-rfid-llrp-inventory/res"
 
-func installFile(path string) error {
-	destFile := hooks.SnapData + RES_DIR + path
-	srcFile := hooks.Snap + RES_DIR + path
-
-	err := os.MkdirAll(filepath.Dir(destFile), 0755)
+	err := hooks.CopyDir(
+		env.Snap+path,
+		env.SnapData+path)
 	if err != nil {
 		return err
 	}
-	err = hooks.CopyFile(srcFile, destFile)
 
-	return err
-
+	return nil
 }
 
-func main() {
-	var err error
+// install is called by the main function
+func install() {
+	log.SetComponentName("install")
 
-	if err = hooks.Init(false, "edgex-app-rfid-llrp-inventory"); err != nil {
-		fmt.Printf("edgex-app-rfid-llrp-inventory:install: initialization failure: %v\n", err)
-		os.Exit(1)
-
-	}
-
-	err = installFile("/configuration.toml")
+	err := installConfig()
 	if err != nil {
-		hooks.Error(fmt.Sprintf("edgex-app-rfid-llrp-inventory:install: %v", err))
-		os.Exit(1)
+		log.Fatalf("error installing config file: %s", err)
 	}
 }
