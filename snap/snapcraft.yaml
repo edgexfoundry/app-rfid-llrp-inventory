@@ -33,7 +33,6 @@ apps:
     command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
     command-chain:
       - bin/source-env-file.sh
-      - bin/security-secret-store-env-var.sh
     daemon: simple
     environment:
       CONFIG_PRO_ARG: "-cp=consul://localhost:8500"
@@ -87,7 +86,6 @@ parts:
     source: snap/local/bin
     organize:
       source-env-file.sh: bin/source-env-file.sh
-      security-secret-store-env-var.sh: bin/security-secret-store-env-var.sh
 
   metadata:
     plugin: nil
