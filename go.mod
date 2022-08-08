@@ -3,7 +3,7 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.18
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v2 v2.3.0-dev.27
+	github.com/edgexfoundry/app-functions-sdk-go/v2 v2.3.0-dev.28
 	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.2.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
@@ -21,7 +21,7 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.4.1 // indirect
 	github.com/edgexfoundry/go-mod-bootstrap/v2 v2.3.0-dev.11 // indirect
 	github.com/edgexfoundry/go-mod-configuration/v2 v2.2.0 // indirect
-	github.com/edgexfoundry/go-mod-messaging/v2 v2.2.1-dev.11 // indirect
+	github.com/edgexfoundry/go-mod-messaging/v2 v2.3.0-dev.12 // indirect
 	github.com/edgexfoundry/go-mod-registry/v2 v2.2.0 // indirect
 	github.com/edgexfoundry/go-mod-secrets/v2 v2.2.1-dev.5 // indirect
 	github.com/fatih/color v1.9.0 // indirect
@@ -52,6 +52,9 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.1.2 // indirect
 	github.com/mitchellh/reflectwalk v1.0.0 // indirect
+	github.com/nats-io/nats.go v1.16.0 // indirect
+	github.com/nats-io/nkeys v0.3.0 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pebbe/zmq4 v1.2.7 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -60,7 +63,7 @@ require (
 	github.com/stretchr/objx v0.4.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/errs v1.2.2 // indirect
-	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
+	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
