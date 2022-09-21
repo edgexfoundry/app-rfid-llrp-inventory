@@ -33,7 +33,10 @@ CGOFLAGS=-ldflags "-linkmode=external -X github.com/edgexfoundry/app-functions-s
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly -buildmode=pie
 
 build:
-	$(GO) build $(CGOFLAGS) -o $(MICROSERVICE)
+	$(GO) build -tags "$(ADD_BUILD_TAGS)" $(CGOFLAGS) -o $(MICROSERVICE)
+
+build-nats:
+	make -e ADD_BUILD_TAGS=include_nats_messaging build
 
 tidy:
 	go mod tidy
@@ -66,12 +69,16 @@ fmt:
 docker:
 	docker build \
 		--rm \
+		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
 		--build-arg http_proxy \
 		--build-arg https_proxy \
 			--label "git_sha=$(GIT_SHA)" \
 			-t edgexfoundry/app-rfid-llrp-inventory:$(GIT_SHA) \
 			-t edgexfoundry/app-rfid-llrp-inventory:$(APPVERSION)-dev \
 			.
+
+docker-nats:
+	make -C . -e ADD_BUILD_TAGS=include_nats_messaging docker
 
 run: build
 	./$(MICROSERVICE) -cp=consul.http://localhost:8500 -confdir=res
