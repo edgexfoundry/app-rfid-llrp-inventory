@@ -113,7 +113,7 @@ Type="edgex-messagebus"
     AutoProvision = "true"
     Deliver = "new"
     DefaultPubRetryAttempts = "2"
-    Subject = "edgex/events/#" # Required for NATS Jetstram only
+    Subject = "edgex/#" # Required for NATS Jetstram only for stream autoprovsioning
 
 [AppCustom]
   # Every device(reader) + antenna port represents a tag location and can be assigned an alias
