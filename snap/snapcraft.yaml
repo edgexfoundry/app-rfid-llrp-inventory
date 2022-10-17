@@ -24,6 +24,11 @@ slots:
       write: [$SNAP_DATA/app-rfid-llrp-inventory]
 
 plugs:
+  app-rfid-llrp-inventory-config:
+    interface: content
+    target: $SNAP_DATA/config/app-rfid-llrp-inventory
+
+  # deprecated
   app-config:
     interface: content
     target: $SNAP_DATA/config/app-rfid-llrp-inventory
