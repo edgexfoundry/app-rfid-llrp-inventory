@@ -23,7 +23,6 @@ ARG ADD_BUILD_TAGS=""
 
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2022: Intel'
-RUN sed -e 's/dl-cdn[.]alpinelinux.org/dl-4.alpinelinux.org/g' -i~ /etc/apk/repositories
 RUN apk add --no-cache ${ALPINE_PKG_BASE} ${ALPINE_PKG_EXTRA}
 WORKDIR /app
 
@@ -40,7 +39,6 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
   copyright='Copyright (c) 2022: Intel'
 LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
 
-RUN sed -e 's/dl-cdn[.]alpinelinux.org/dl-4.alpinelinux.org/g' -i~ /etc/apk/repositories
 RUN apk --no-cache add ca-certificates zeromq dumb-init
 
 COPY --from=builder /app/Attribution.txt /Attribution.txt
