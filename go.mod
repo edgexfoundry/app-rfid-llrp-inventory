@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go/v2 v2.3.0-dev.58
-	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.3.0-dev.19
+	github.com/edgexfoundry/go-mod-core-contracts/v2 v2.3.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
