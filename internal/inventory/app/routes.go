@@ -13,7 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 )

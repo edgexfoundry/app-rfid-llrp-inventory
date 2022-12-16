@@ -17,9 +17,9 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
-	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg"
-	"github.com/edgexfoundry/app-functions-sdk-go/v2/pkg/interfaces"
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/clients/logger"
+	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg"
+	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
 	"github.com/pkg/errors"
 )
 
@@ -160,7 +160,7 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	}()
 
 	// Subscribe to events.
-	err := app.service.SetFunctionsPipeline(
+	err := app.service.SetDefaultFunctionsPipeline(
 		app.processEdgeXEvent)
 	if err != nil {
 		return errors.Wrap(err, "failed to build pipeline")

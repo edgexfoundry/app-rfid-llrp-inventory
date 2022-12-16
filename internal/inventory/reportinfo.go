@@ -3,7 +3,7 @@ package inventory
 import (
 	"time"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v2/dtos"
+	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
 )
 
 // ReportInfo holds both pre-existing as well as computed metadata about an incoming ROAccessReport
