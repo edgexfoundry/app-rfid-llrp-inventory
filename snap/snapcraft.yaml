@@ -41,7 +41,7 @@ apps:
     daemon: simple
     environment:
       CONFIG_PRO_ARG: "-cp=consul://localhost:8500"
-      CONF_ARG: "--confdir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
+      CONF_ARG: "--configDir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
       REGISTRY_ARG: "--registry"
       SECRETSTORE_TOKENFILE: $SNAP_DATA/app-rfid-llrp-inventory/secrets-token.json
     install-mode: disable
