@@ -1,13 +1,5 @@
 .PHONY: build test unittest lint clean update fmt docker run
 
-GO=CGO_ENABLED=1 GO111MODULE=on go
-
-# see https://shibumi.dev/posts/hardening-executables
-CGO_CPPFLAGS="-D_FORTIFY_SOURCE=2"
-CGO_CFLAGS="-O2 -pipe -fno-plt"
-CGO_CXXFLAGS="-O2 -pipe -fno-plt"
-CGO_LDFLAGS="-Wl,-O1,–sort-common,–as-needed,-z,relro,-z,now"
-
 ARCH=$(shell uname -m)
 
 MICROSERVICE=app-rfid-llrp-inventory
@@ -23,17 +15,13 @@ SDKVERSION=$(shell sed -En 's|.*github.com/edgexfoundry/app-functions-sdk-go/v3 
 
 GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.SDKVersion=$(SDKVERSION) \
 					-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION) \
-					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)"
-
-GOFLAGS=-ldflags "-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.SDKVersion=$(SDKVERSION) \
-					-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION) \
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly
-CGOFLAGS=-ldflags "-linkmode=external -X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.SDKVersion=$(SDKVERSION) \
-					-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION) \
-					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly -buildmode=pie
+GOTESTFLAGS?=-race
 
+# CGO is enabled by default and causes local docker builds to fail due to no gcc,
+# but is required for test with -race, so must disable it for the builds only
 build:
-	$(GO) build -tags "$(ADD_BUILD_TAGS)" $(CGOFLAGS) -o $(MICROSERVICE)
+	CGO_ENABLED=0 go build -tags "$(ADD_BUILD_TAGS)" $(GOFLAGS) -o $(MICROSERVICE)
 
 build-nats:
 	make -e ADD_BUILD_TAGS=include_nats_messaging build
@@ -45,14 +33,14 @@ t:
 	[ -z "$$(gofmt -p -l . || echo 'err')" ]
 
 unittest:
-	$(GO) test ./... -coverprofile=coverage.out ./...
+	go test $(GOTESTFLAGS) ./... -coverprofile=coverage.out ./...
 
 lint:
 	@which golangci-lint >/dev/null || echo "WARNING: go linter not installed. To install, run\n  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b \$$(go env GOPATH)/bin v1.42.1"
 	@if [ "z${ARCH}" = "zx86_64" ] && which golangci-lint >/dev/null ; then golangci-lint run --config .golangci.yml ; else echo "WARNING: Linting skipped (not on x86_64 or linter not installed)"; fi
 
 test: unittest lint
-	$(GO) vet ./...
+	go vet ./...
 	gofmt -l $$(find . -type f -name '*.go'| grep -v "/vendor/")
 	[ "`gofmt -l $$(find . -type f -name '*.go'| grep -v "/vendor/")`" = "" ]
 	./bin/test-attribution.sh
@@ -60,11 +48,8 @@ test: unittest lint
 clean:
 	rm -f $(MICROSERVICE)
 
-update:
-	$(GO) mod download
-
 fmt:
-	$(GO) fmt ./...
+	go fmt ./...
 
 docker:
 	docker build \
@@ -84,4 +69,4 @@ run: build
 	./$(MICROSERVICE) -cp=consul.http://localhost:8500 -confdir=res
 
 vendor:
-	$(GO) mod vendor
+	go mod vendor
