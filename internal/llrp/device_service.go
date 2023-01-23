@@ -102,12 +102,12 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesResponse, error) {
 	ds.lc.Debugf("Sending GET command '%s' to device '%s'", capDevCmd, device)
 
-	resp, err := ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
+	resp, err := ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, false, true)
 	for try := 1; err != nil && try < maxTries; try++ {
 		// when an offline reader comes back online, it may return an error querying the capabilities due to a
 		// slight delay when the device service updates the reader's OperatingState. So lets sleep a bit and retry.
 		time.Sleep(sleepInterval * time.Duration(try))
-		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, "no", "yes")
+		resp, err = ds.cmdClient.IssueGetCommandByName(context.Background(), device, capDevCmd, false, true)
 	}
 
 	if err != nil {

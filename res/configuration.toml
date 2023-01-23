@@ -61,9 +61,12 @@ Type = "consul"
   Port = 59881
 
   [Clients.core-command]
-  Protocol = "http"
-  Host = "localhost"
-  Port = 59882
+  UseMessageBus = true
+  [Clients.core-command.Topics]
+  QueryRequestTopicPrefix = "edgex/core/commandquery/request"
+  QueryResponseTopic = "edgex/core/commandquery/response"
+  CommandRequestTopicPrefix = "edgex/core/command/request"
+  CommandResponseTopic = "edgex/core/command/response/#"
 
 # SecretStore is required when Store and Forward is enabled and running with security
 # so Database credentials can be pulled from Vault.
