@@ -100,8 +100,8 @@ Type = "redis"
 AuthMode = "usernamepassword"  # required for redis messagebus (secure or insecure).
 SecretName = "redisdb"
   [MessageBus.Topics]
-  SubscribeTopics = "edgex/events/#/#/#/ROAccessReport,edgex/events/#/#/#/ReaderEventNotification"
-  PublishTopic="edgex/events/device/{profilename}/{devicename}/{sourcename}" # publish to same topic format the Device Services use
+  SubscribeTopics = "edgex/events/+/device-rfid-llrp/+/+/ROAccessReport,edgex/events/+/device-rfid-llrp/+/+/ReaderEventNotification"
+  PublishTopic="edgex/events/device/app-rfid-llrp/{profilename}/{devicename}/{sourcename}" # publish to same topic format the Device Services use
   [MessageBus.Optional]
   # Default MQTT Specific options that need to be here to enable evnironment variable overrides of them
   ClientId ="app-rfid-llrp-inventory"
