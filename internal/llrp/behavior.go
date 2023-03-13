@@ -111,23 +111,23 @@ type BasicDevice struct {
 // ImpinjDevice embeds BasicDevice to provide some Impinj-specific Behavior implementations.
 //
 // Impinj isn't compliant with the following elements of the LLRP standard:
-// - UHF Modes incorrectly report BLF (in Hz) instead of BDR (in bps).
-// - UHF Modes include "Autoset" modes with IDs > 1000,
-//   for which the parameter values are made up;
-//   the actual mode used is one of the non-Autoset modes,
-//   but the Reader interprets the given ModeID as a hint
-//   for it to choose which of those it thinks is best.
-// - Truncate actions during Select (i.e., C1G2Filter.T) are not supported and must be 0.
-// - Per-antenna configurations are not compliant in general,
-//   but you can set transmit power and receive sensitivity per-antenna.
+//   - UHF Modes incorrectly report BLF (in Hz) instead of BDR (in bps).
+//   - UHF Modes include "Autoset" modes with IDs > 1000,
+//     for which the parameter values are made up;
+//     the actual mode used is one of the non-Autoset modes,
+//     but the Reader interprets the given ModeID as a hint
+//     for it to choose which of those it thinks is best.
+//   - Truncate actions during Select (i.e., C1G2Filter.T) are not supported and must be 0.
+//   - Per-antenna configurations are not compliant in general,
+//     but you can set transmit power and receive sensitivity per-antenna.
 //
 // Additionally, the following limitations have been observed:
-// - If Hopping is True, we've observed only a single HopTable.
-// - Depending on the firmware and specific Reader type, 2-5 C1G2 Filters are available.
-// - There seem to be 5 real UHF Modes, though which are available
-//   is limited by Reader version and Firmware.
-//   All of them use Multi-Reader or Dense-Reader spectral masks,
-//   a DR of 64/3, and do not permit Tari selection (min==max):
+//   - If Hopping is True, we've observed only a single HopTable.
+//   - Depending on the firmware and specific Reader type, 2-5 C1G2 Filters are available.
+//   - There seem to be 5 real UHF Modes, though which are available
+//     is limited by Reader version and Firmware.
+//     All of them use Multi-Reader or Dense-Reader spectral masks,
+//     a DR of 64/3, and do not permit Tari selection (min==max):
 //   - Mode0 is their fastest, at 640kbps using Tari 6.25us, PIER 1.5, and FM0.
 //   - Mode1 they call "Hybrid"; it's the same as Mode0,
 //     but uses Miller2 backscatter encoding, so the BDR is 320kbps.
@@ -350,39 +350,39 @@ func (d *ImpinjDevice) ProcessTagReport(_ []TagReportData) {}
 // You can't even query a Reader to know if it's something the Reader supports.
 //
 // As a result, the Clients must track:
-// - the most-recently-received value of every optional parameter
-// - the reporting parameters of any ROSpec
-//   for which it might still receive tag reports;
-//   note that it's legal to delete an ROSpec before requesting its data
-// - the default reporting parameters at any point they were changed,
-//   if there was defined at that time an enabled ROSpec that used the defaults
-// - the ROSpecIDs and start/stop timestamps of any ROSpec
-//   for which it might still receive tag reports;
-//   since this is itself an optional parameter,
-//   there are several ways to configure an LLRP Reader
-//   such that it is impossible to disambiguate nil parameters.
+//   - the most-recently-received value of every optional parameter
+//   - the reporting parameters of any ROSpec
+//     for which it might still receive tag reports;
+//     note that it's legal to delete an ROSpec before requesting its data
+//   - the default reporting parameters at any point they were changed,
+//     if there was defined at that time an enabled ROSpec that used the defaults
+//   - the ROSpecIDs and start/stop timestamps of any ROSpec
+//     for which it might still receive tag reports;
+//     since this is itself an optional parameter,
+//     there are several ways to configure an LLRP Reader
+//     such that it is impossible to disambiguate nil parameters.
 //
 // Here's a direct quote from the LLRP Spec explaining how it works:
 //
-//		This report parameter is generated per tag per accumulation scope[*].
-//		The only mandatory portion of this parameter is the EPCData parameter.
-//		If there was an access operation performed on the tag,
-//		the results of the OpSpecs are mandatory in the report.
-//		The other sub-parameters in this report are optional.
-//		LLRP provides three ways to make the tag reporting efficient:
+//	This report parameter is generated per tag per accumulation scope[*].
+//	The only mandatory portion of this parameter is the EPCData parameter.
+//	If there was an access operation performed on the tag,
+//	the results of the OpSpecs are mandatory in the report.
+//	The other sub-parameters in this report are optional.
+//	LLRP provides three ways to make the tag reporting efficient:
 //
-//		(i) Allow parameters to be enabled or disabled via TagReportContentSelector in TagReportSpec.
-//		(ii) If an optional parameter is enabled, and is absent in the report,
-//		the Client SHALL assume that the value is identical
-//		to the last parameter of the same type received.
-//		For example, this allows the Readers to not send a parameter in the report
-//		whose value has not changed since the last time it was sent by the Reader.
+//	(i) Allow parameters to be enabled or disabled via TagReportContentSelector in TagReportSpec.
+//	(ii) If an optional parameter is enabled, and is absent in the report,
+//	the Client SHALL assume that the value is identical
+//	to the last parameter of the same type received.
+//	For example, this allows the Readers to not send a parameter in the report
+//	whose value has not changed since the last time it was sent by the Reader.
 //
 // [*] This is just saying you get a TagReportData parameter
-//     for each EPC and unique combination of OpSpec result or matched IDs.
-//     Report accumulation also affects the reporting of
-//     timestamps, RSSI, the channel index, and number of observations.
 //
+//	for each EPC and unique combination of OpSpec result or matched IDs.
+//	Report accumulation also affects the reporting of
+//	timestamps, RSSI, the channel index, and number of observations.
 func (d *BasicDevice) fillAmbiguousNil(tags []TagReportData) {
 	for i := range tags {
 		tag := &tags[i]
