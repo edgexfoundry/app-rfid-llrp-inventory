@@ -6,12 +6,12 @@
 package inventoryapp
 
 import (
-	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
+
+	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	"github.com/gorilla/mux"
@@ -158,7 +158,7 @@ func (app *InventoryApp) setBehavior(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	data, err := ioutil.ReadAll(io.LimitReader(req.Body, maxBodyBytes))
+	data, err := io.ReadAll(io.LimitReader(req.Body, maxBodyBytes))
 	if err != nil {
 		msg := fmt.Sprintf("Failed to read behavior data: %v", err)
 		app.lc.Error(msg)
