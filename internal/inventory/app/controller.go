@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -171,7 +171,7 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 
 	// load tag data
 	var snapshot []inventory.StaticTag
-	snapshotData, err := ioutil.ReadFile(filepath.Join(cacheFolder, tagCacheFile))
+	snapshotData, err := os.ReadFile(filepath.Join(cacheFolder, tagCacheFile))
 	if err != nil {
 		app.lc.Warn("Failed to load inventory snapshot.", "error", err.Error())
 	} else {
@@ -289,7 +289,7 @@ func (app *InventoryApp) persistSnapshot(snapshot []inventory.StaticTag) {
 		return
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(cacheFolder, tagCacheFile), data, filePerm); err != nil {
+	if err := os.WriteFile(filepath.Join(cacheFolder, tagCacheFile), data, filePerm); err != nil {
 		app.lc.Warn("Failed to persist inventory snapshot.", "error", err.Error())
 		return
 	}
