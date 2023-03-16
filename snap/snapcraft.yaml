@@ -1,7 +1,9 @@
 name: edgex-app-rfid-llrp-inventory
 base: core20
-adopt-info: metadata
 license: Apache-2.0
+summary: EdgeX RFID LLRP Inventory Application Service
+description: Refer to https://snapcraft.io/edgex-app-rfid-llrp-inventory
+adopt-info: app-rfid-llrp-inventory
 
 architectures:
   - build-on: arm64
@@ -35,14 +37,11 @@ plugs:
  
 apps:
   app-rfid-llrp-inventory:
-    command: bin/app-rfid-llrp-inventory $CONFIG_PRO_ARG $CONF_ARG $REGISTRY_ARG
+    command: bin/app-rfid-llrp-inventory --configDir $SNAP_DATA/config/app-rfid-llrp-inventory/res --configProvider --registry
     command-chain:
       - bin/source-env-file.sh
     daemon: simple
     environment:
-      CONFIG_PRO_ARG: "-cp=consul://localhost:8500"
-      CONF_ARG: "--configDir=$SNAP_DATA/config/app-rfid-llrp-inventory/res"
-      REGISTRY_ARG: "--registry"
       SECRETSTORE_TOKENFILE: $SNAP_DATA/app-rfid-llrp-inventory/secrets-token.json
     install-mode: disable
     plugs: [network, network-bind]
@@ -55,24 +54,32 @@ parts:
       - go/1.20/stable
     override-build: |
       cd $SNAPCRAFT_PART_SRC
+      
       make build
       install -DT ./helper-go $SNAPCRAFT_PART_INSTALL/bin/helper-go
 
   app-rfid-llrp-inventory:
-    after: [metadata]
     source: .
     plugin: make
-    build-packages: [gcc, git, libzmq3-dev, pkg-config]
+    build-packages: [git]
     build-snaps:
       - go/1.20/stable
     stage-packages: [libzmq5]
     override-build: |
       cd $SNAPCRAFT_PART_SRC
 
-      # the version is needed for the build
-      cat ./VERSION
+      if git describe ; then
+        VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
+      else
+        VERSION="0.0.0"
+      fi
 
-      make tidy
+      # set the version of the snap
+      snapcraftctl set-version $VERSION
+
+      # write version to file for the build
+      echo $VERSION > VERSION
+
       make build
 
       install -DT "./app-rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
@@ -92,25 +99,3 @@ parts:
     organize:
       source-env-file.sh: bin/source-env-file.sh
 
-  metadata:
-    plugin: nil
-    source: https://github.com/canonical/edgex-snap-metadata.git
-    source-branch: appstream
-    source-depth: 1
-    override-build: |
-      # install the icon at the default internal path
-      install -DT edgex-snap-icon.png \
-        $SNAPCRAFT_PART_INSTALL/meta/gui/icon.png      
-      # change to this project's repo to get the version
-      cd $SNAPCRAFT_PROJECT_DIR
-      if git describe ; then
-        VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
-      else
-        VERSION="0.0.0"
-      fi
-      
-      # write version to file for the build
-      echo $VERSION > ./VERSION
-      # set the version of this snap
-      snapcraftctl set-version $VERSION
-    parse-info: [edgex-app-rfid-llrp-inventory.metainfo.xml]
