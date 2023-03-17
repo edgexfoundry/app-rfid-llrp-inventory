@@ -10,7 +10,7 @@ import (
 )
 
 // ApplicationSettings is a struct that defines the ApplicationSettings section of the
-// configuration.toml file.
+// configuration.yaml file.
 type ApplicationSettings struct {
 	MobilityProfileThreshold     float64
 	MobilityProfileHoldoffMillis float64
