@@ -86,7 +86,7 @@ parts:
       
       RES=$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res
       mkdir -p $RES
-      cp res/configuration.toml $RES
+      cp res/configuration.yaml $RES
       
       DOC=$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory
       mkdir -p $DOC

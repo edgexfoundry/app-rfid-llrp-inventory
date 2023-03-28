@@ -181,7 +181,7 @@ especially useful when using a dual-linear antenna and mapping both polarities t
 
 ### Configuration
 
-The following configuration options in the `[ApplicationSettings]` section affect how the tag location algorithm works under the hood.
+The following configuration options in the `ApplicationSettings` section affect how the tag location algorithm works under the hood.
 
 - **`AdjustLastReadOnByOrigin`** *`[bool]`*: If `true`, this will override the tag read timestamps sent from the sensor
         with an adjusted one based on the UTC time the `LLRP Device Service` received the message from the device (aka `Origin`). 
@@ -233,7 +233,7 @@ The location will change when the following equation is true:
 ![Mobility Profile Diagram](images/mobility-profile.png)
 
 #### Configure Mobility Profile
-_Note: All values can be modified via the `[ApplicationSettings]` section.
+_Note: All values can be modified via the `ApplicationSettings` section.
 
 - **`MobilityProfileSlope`** *`[float]`*: Used to determine the offset applied to older RSSI values (aka rate of decay)
   - units: `dBm per millisecond`
@@ -285,31 +285,31 @@ To get the list of LLRP devices or readers connected,
 }
 ```
 
-### Via configuration.toml (before deployment)
+### Via configuration.yaml (before deployment)
 If you already know the alias values you would like to use before deployment, they can be defined in your
-`configuration.toml` file. There is a section called `[Aliases]` under the `[AppCustom]` section that is defaulted to empty.
+`configuration.yaml` file. There is a section called `Aliases` under the `AppCustom` section that is defaulted to empty.
 
 In order to override an alias, set the default alias as the key, and the new alias as the value you want, such as:
 
-    [AppCustom.Aliases]
-    Reader-10-EF-25_1 = "Freezer"
-    Reader-10-EF-25_2 = "Backroom"
+    Aliases:
+      Reader-10-EF-25_1: "Freezer"
+      Reader-10-EF-25_2: "Backroom"
 
 ##### Configuration for Normal Service Startup
 If an existing `Aliases` folder key (even if empty) is found in Consul, nothing is done. Data in Consul
 will be left as-is.
 
 If no existing `Aliases` folder key is found in Consul:
-- If an `[Aliases]` section is **not present** or **is empty** in the user's TOML file, nothing will be done or added to Consul.
-- If an `[Aliases]` section is **present and contains data**, this data will be uploaded to Consul.
+- If an `Aliases` section is **not present** or **is empty** in the user's YAML file, nothing will be done or added to Consul.
+- If an `Aliases` section is **present and contains data**, this data will be uploaded to Consul.
 
 ##### Overwrite Config in Consul (During Development)
 During development, the user also has the option to pass the `-o/--overwrite` command line flag
 to the service. In addition to what EdgeX normally does when this is passed, the Aliases are read
-from the TOML file and uploaded to Consul, overwriting existing Aliases with the same key. 
+from the YAML file and uploaded to Consul, overwriting existing Aliases with the same key. 
 
 > _One thing to be aware of however is that the Aliases are treated as Key/Value pairs so any Alias
-> key in Consul that is not present in the TOML file will **not** be deleted from Consul. Read
+> key in Consul that is not present in the YAML file will **not** be deleted from Consul. Read
 > below for an example scenario._
 
 ###### Scenario
@@ -317,15 +317,15 @@ Consul already contains the following key/values:
 - `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_1` = `POS`
 - `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
 
-The user passes `-o/--overwrite` flag, with the following TOML file:
+The user passes `-o/--overwrite` flag, with the following YAML file:
 
-    [Aliases]
-    Reader-10-EF-25_1 = "Freezer"
-    Reader-10-EF-25_2 = "Backroom"
+    Aliases:
+      Reader-10-EF-25_1: "Freezer"
+      Reader-10-EF-25_2: "Backroom"
 
 - `Reader-10-EF-25_1` already exists with a value of `POS` and will be overwritten to `Freezer`.
 - `Reader-10-EF-25_2` is new and will be added as expected with value `Backroom`.
-- `Reader-20-20-20_1` is not present in the TOML file, but was pre-existing in Consul. This value will be left alone.
+- `Reader-20-20-20_1` is not present in the YAML file, but was pre-existing in Consul. This value will be left alone.
 
 ###### Outcome
 The following key/value pairs will exist in Consul:
@@ -333,12 +333,12 @@ The following key/value pairs will exist in Consul:
 - `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-10-EF-25_2` = `Backroom`
 - `app-rfid-llrp-inventory/AppCustom/Aliases/Reader-20-20-20_1` = `Store`
 
-> Note that there is a config watcher for the `[AppCustom]` section that notifies the app of changes. This config watcher will load all the aliases from Consul on startup. 
+> Note that there is a config watcher for the `AppCustom` section that notifies the app of changes. This config watcher will load all the aliases from Consul on startup. 
 
 
 ### Via Consul (after deployment)
 Users can also configure the aliases using Consul. This can be achieved via Consul’s UI or CLI. This
-can be done regardless of whether `configuration.toml` specified initial aliases or not.
+can be done regardless of whether `configuration.yaml` specified initial aliases or not.
 
 #### Setting Alias via Consul UI
 - If one does not exist, create a folder named `Aliases` under [Edgex Consul][consul_root].
