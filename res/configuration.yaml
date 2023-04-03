@@ -2,28 +2,28 @@ Writable:
   LogLevel: INFO
 
 Service:
+  Host: localhost
   Port: 59711
   StartupMsg: "RFID LLRP Inventory Service"
 
 Clients:
   core-command:
     UseMessageBus: true
-  # core-metadata:
-  #   Host: "localhost"
+#  core-metadata:
+#    Host: "localhost"
 
 # uncomment when running from command-line in hybrid mode with -cp -o flags
-# Registry:
-#   Host: "localhost"
-# Database:
-#   Host: "localhost" 
+#Registry:
+#  Host: "localhost"
+#Database:
+#  Host: "localhost"
 
 MessageBus:
-  # Host: localhost # uncomment when running from command-line in hybrid mode
+#  Host: localhost # uncomment when running from command-line in hybrid mode
   Optional:
     ClientId: app-rfid-llrp-inventory
 
 Trigger:
-  Type: edgex-messagebus
   SubscribeTopics: events/+/device-rfid-llrp/+/+/ROAccessReport,edgex/events/+/device-rfid-llrp/+/+/ReaderEventNotification
   PublishTopic: events/device/app-rfid-llrp/{profilename}/{devicename}/{sourcename} # publish to same topic format the Device Services use
 
