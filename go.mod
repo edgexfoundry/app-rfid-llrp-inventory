@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.0.0-dev.50
-	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.0.0-dev.35
+	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.0.0-dev.36
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
