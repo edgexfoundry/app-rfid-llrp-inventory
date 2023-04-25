@@ -1,5 +1,5 @@
 name: edgex-app-rfid-llrp-inventory
-base: core20
+base: core22
 license: Apache-2.0
 summary: EdgeX RFID LLRP Inventory Application Service
 description: Refer to https://snapcraft.io/edgex-app-rfid-llrp-inventory
@@ -30,11 +30,6 @@ plugs:
     interface: content
     target: $SNAP_DATA/config/app-rfid-llrp-inventory
 
-  # deprecated
-  app-config:
-    interface: content
-    target: $SNAP_DATA/config/app-rfid-llrp-inventory
- 
 apps:
   app-rfid-llrp-inventory:
     command: bin/app-rfid-llrp-inventory --configDir $SNAP_DATA/config/app-rfid-llrp-inventory/res --configProvider --registry
@@ -53,10 +48,10 @@ parts:
     build-snaps:
       - go/1.20/stable
     override-build: |
-      cd $SNAPCRAFT_PART_SRC
+      cd $CRAFT_PART_SRC
       
       make build
-      install -DT ./helper-go $SNAPCRAFT_PART_INSTALL/bin/helper-go
+      install -DT ./helper-go $CRAFT_PART_INSTALL/bin/helper-go
 
   app-rfid-llrp-inventory:
     source: .
@@ -66,7 +61,7 @@ parts:
       - go/1.20/stable
     stage-packages: [libzmq5]
     override-build: |
-      cd $SNAPCRAFT_PART_SRC
+      cd $CRAFT_PART_SRC
 
       if git describe ; then
         VERSION=$(git describe --tags --abbrev=0 | sed 's/v//')
@@ -75,20 +70,20 @@ parts:
       fi
 
       # set the version of the snap
-      snapcraftctl set-version $VERSION
+      craftctl set version=$VERSION
 
       # write version to file for the build
       echo $VERSION > VERSION
 
       make build
 
-      install -DT "./app-rfid-llrp-inventory" "$SNAPCRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
+      install -DT "./app-rfid-llrp-inventory" "$CRAFT_PART_INSTALL/bin/app-rfid-llrp-inventory"
       
-      RES=$SNAPCRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res
+      RES=$CRAFT_PART_INSTALL/config/app-rfid-llrp-inventory/res
       mkdir -p $RES
-      cp res/configuration.yaml $RES
+      cp -r res/* $RES
       
-      DOC=$SNAPCRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory
+      DOC=$CRAFT_PART_INSTALL/usr/share/doc/app-rfid-llrp-inventory
       mkdir -p $DOC
       cp Attribution.txt $DOC/Attribution.txt
       cp LICENSE $DOC/LICENSE
