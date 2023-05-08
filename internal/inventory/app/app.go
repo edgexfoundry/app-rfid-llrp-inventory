@@ -166,7 +166,7 @@ func (app *InventoryApp) RunUntilCancelled() error {
 		return errors.Wrap(err, "failed to build pipeline")
 	}
 
-	if err = app.service.MakeItRun(); err != nil {
+	if err = app.service.Run(); err != nil {
 		return errors.Wrap(err, "failed to run pipeline")
 	}
 
