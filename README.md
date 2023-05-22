@@ -50,7 +50,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventArrived`**
 ```json
 {
-  "apiVersion": "v2",
+  "apiVersion": "v3",
   "id": "6def8859-5a12-4c83-b68c-256303146682",
   "deviceName": "app-rfid-llrp-inventory",
   "profileName": "app-rfid-llrp-inventory",
@@ -58,7 +58,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
   "origin": 1598043284109799400,
   "readings": [
     {
-      "apiVersion": "v2",
+      "apiVersion": "v3",
       "id": "8d15d035-402f-4abc-85fc-a7ed7213122a",
       "origin": 1598043284109799400,
       "deviceName": "app-rfid-llrp-inventory",
@@ -74,7 +74,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventMoved`**
 ```json
 {
-  "apiVersion": "v2",
+  "apiVersion": "v3",
   "id": "c78c304e-1906-4d17-bf26-5075756a231f",
   "deviceName": "app-rfid-llrp-inventory",
   "profileName": "app-rfid-llrp-inventory",
@@ -82,7 +82,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
   "origin": 1598401259697580500,
   "readings": [
     {
-      "apiVersion": "v2",
+      "apiVersion": "v3",
       "id": "323694d9-1a48-417a-9f43-25998536ae8f",
       "origin": 1598401259697580500,
       "deviceName": "app-rfid-llrp-inventory",
@@ -98,7 +98,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
 - **`InventoryEventDeparted`**
 ```json
 {
-  "apiVersion": "v2",
+  "apiVersion": "v3",
   "id": "4d042708-c5de-41fa-827a-3f24b364c6de",
   "deviceName": "app-rfid-llrp-inventory",
   "profileName": "app-rfid-llrp-inventory",
@@ -106,7 +106,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
   "origin": 1598062424894043600,
   "readings": [
     {
-      "apiVersion": "v2",
+      "apiVersion": "v3",
       "id": "928ff90d-02d1-43be-81a6-a0d75886b0e4",
       "origin": 1598062424894043600,
       "deviceName": "app-rfid-llrp-inventory",
@@ -116,7 +116,7 @@ Here are some example `EdgeX Events` with accompanying `EdgeX Readings`.
       "value": "{\"epc\":\"30340bb6884cb101a13bc744\",\"tid\":\"\",\"timestamp\":1598062424893,\"last_read\":1598062392524,\"last_known_location\":\"SpeedwayR-10-EF-25_1\"}"
     },
     {
-      "apiVersion": "v2",
+      "apiVersion": "v3",
       "id": "abfff90d-02d1-43be-81a6-a0d75886cdaf",
       "origin": 1598062424894043600,
       "deviceName": "rfid-llrp-inventory",
@@ -278,10 +278,10 @@ application has a format of `<deviceName>_<antennaId>` e.g.
 `Reader-10-EF-25_1` where `Reader-10-EF-25` is the deviceName and `1` is the antennaId.
 
 To get the list of LLRP devices or readers connected,
-`GET` to the `/api/v2/readers` endpoint:   
+`GET` to the `/api/v3/readers` endpoint:   
                                                        
 
-    curl -o- localhost:59711/api/v2/readers
+    curl -o- localhost:59711/api/v3/readers
 
 ```json
 {
@@ -364,9 +364,9 @@ can be done regardless of whether `configuration.yaml` specified initial aliases
 
 Everytime the user creates/updates the Aliases folder, the configuration changes apply to the application dynamically, and the updated alias can be seen under tag location `(location_alias)`
 
-`GET` to the `/api/v2/inventory/snapshot` endpoint:   
+`GET` to the `/api/v3/inventory/snapshot` endpoint:   
                                                        
-    curl -o- localhost:59711/api/v2/inventory/snapshot
+    curl -o- localhost:59711/api/v3/inventory/snapshot
 
 ```json
  [
@@ -457,16 +457,16 @@ Here's how the service works with Behaviors:
 To start all Readers reading with the current behavior, 
 `POST` to the `/command/reading/start` endpoint:
 
-    curl -o- -X POST localhost:59711/api/v2/command/reading/start
+    curl -o- -X POST localhost:59711/api/v3/command/reading/start
 
 To stop reading,
 `POST` to the `/command/reading/stop` endpoint:
 
-    curl -o- -X POST localhost:59711/api/v2/command/reading/stop
+    curl -o- -X POST localhost:59711/api/v3/command/reading/stop
 
 To view the `default` Behavior:
 
-    curl -o- localhost:59711/api/v2/behaviors/default
+    curl -o- localhost:59711/api/v3/behaviors/default
 
 ```json
 {
@@ -487,7 +487,7 @@ The following example uses `jq` to generate the `JSON` Behavior structure,
 the details of which are explained below.
 This particular Behavior enables a `Fast` scan at `30 dBm`:
 
-    curl -o- localhost:59711/api/v2/behaviors/default -XPUT \
+    curl -o- localhost:59711/api/v3/behaviors/default -XPUT \
         --data @<(jq -n '{ScanType: "Fast", Power: {Max: 3000}}')
 
 
@@ -495,7 +495,7 @@ If you attempt to set the Behavior to something that can't be supported
 all the Readers to which it should apply, 
 you'll receive an error response, and the Behavior won't change:
 
-    curl -o- -XPUT localhost:59711/api/v2/behaviors/default \
+    curl -o- -XPUT localhost:59711/api/v3/behaviors/default \
         --data @<(jq -n '{ScanType: "Fast"}')
     
     new behavior is invalid for "Speedway": target power (0.00 dBm)
@@ -622,7 +622,7 @@ with a `set` that targets that `deviceResource`.
 
 When this service sees an Impinj device, 
 it sends a `PUT` request with `{"ImpinjCustomExtensionMessage": "AAAAAA=="}` 
-to `{deviceService}/api/v2/commands/{deviceName}/enableImpinjExt`;
+to `{deviceService}/api/v3/commands/{deviceName}/enableImpinjExt`;
 if that `deviceCommand` and `deviceResource` exist,
 the Device Service will send a `CustomMessage` to the reader,
 enabling this service to send Impinj's `CustomParameter`s.
