@@ -24,7 +24,7 @@ MessageBus:
     ClientId: app-rfid-llrp-inventory
 
 Trigger:
-  SubscribeTopics: events/+/device-rfid-llrp/+/+/ROAccessReport,edgex/events/+/device-rfid-llrp/+/+/ReaderEventNotification
+  SubscribeTopics: events/+/device-rfid-llrp/#
   PublishTopic: events/device/app-rfid-llrp/{profilename}/{devicename}/{sourcename} # publish to same topic format the Device Services use
 
 AppCustom:
