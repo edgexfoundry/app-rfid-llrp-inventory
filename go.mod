@@ -3,8 +3,8 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.20
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.0.0-dev.67
-	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.0.0-dev.42
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.0.0-dev.68
+	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.0.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
 	github.com/pkg/errors v0.9.1
@@ -18,11 +18,11 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/diegoholiveira/jsonlogic/v3 v3.2.7 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.2 // indirect
-	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.0.0-dev.92 // indirect
-	github.com/edgexfoundry/go-mod-configuration/v3 v3.0.0-dev.10 // indirect
-	github.com/edgexfoundry/go-mod-messaging/v3 v3.0.0-dev.32 // indirect
-	github.com/edgexfoundry/go-mod-registry/v3 v3.0.0-dev.7 // indirect
-	github.com/edgexfoundry/go-mod-secrets/v3 v3.0.0-dev.18 // indirect
+	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.0.0 // indirect
+	github.com/edgexfoundry/go-mod-configuration/v3 v3.0.0 // indirect
+	github.com/edgexfoundry/go-mod-messaging/v3 v3.0.0 // indirect
+	github.com/edgexfoundry/go-mod-registry/v3 v3.0.0 // indirect
+	github.com/edgexfoundry/go-mod-secrets/v3 v3.0.0 // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.4.0 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.0 // indirect
