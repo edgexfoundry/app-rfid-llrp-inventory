@@ -4,6 +4,68 @@
 
 - [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md)
 
+## [v3.0.0] Minnesota - 2023-05-31 (Only compatible with the 3.x releases)
+
+### Features ✨
+
+- Remove ZeroMQ MessageBus capability ([#cbfcac4](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/cbfcac44887bc7898a8a00a335521df61c6eaadd))
+  ```text
+  BREAKING CHANGE: ZeroMQ MessageBus capability no longer available
+  ```
+- Consume additional level in event publish topic ([#63c8b30](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/63c8b30869f87de451dd33f2aa13687440ae64a8))
+  ```text
+  BREAKING CHANGE: Inventory events are published using new topic which includes additional level for the service name.
+  ```
+- Updates for common config ([#0e6798d](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/0e6798df487ae229a4ea3230d61bef5bbf47a589))
+  ```text
+  BREAKING CHANGE: configuration file changed to remove common config settings
+  ```
+
+### Bug Fixes 🐛
+
+- Change subscription topics to receive any event from device LLRP ([#202](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/202)) ([#ad72238](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/ad72238))
+- **snap:** Refactor to avoid conflicts with readonly config provider directory ([#163](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/163)) ([#636b604](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/636b604))
+
+### Code Refactoring ♻
+
+- Use latest SDK for flattened config stem ([#004f5d2](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/004f5d27058d063ff3ccf1e62d985591669bdfad))
+  ```text
+  BREAKING CHANGE: location of service configuration in Consul changed
+  ```
+- Rename command line flags for the sake of consistency ([#dc56276](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/dc56276b993b2878b0d870e671804c10f96a6178))
+  ```text
+  BREAKING CHANGE: renamed -c/--confdir to -cd/--configDirand -f/--file to -cf/--configFile
+  ```
+- Adjust configuration for reworked MessageBus config ([#bbc8cea](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/bbc8cea5256726f873dd73e5987e9fb16baf68a3))
+  ```text
+  BREAKING CHANGE: MessageBus configuration is now standalone from Trigger
+  ```
+- Replace internal topics from config with new constants and use base topic  ([#0d101ae](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/0d101ae6821c8ff83b48d3de973276031649eb12))
+  ```text
+  BREAKING CHANGE: Internal topics no longer configurable, except the base topic. Trigger topics for edgex-messagebus and external-mqtt now directly under Trigger section. All configured topics (subscribe and function pipeline) now automatically have the base topic (default of "edgex/") prepended.
+  ```
+- Change configuration file format to YAML  ([#926f659](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/926f659ef75c956bce735ba4a63a1e2481fbf915))
+  ```text
+  BREAKING CHANGE:  Configuration file now uses YAML format, default file name is now configuration.yaml
+  ```
+- Enable core command via message bus ([#139](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/139)) ([#494ae06](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/494ae06))
+- Consume MakeItRun rename to Run ([#188](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/188)) ([#cc44783](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/cc44783))
+- Go 1.20 gofmt ([#157](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/157)) ([#968f145](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/968f145))
+- **snap:** Drop the support for legacy snap env options ([#350dcbb](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/350dcbb98a3b589a77f3df68bd3874cc550526fa))
+  ```text
+  BREAKING CHANGE: Drop the support for deprecated snap options starting with `env.`
+  ```
+- **snap:** Update command and metadata sourcing ([#162](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/162)) ([#0370fe2](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/0370fe2))
+
+### Documentation 📖
+
+- Add main branch Warning ([#191](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/191)) ([#583b590](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/583b590))
+
+### Build 👷
+
+- Ignore all go-mod deps, except go-mod-bootstrap ([#185](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/185)) ([#f3383ef](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/f3383ef))
+- Update to Go 1.20, Alpine 3.17 and linter v1.51.2 ([#158](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/158)) ([#9fc1e83](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commits/9fc1e83))
+
 ## [v2.3.0] - Levski - 2022-11-09 (Only compatible with the 2.x releases)
 
 ### Features ✨
