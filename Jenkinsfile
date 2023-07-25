@@ -16,5 +16,6 @@
 
 edgeXBuildGoApp (
     project: 'app-rfid-llrp-inventory',
+    goVersion: '1.20',
     buildSnap: false
 )
