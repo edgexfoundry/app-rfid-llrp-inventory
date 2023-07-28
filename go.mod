@@ -3,7 +3,7 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.20
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.12
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.1.0-dev.13
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.1.0-dev.2
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
