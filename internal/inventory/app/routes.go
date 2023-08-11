@@ -15,7 +15,6 @@ import (
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -62,7 +61,7 @@ func (app *InventoryApp) addRoutes() error {
 
 func (app *InventoryApp) addRoute(path, method string, f http.HandlerFunc) error {
 	if err := app.service.AddRoute(path, f, method); err != nil {
-		return errors.Wrapf(err, "failed to add route, path=%s, method=%s", path, method)
+		return fmt.Errorf("failed to add route, path=%s, method=%s: %w", path, method, err)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ package inventoryapp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -312,7 +312,7 @@ func (app *InventoryApp) publishEvents(events []inventory.Event) error {
 	addRequest := requests.NewAddEventRequest(edgeXEvent)
 	payload, err := json.Marshal(addRequest)
 	if err != nil {
-		return errors.Wrap(err, "unable to marshal inventory event(s) to publish")
+		return fmt.Errorf("unable to marshal inventory event(s) to publish: %w", err)
 	}
 
 	// Need a Context to have values for the placeholders in the configured topic
@@ -322,7 +322,7 @@ func (app *InventoryApp) publishEvents(events []inventory.Event) error {
 	context.AddValue(interfaces.SOURCENAME, edgeXEvent.SourceName)
 
 	if err := app.publisher.Publish(payload, context); err != nil {
-		return errors.Wrap(err, "unable to publish inventory event(s)")
+		return fmt.Errorf("unable to publish inventory event(s): %w", err)
 	}
 
 	return nil

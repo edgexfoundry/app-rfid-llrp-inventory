@@ -6,7 +6,8 @@
 package inventory
 
 import (
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 )
 
 // ApplicationSettings is a struct that defines the ApplicationSettings section of the
@@ -78,15 +79,15 @@ func NewServiceConfig() ServiceConfig {
 // or the first validation error it encounters.
 func (as ApplicationSettings) Validate() error {
 	if as.DepartedThresholdSeconds == 0 {
-		return errors.Wrap(ErrOutOfRange, "DepartedThresholdSeconds must be >0")
+		return fmt.Errorf("DepartedThresholdSeconds must be >0: %w", ErrOutOfRange)
 	}
 
 	if as.DepartedCheckIntervalSeconds == 0 {
-		return errors.Wrap(ErrOutOfRange, "DepartedCheckIntervalSeconds must be >0")
+		return fmt.Errorf("DepartedCheckIntervalSeconds must be >0: %w", ErrOutOfRange)
 	}
 
 	if as.AgeOutHours == 0 {
-		return errors.Wrap(ErrOutOfRange, "AgeOutHours must be >0")
+		return fmt.Errorf("AgeOutHours must be >0: %w", ErrOutOfRange)
 	}
 
 	return nil
