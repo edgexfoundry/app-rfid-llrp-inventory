@@ -7,6 +7,7 @@ package inventoryapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,6 @@ import (
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg"
 	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -79,20 +79,20 @@ func (app *InventoryApp) Initialize() error {
 	app.lc.Info("Starting.")
 
 	if err = app.service.LoadCustomConfig(&app.config, customKey); err != nil {
-		return errors.Wrap(err, "failed to load custom configuration")
+		return fmt.Errorf("failed to load custom configuration: %w", err)
 	}
 
 	if err = app.config.AppCustom.AppSettings.Validate(); err != nil {
-		return errors.Wrap(err, "failed to validate custom config")
+		return fmt.Errorf("failed to validate custom config: %w", err)
 	}
 
 	if err = app.service.ListenForCustomConfigChanges(&app.config.AppCustom, customKey, app.processConfigUpdates); err != nil {
-		return errors.Wrap(err, "failed to listen for custom config changes")
+		return fmt.Errorf("failed to listen for custom config changes: %w", err)
 	}
 
 	app.publisher, err = app.service.AddBackgroundPublisher(1)
 	if err != nil {
-		return errors.Wrap(err, "failed to add BackgroundPublisher")
+		return fmt.Errorf("failed to add BackgroundPublisher: %w", err)
 	}
 
 	app.defaultGrp = llrp.NewReaderGroup()
@@ -105,7 +105,7 @@ func (app *InventoryApp) Initialize() error {
 
 	response, err := app.service.DeviceClient().DevicesByServiceName(context.Background(), dsName, 0, -1)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get existing device names for device service name %s", dsName)
+		return fmt.Errorf("failed to get existing device names for device service name %s: %w", dsName, err)
 	}
 
 	app.lc.Debugf("Found %d devices", len(response.Devices))
@@ -163,11 +163,11 @@ func (app *InventoryApp) RunUntilCancelled() error {
 	err := app.service.SetDefaultFunctionsPipeline(
 		app.processEdgeXEvent)
 	if err != nil {
-		return errors.Wrap(err, "failed to build pipeline")
+		return fmt.Errorf("failed to build pipeline: %w", err)
 	}
 
 	if err = app.service.Run(); err != nil {
-		return errors.Wrap(err, "failed to run pipeline")
+		return fmt.Errorf("failed to run pipeline: %w", err)
 	}
 
 	// let task loop complete

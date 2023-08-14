@@ -10,7 +10,6 @@ package llrp
 import (
 	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
 	"sort"
 	"strings"
 )
@@ -76,10 +75,10 @@ var (
 
 func errMissingCapInfo(name string, path ...string) error {
 	if len(path) != 0 {
-		return errors.Wrapf(ErrMissingCapInfo, "missing LLRP %s from %s",
-			name, strings.Join(path, "."))
+		return fmt.Errorf("missing LLRP %s from %s: %w",
+			name, strings.Join(path, "."), ErrMissingCapInfo)
 	}
-	return errors.Wrapf(ErrMissingCapInfo, "missing LLRP %s", name)
+	return fmt.Errorf("missing LLRP %s: %w", name, ErrMissingCapInfo)
 }
 
 // BasicDevice holds details of an LLRP device
@@ -474,9 +473,8 @@ func (d *BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 	// First, find the highest power at or below the Target.
 	pwrIdx, pwr := d.findPower(b.Power.Max)
 	if pwr > b.Power.Max {
-		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"target power (%.2f dBm) is lower than the lowest supported (%.2f dBm)",
-			float32(b.Power.Max)/100.0, float32(pwr)/100.0)
+		return nil, fmt.Errorf("target power (%.2f dBm) is lower than the lowest supported (%.2f dBm): %w",
+			float32(b.Power.Max)/100.0, float32(pwr)/100.0, ErrUnsatisfiable)
 	}
 
 	// In hopping regulatory regions, we assume the power is legal for all frequencies.
@@ -499,9 +497,8 @@ func (d *BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 		}
 	}
 
-	return nil, errors.Wrapf(ErrUnsatisfiable,
-		"no frequency permits the desired power level (%.2f dBm)",
-		float32(b.Power.Max)/100.0)
+	return nil, fmt.Errorf("no frequency permits the desired power level (%.2f dBm): %w",
+		float32(b.Power.Max)/100.0, ErrUnsatisfiable)
 }
 
 // findPower returns the device's best match to a given power level,
@@ -664,9 +661,8 @@ type Environment struct {
 func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	if b.GPITrigger != nil && (b.GPITrigger.Port == 0 ||
 		d.nGPIs == 0 || b.GPITrigger.Port > d.nGPIs) {
-		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"behavior uses a GPI Trigger with invalid Port "+
-				"(%d not in [1, %d])", b.GPITrigger.Port, d.nGPIs)
+		return nil, fmt.Errorf("behavior uses a GPI Trigger with invalid Port "+
+			"(%d not in [1, %d]): %w", b.GPITrigger.Port, d.nGPIs, ErrUnsatisfiable)
 	}
 
 	transmit, err := d.Transmit(b)
@@ -850,9 +846,8 @@ func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 func (d *ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 	if b.GPITrigger != nil && (b.GPITrigger.Port == 0 ||
 		d.nGPIs == 0 || b.GPITrigger.Port > d.nGPIs) {
-		return nil, errors.Wrapf(ErrUnsatisfiable,
-			"behavior uses a GPI Trigger with invalid Port "+
-				"(%d not in [1, %d])", b.GPITrigger.Port, d.nGPIs)
+		return nil, fmt.Errorf("behavior uses a GPI Trigger with invalid Port "+
+			"(%d not in [1, %d]): %w", b.GPITrigger.Port, d.nGPIs, ErrUnsatisfiable)
 	}
 
 	transmit, err := d.Transmit(b)
@@ -978,7 +973,7 @@ var (
 
 func (s ScanType) MarshalText() ([]byte, error) {
 	if !(0 <= int(s) && int(s) < len(scanStrs)) {
-		return nil, errors.Errorf("unknown ScanType: %v", s)
+		return nil, fmt.Errorf("unknown ScanType: %v", s)
 	}
 	return scanStrs[s], nil
 }
@@ -991,5 +986,5 @@ func (s *ScanType) UnmarshalText(text []byte) error {
 		}
 	}
 
-	return errors.Errorf("unknown ScanType: %q", string(text))
+	return fmt.Errorf("unknown ScanType: %q", string(text))
 }

@@ -8,7 +8,6 @@ package llrp
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
 	"strings"
 	"sync"
@@ -199,7 +198,7 @@ func (rg *ReaderGroup) SetBehavior(ds DSClient, b Behavior) error {
 	for name, r := range rg.readers {
 		s, err := r.NewROSpec(b, rg.env)
 		if err != nil {
-			return errors.WithMessagef(err, "new behavior is invalid for %q", name)
+			return fmt.Errorf("new behavior is invalid for %q: %w", name, err)
 		}
 
 		s.ROSpecID = defaultROSpecID
@@ -217,7 +216,7 @@ func (rg *ReaderGroup) SetBehavior(ds DSClient, b Behavior) error {
 		go func(name string, s *ROSpec) {
 			defer wg.Done()
 			if err := replaceRO(ds, name, s); err != nil {
-				errs <- errors.WithMessagef(err, "failed to replace ROSpec for %q", name)
+				errs <- fmt.Errorf("failed to replace ROSpec for %q: %v", name, err)
 			}
 		}(d, s)
 	}
@@ -234,8 +233,7 @@ func (rg *ReaderGroup) SetBehavior(ds DSClient, b Behavior) error {
 		return nil
 	}
 
-	return errors.WithMessagef(multiErr,
-		"failed to replace ROSpec on %d readers", len(multiErr))
+	return fmt.Errorf("failed to replace ROSpec on %d readers: %v", len(multiErr), multiErr)
 }
 
 // MultiErr tracks a list of errors collected

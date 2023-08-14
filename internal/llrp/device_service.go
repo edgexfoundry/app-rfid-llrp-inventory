@@ -8,12 +8,13 @@ package llrp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/interfaces"
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
-	"github.com/pkg/errors"
 )
 
 // These are the names of deviceResource and deviceCommands
@@ -62,7 +63,7 @@ func (ds DSClient) NewReader(device string) (TagReader, error) {
 	}
 
 	if devCap.GeneralDeviceCapabilities == nil {
-		return nil, errors.Errorf("missing general capabilities for %q", device)
+		return nil, fmt.Errorf("missing general capabilities for %q", device)
 	}
 
 	var tr TagReader
@@ -111,7 +112,7 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 	}
 
 	if err != nil {
-		return nil, errors.Wrap(err, "device info request failed")
+		return nil, fmt.Errorf("device info request failed: %w", err)
 	}
 
 	caps := &GetReaderCapabilitiesResponse{}
@@ -121,11 +122,11 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 			// in order to get this into the reader capabilities struct we need to first marshal it back to JSON
 			data, err := json.Marshal(reading.ObjectValue)
 			if err != nil {
-				return nil, errors.Wrap(err, "marshal failed for reading object value (reader capabilities)")
+				return nil, fmt.Errorf("marshal failed for reading object value (reader capabilities): %w", err)
 			}
 			err = json.Unmarshal(data, &caps)
 			if err != nil {
-				return nil, errors.Wrap(err, "unmarshal failed for reader capabilities")
+				return nil, fmt.Errorf("unmarshal failed for reader capabilities: %w", err)
 			}
 			break
 		}
@@ -142,13 +143,13 @@ func (ds DSClient) GetCapabilities(device string) (*GetReaderCapabilitiesRespons
 func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 	confData, err := json.Marshal(conf)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal SetReaderConfig message")
+		return fmt.Errorf("failed to marshal SetReaderConfig message: %w", err)
 	}
 
 	var configMapData map[string]interface{}
 	err = json.Unmarshal(confData, &configMapData)
 	if err != nil {
-		return errors.Wrap(err, "failed to unmarshal SetReaderConfig message")
+		return fmt.Errorf("failed to unmarshal SetReaderConfig message: %w", err)
 	}
 
 	commandData := map[string]interface{}{
@@ -159,7 +160,7 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 
 	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, configDevCmd, commandData)
 	if err != nil {
-		return errors.WithMessage(err, "failed to set reader config")
+		return fmt.Errorf("failed to set reader config: %v", err)
 	}
 	return nil
 }
@@ -168,13 +169,13 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 	roData, err := json.Marshal(spec)
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal ROSpec")
+		return fmt.Errorf("failed to marshal ROSpec: %w", err)
 	}
 
 	var roMapData map[string]interface{}
 	err = json.Unmarshal(roData, &roMapData)
 	if err != nil {
-		return errors.Wrap(err, "failed to unmarshal ROSpec")
+		return fmt.Errorf("failed to unmarshal ROSpec: %w", err)
 	}
 
 	commandData := map[string]interface{}{
@@ -185,7 +186,7 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 
 	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, addCmd, commandData)
 	if err != nil {
-		return errors.WithMessage(err, "failed to add ROSpec")
+		return fmt.Errorf("failed to add ROSpec: %v", err)
 	}
 	return nil
 }
@@ -230,7 +231,7 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 
 	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, roCmd, data)
 	if err != nil {
-		return errors.WithMessage(err, "failed to "+roCmd)
+		return fmt.Errorf("failed to "+roCmd+": %v", err)
 	}
 
 	return nil
@@ -247,7 +248,7 @@ func (d *ImpinjDevice) EnableCustomExt(device string, ds DSClient) error {
 	// the Device profile for impinj has a defaultvalue, so passing empty map
 	_, err := ds.cmdClient.IssueSetCommandByName(context.Background(), device, enableImpinjCmd, data)
 	if err != nil {
-		return errors.WithMessage(err, "failed to enable Impinj extensions")
+		return fmt.Errorf("failed to enable Impinj extensions: %v", err)
 	}
 
 	return nil
