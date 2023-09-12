@@ -243,7 +243,7 @@ func TestSetConfig(t *testing.T) {
 
 func TestAddROSpec(t *testing.T) {
 	type fields struct {
-		ROSpec ROSpec
+		ROSpec *ROSpec
 	}
 	type testCase struct {
 		testCaseName  string
@@ -257,14 +257,14 @@ func TestAddROSpec(t *testing.T) {
 		{
 			testCaseName:  "Test Unsuccessful ROSpec Addition",
 			deviceName:    "SpeedwayR-19-FE-16",
-			fields:        fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
+			fields:        fields{ROSpec: &ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
 			respCode:      http.StatusBadRequest,
 			errorExpected: true,
 		},
 		{
 			testCaseName:  "Test Successful ROSpec Addition",
 			deviceName:    "SpeedwayR-19-FE-16",
-			fields:        fields{ROSpec: ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
+			fields:        fields{ROSpec: &ROSpec{ROSpecID: ImpinjTagReportContentSelector, Priority: 0, ROSpecCurrentState: ROSpecStateActive, ROBoundarySpec: ROBoundarySpec{StartTrigger: ROSpecStartTrigger{GPITrigger: &GPITriggerValue{Port: 0, Event: false, Timeout: 0}}}}},
 			respCode:      http.StatusOK,
 			errorExpected: false,
 		},
@@ -283,7 +283,7 @@ func TestAddROSpec(t *testing.T) {
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
 
-			err := deviceServiceClient.AddROSpec(tc.deviceName, &tc.fields.ROSpec)
+			err := deviceServiceClient.AddROSpec(tc.deviceName, tc.fields.ROSpec)
 			if tc.errorExpected {
 				assert.Error(tt, err)
 			} else {
