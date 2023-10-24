@@ -22,7 +22,7 @@ make docker
 
 ## Build with NATS Messaging
 Currently, the NATS Messaging capability (NATS MessageBus) is opt-in at build time.
-This means that the published Docker image and Snaps do not include the NATS messaging capability.
+This means that the published Docker image does not include the NATS messaging capability.
 
 The following make commands will build the local binary or local Docker image with NATS messaging
 capability included.
@@ -36,12 +36,9 @@ See [Compose Builder](https://github.com/edgexfoundry/edgex-compose/tree/main/co
 
 ## Packaging
 
-This component is packaged as docker image and snap.
+This component is packaged as docker image.
 
 For docker, please refer to the [Dockerfile](Dockerfile) and [Docker Compose Builder] scripts.
-
-For the snap, refer to the [snap](snap) directory.
-
 
 ## Inventory Events
 There are 3 basic inventory events that are generated and sent to EdgeX's core-data. 
