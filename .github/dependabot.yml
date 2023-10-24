@@ -16,7 +16,3 @@ updates:
       - dependency-name: "github.com/edgexfoundry/go-mod-secrets/v3"
         # Included when go-mod-bootstrap is updated
 
-  - package-ecosystem: "gomod"
-    directory: "/snap/local/helper-go"
-    schedule:
-      interval: "daily"

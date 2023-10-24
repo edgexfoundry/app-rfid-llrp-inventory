@@ -18,16 +18,6 @@ vendor/
 app-rfid-llrp-inventory
 glide.lock
 
-# snap files
-*.snap
-*.assert
-prime/
-stage/
-parts/
-squashfs-root/
-coverage.out
-VERSION
-
 # Very Important: This line is needed to keep your credentials from being checked into github.
 **/.env
 
