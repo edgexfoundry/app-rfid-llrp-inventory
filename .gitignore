@@ -47,5 +47,5 @@ cache/
 # Output of the go tool cover
 coverage.out
 
-# Output of the Makefile
+# Used by Makefile
 VERSION
