@@ -43,3 +43,9 @@ logs/
 !static/html/*
 
 cache/
+
+# Output of the go tool cover
+coverage.out
+
+# Output of the Makefile
+VERSION
