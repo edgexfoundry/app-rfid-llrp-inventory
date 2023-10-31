@@ -1,0 +1,178 @@
+openapi: 3.0.0
+info:
+  title: EdgeX App RFID LLRP Inventory Service
+  description: EdgeX App RFID LLRP Inventory Service REST APIs
+  version: 3.1.0
+servers:
+- url: http://localhost:59711
+  description: Local running instance of App RFID LLRP Inventory Service
+- url: http://127.0.0.1:59711
+  description: Local running instance of App RFID LLRP Inventory Service
+- url: http://0.0.0.0:59711
+  description: Local running instance of App RFID LLRP Inventory Service
+components:
+  schemas:
+    readers:
+      description: "List of LLRP Readers"
+      type: array
+      items:
+        type: string
+    behavior:
+      description: "Characteristics of LLRP Readers"
+      type: object
+      properties:
+        gpiTrigger:
+          type: object
+          properties:
+            Port:
+              type: number
+            Event:
+              type: boolean
+            timeout:
+              type: number
+        impinjOptions:
+          type: object
+          properties:
+            suppressMonza:
+              type: boolean
+        scanType:
+          type: number
+        duration:
+          type: number
+        power:
+          type: object
+          properties:
+            max:
+              type: number
+        frequencies:
+          type: array
+          items:
+            type: number
+    snapshot:
+      description: "List of inventory tags"
+      type: array
+      items:
+        type: object
+        properties:
+          epc:
+            description: "Electronic Product Code"
+            type: string
+          tid:
+            description: "Tag ID"
+            type: string
+          location:
+            description: "Tag's current location"
+            type: object
+            properties:
+              device_name:
+                description: "name of the device"
+                type: string
+              antenna_id:
+                description: "Id number of the antenna"
+                type: number
+          location_alias:
+            description: "Alias name for the location"
+            type: string
+          last_read:
+            description: "last time the tag was seen by any reader/antenna"
+            type: number
+          last_arrived:
+            description: "Most recent time this tag generated an ArrivedEvent"
+            type: number
+          last_departed:
+            description: "Most recent time this tag generated an DepartedEvent"
+            type: number
+          state:
+            description: "current state of the tag (Present, Departed, Unknown)"
+            type: string
+          stats_map:
+            description: "current state of the tag (Present, Departed, Unknown)"
+            type: object
+            additionalProperties:
+              type: object
+              properties:
+                last_read:
+                  type: number
+                mean_rssi:
+                  type: number
+paths:
+  /api/v3/readers:
+    get:
+      summary: "Gets list of available LLRP readers"
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/readers'
+        '500':
+          description: "Indicates internal server error"
+  /api/v3/inventory/snapshot:
+    get:
+      summary: "Get the current inventory snapshot"
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/snapshot'
+        '500':
+          description: "Indicates internal server error"
+  /api/v3/command/reading/start:
+    post:
+      summary: "Start all tag readers in the reader group"
+      responses:
+        '200':
+          description: "Indicates request was accepted"
+        '500':
+          description: "Indicates internal server error"
+  /api/v3/command/reading/stop:
+    post:
+      summary: "Stops all tag readers in the reader group"
+      responses:
+        '200':
+          description: "Indicates request was accepted"
+        '500':
+          description: "Indicates internal server error"
+  /api/v3/behaviors/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The name of the behavior. Currently only "default" is supported
+    get:
+      summary: "Gets the behavior details"
+      responses:
+        '200':
+          description: "Indicates the request was processed successfully"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/behavior'
+        '404':
+          description: "Behavior not found"
+        '500':
+          description: "Indicates internal server error"
+    put:
+      summary: "Sets the behavior details"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/behavior'
+      responses:
+        '200':
+          description: "Indicates request was accepted"
+        '400':
+          description: "Indicates request didn't meet requirements"
+        '404':
+          description: "Behavior not found"
+        '500':
+          description: "Indicates internal server error"
+
+
