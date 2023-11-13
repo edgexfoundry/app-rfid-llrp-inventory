@@ -4,6 +4,44 @@
 
 - [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md)
 
+## [v3.1.0] Napa - 2023-11-15 (Only compatible with the 3.x releases)
+
+
+### ✨  Features
+
+- Remove snap packaging ([#238](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/238)) ([ae0fc91…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/ae0fc916ce7d511bfada48b200efa99a99f94c46))
+```text
+
+BREAKING CHANGE: Remove snap packaging ([#238](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/238))
+
+```
+
+
+### ◀️ Revert
+
+- Restore ignored items that were not snap-related ([#241](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/241)) ([df6d7f6…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/df6d7f608fd9c1c4fe6c937888fc634314559cbf))
+
+
+### ♻ Code Refactoring
+
+- Remove obsolete comments from config file ([#240](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/240)) ([9e1f568…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/9e1f568c9b1455eaf2490256b50d2aac3d1e2766))
+- Replace github.com/pkg/errors with errors ([#218](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/218)) ([49917a2…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/49917a2fa1511478922ba9567a0d5bdfd5b8a77e))
+
+
+### 📖 Documentation
+
+- Replace docs in README with link to docs on docs.edgexfoundry.org ([#248](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/248)) ([03dfe80…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/03dfe80146e416d2b04b2eaefcdaa11753ed70f8))
+- Add swagger file ([#244](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/244)) ([21ed4d0…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/21ed4d02aeb24d2ae6dc2d5f32ea5d4fa656c524))
+
+
+### 👷 Build
+
+- Upgrade to go-1.21, Linter1.54.2 and Alpine 3.18 ([#224](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/224)) ([373aed2…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/373aed2dc61e6e0ec63a26b7343d1577d4fdcb4f))
+
+### 🤖 Continuous Integration
+
+- Add automated release workflow on tag creation ([c895c02…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/c895c02946e1a59c8ddbef8aecdd97cb56dca6f0))
+
 ## [v3.0.1] Minnesota - 2023-07-25 (Only compatible with the 3.x releases)
 ### Features ✨
 Security - Add missing authentication hooks to standard routes (#1447)
