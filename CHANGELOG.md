@@ -16,12 +16,6 @@ BREAKING CHANGE: Remove snap packaging ([#238](https://github.com/edgexfoundry/a
 
 ```
 
-
-### ◀️ Revert
-
-- Restore ignored items that were not snap-related ([#241](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/241)) ([df6d7f6…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/df6d7f608fd9c1c4fe6c937888fc634314559cbf))
-
-
 ### ♻ Code Refactoring
 
 - Remove obsolete comments from config file ([#240](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/240)) ([9e1f568…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/9e1f568c9b1455eaf2490256b50d2aac3d1e2766))
