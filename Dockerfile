@@ -38,6 +38,8 @@ LABEL license='SPDX-License-Identifier: Apache-2.0' \
 LABEL Name=app-service-rfid-llrp-inventory Version=${VERSION}
 
 RUN apk --no-cache add ca-certificates dumb-init
+# Ensure using latest versions of all installed packages to avoid any recent CVEs
+RUN apk --no-cache upgrade
 
 COPY --from=builder /app/Attribution.txt /Attribution.txt
 COPY --from=builder /app/LICENSE /LICENSE
