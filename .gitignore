@@ -14,7 +14,6 @@
 *.log
 
 .idea/
-vendor/
 app-rfid-llrp-inventory
 glide.lock
 
