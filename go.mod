@@ -6,7 +6,7 @@ require (
 	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.1
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.2.0-dev.1
 	github.com/google/uuid v1.4.0
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/stretchr/testify v1.8.4
 )
 
