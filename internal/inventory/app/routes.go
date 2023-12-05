@@ -14,7 +14,6 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
 	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
-	"github.com/gorilla/mux"
 	"github.com/labstack/echo/v4"
 )
 
@@ -24,7 +23,7 @@ const (
 	snapshotRoute  = common.ApiBase + "/inventory/snapshot"
 	cmdStartRoute  = common.ApiBase + "/command/reading/start"
 	cmdStopRoute   = common.ApiBase + "/command/reading/stop"
-	behaviorsRoute = common.ApiBase + "/behaviors/{name}"
+	behaviorsRoute = common.ApiBase + "/behaviors/:name"
 )
 
 func (app *InventoryApp) addRoutes() error {
@@ -79,7 +78,7 @@ func (app *InventoryApp) getReaders(ctx echo.Context) error {
 	if err := app.defaultGrp.WriteReaders(w); err != nil {
 		msg := fmt.Sprintf("Failed to write readers list: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 	return nil
 }
@@ -90,7 +89,7 @@ func (app *InventoryApp) getSnapshot(ctx echo.Context) error {
 	if err := app.requestInventorySnapshot(w); err != nil {
 		msg := fmt.Sprintf("Failed to write inventory snapshot: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 	return nil
 }
@@ -99,7 +98,7 @@ func (app *InventoryApp) startReading(ctx echo.Context) error {
 	if err := app.defaultGrp.StartAll(app.devService); err != nil {
 		msg := fmt.Sprintf("Failed to StartAll: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 	return nil
 }
@@ -108,15 +107,14 @@ func (app *InventoryApp) stopReading(ctx echo.Context) error {
 	if err := app.defaultGrp.StopAll(app.devService); err != nil {
 		msg := fmt.Sprintf("Failed to StopAll: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 	return nil
 }
 
 func (app *InventoryApp) getBehavior(ctx echo.Context) error {
 	w := ctx.Response().Writer
-	rv := mux.Vars(ctx.Request())
-	bName := rv["name"]
+	bName := ctx.Param("name")
 	// Currently, only "default" is supported.
 	if bName != "default" {
 		msg := fmt.Sprintf("Request to GET unknown behavior. Name: %v", bName)
@@ -125,23 +123,21 @@ func (app *InventoryApp) getBehavior(ctx echo.Context) error {
 		if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
 			app.lc.Error("Error writing failure response.", "error", err)
 		}
-		ctx.String(http.StatusNotFound, msg)
-		return nil
+		return ctx.String(http.StatusNotFound, msg)
 	}
 
 	data, err := json.Marshal(app.defaultGrp.Behavior())
 	if err != nil {
 		msg := fmt.Sprintf("Failed to marshal behavior: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
-		return nil
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 
 	if _, err := w.Write(data); err != nil {
 		msg := fmt.Sprintf("Failed to write behavior data: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
-		return nil
+		return ctx.String(http.StatusInternalServerError, msg)
+
 	}
 	return nil
 }
@@ -149,8 +145,7 @@ func (app *InventoryApp) getBehavior(ctx echo.Context) error {
 func (app *InventoryApp) setBehavior(ctx echo.Context) error {
 	w := ctx.Response().Writer
 	req := ctx.Request()
-	rv := mux.Vars(req)
-	bName := rv["name"]
+	bName := ctx.Param("name")
 	// Currently, only "default" is supported.
 	if bName != "default" {
 		msg := fmt.Sprintf("Attempt to PUT unknown behavior. Name %v", bName)
@@ -158,16 +153,14 @@ func (app *InventoryApp) setBehavior(ctx echo.Context) error {
 		if _, err := w.Write([]byte("Invalid behavior name.")); err != nil {
 			app.lc.Error("Error writing failure response.", "error", err)
 		}
-		ctx.String(http.StatusNotFound, msg)
-		return nil
+		return ctx.String(http.StatusNotFound, msg)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(req.Body, maxBodyBytes))
 	if err != nil {
 		msg := fmt.Sprintf("Failed to read behavior data: %v", err)
 		app.lc.Error(msg)
-		ctx.String(http.StatusInternalServerError, msg)
-		return nil
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 
 	var b llrp.Behavior
@@ -175,8 +168,7 @@ func (app *InventoryApp) setBehavior(ctx echo.Context) error {
 		msg := fmt.Sprintf("Failed to unmarshal behavior data: %v. Body: %s", err, string(data))
 		app.lc.Error(msg)
 		w.WriteHeader(http.StatusBadRequest)
-		ctx.String(http.StatusInternalServerError, msg)
-		return nil
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 
 	if err := app.defaultGrp.SetBehavior(app.devService, b); err != nil {
@@ -186,8 +178,7 @@ func (app *InventoryApp) setBehavior(ctx echo.Context) error {
 		if _, err := w.Write([]byte(err.Error())); err != nil {
 			app.lc.Error("Error writing failure response.", "error", err)
 		}
-		ctx.String(http.StatusInternalServerError, msg)
-		return nil
+		return ctx.String(http.StatusInternalServerError, msg)
 	}
 
 	app.lc.Info("Updated behavior.", "name", bName)
