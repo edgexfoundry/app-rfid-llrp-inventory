@@ -3,7 +3,7 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.21
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.32
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.33
 	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.2.0-dev.13
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.11.4
@@ -14,10 +14,11 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/diegoholiveira/jsonlogic/v3 v3.4.0 // indirect
+	github.com/diegoholiveira/jsonlogic/v3 v3.5.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.3 // indirect
 	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.2.0-dev.29 // indirect
 	github.com/edgexfoundry/go-mod-configuration/v3 v3.2.0-dev.3 // indirect
