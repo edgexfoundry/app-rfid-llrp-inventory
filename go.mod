@@ -3,8 +3,8 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.21
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.46
-	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.2.0-dev.30
+	github.com/edgexfoundry/app-functions-sdk-go/v3 v3.2.0-dev.49
+	github.com/edgexfoundry/go-mod-core-contracts/v3 v3.2.0-dev.32
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/stretchr/testify v1.9.0
@@ -20,9 +20,9 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/diegoholiveira/jsonlogic/v3 v3.5.3 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.5.0 // indirect
-	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.2.0-dev.49 // indirect
-	github.com/edgexfoundry/go-mod-configuration/v3 v3.2.0-dev.11 // indirect
-	github.com/edgexfoundry/go-mod-messaging/v3 v3.2.0-dev.29 // indirect
+	github.com/edgexfoundry/go-mod-bootstrap/v3 v3.2.0-dev.52 // indirect
+	github.com/edgexfoundry/go-mod-configuration/v3 v3.2.0-dev.12 // indirect
+	github.com/edgexfoundry/go-mod-messaging/v3 v3.2.0-dev.31 // indirect
 	github.com/edgexfoundry/go-mod-registry/v3 v3.2.0-dev.13 // indirect
 	github.com/edgexfoundry/go-mod-secrets/v3 v3.2.0-dev.9 // indirect
 	github.com/fatih/color v1.16.0 // indirect
@@ -68,6 +68,11 @@ require (
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/serf v0.10.1 // indirect
+	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgx/v5 v5.6.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kataras/go-events v0.0.3 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
