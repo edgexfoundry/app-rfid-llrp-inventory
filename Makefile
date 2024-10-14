@@ -1,5 +1,10 @@
 .PHONY: build test unittest lint clean update fmt docker run
 
+# change the following boolean flag to enable or disable the Full RELRO (RELocation Read Only) for linux ELF (Executable and Linkable Format) binaries
+ENABLE_FULL_RELRO:="true"
+# change the following boolean flag to enable or disable PIE for linux binaries which is needed for ASLR (Address Space Layout Randomization) on Linux, the ASLR support on Windows is enabled by default
+ENABLE_PIE:="true"
+
 ARCH=$(shell uname -m)
 
 MICROSERVICE=app-rfid-llrp-inventory
@@ -17,6 +22,14 @@ GOFLAGS=-ldflags "-s -w -X github.com/edgexfoundry/app-functions-sdk-go/v3/inter
 					-X github.com/edgexfoundry/app-functions-sdk-go/v3/internal.ApplicationVersion=$(APPVERSION) \
 					-X edgexfoundry/app-rfid-llrp-inventory.Version=$(APPVERSION)" -trimpath -mod=readonly
 GOTESTFLAGS?=-race
+
+ifeq ($(ENABLE_FULL_RELRO), "true")
+	GOFLAGS += -ldflags "-bindnow"
+endif
+
+ifeq ($(ENABLE_PIE), "true")
+	GOFLAGS += -buildmode=pie
+endif
 
 # CGO is enabled by default and causes local docker builds to fail due to no gcc,
 # but is required for test with -race, so must disable it for the builds only
