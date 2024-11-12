@@ -12,8 +12,8 @@ import (
 
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/models"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/clients/logger"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/models"
 )
 
 type processorConfig struct {

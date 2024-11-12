@@ -18,9 +18,9 @@ import (
 	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
-	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg"
-	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/clients/logger"
+	"github.com/edgexfoundry/app-functions-sdk-go/v4/pkg"
+	"github.com/edgexfoundry/app-functions-sdk-go/v4/pkg/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/clients/logger"
 )
 
 const (
