@@ -16,15 +16,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos/requests"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/common"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/dtos/requests"
 	"github.com/google/uuid"
 
 	"edgexfoundry/app-rfid-llrp-inventory/internal/inventory"
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
-	"github.com/edgexfoundry/app-functions-sdk-go/v3/pkg/interfaces"
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/dtos"
+	"github.com/edgexfoundry/app-functions-sdk-go/v4/pkg/interfaces"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/dtos"
 )
 
 const (
@@ -250,17 +250,17 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 		case rawConfig := <-app.confUpdateCh:
 			newConfig, ok := rawConfig.(*inventory.CustomConfig)
 			if !ok {
-				app.lc.Warn("Unable to decode configuration from consul.", "raw", fmt.Sprintf("%#v", rawConfig))
+				app.lc.Warn("Unable to decode configuration from keeper.", "raw", fmt.Sprintf("%#v", rawConfig))
 				continue
 			}
 
 			if err := newConfig.AppSettings.Validate(); err != nil {
-				app.lc.Error("Invalid Consul configuration.", "error", err.Error())
+				app.lc.Error("Invalid Configuration configuration.", "error", err.Error())
 				continue
 			}
 
-			app.lc.Info("Configuration updated from consul.")
-			app.lc.Debug("New consul config.", "config", fmt.Sprintf("%+v", newConfig))
+			app.lc.Info("Configuration updated from keeper.")
+			app.lc.Debug("New Configuration config.", "config", fmt.Sprintf("%+v", newConfig))
 			processor.UpdateConfig(*newConfig)
 
 			// check if we need to change the ticker interval

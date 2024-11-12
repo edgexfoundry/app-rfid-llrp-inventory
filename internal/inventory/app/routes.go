@@ -8,13 +8,13 @@ package inventoryapp
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/labstack/echo/v4"
 	"io"
 	"net/http"
 
 	"edgexfoundry/app-rfid-llrp-inventory/internal/llrp"
 
-	"github.com/edgexfoundry/go-mod-core-contracts/v3/common"
-	"github.com/labstack/echo/v4"
+	"github.com/edgexfoundry/go-mod-core-contracts/v4/common"
 )
 
 const (

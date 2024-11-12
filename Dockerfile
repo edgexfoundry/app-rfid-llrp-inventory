@@ -55,4 +55,4 @@ VOLUME /cache
 EXPOSE 59711
 
 ENTRYPOINT ["/app-rfid-llrp-inventory"]
-CMD ["-cp=consul.http://edgex-core-consul:8500", "-registry"]
+CMD ["-cp=keeper.http://edgex-core-keeper:59890", "-registry"]
