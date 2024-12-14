@@ -3,10 +3,10 @@ module edgexfoundry/app-rfid-llrp-inventory
 go 1.23
 
 require (
-	github.com/edgexfoundry/app-functions-sdk-go/v4 v4.0.0-dev.12
+	github.com/edgexfoundry/app-functions-sdk-go/v4 v4.0.0-dev.14
 	github.com/edgexfoundry/go-mod-core-contracts/v4 v4.0.0-dev.14
 	github.com/google/uuid v1.6.0
-	github.com/labstack/echo/v4 v4.13.0
+	github.com/labstack/echo/v4 v4.13.2
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -16,9 +16,9 @@ require (
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/diegoholiveira/jsonlogic/v3 v3.5.3 // indirect
+	github.com/diegoholiveira/jsonlogic/v3 v3.6.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.5.0 // indirect
-	github.com/edgexfoundry/go-mod-bootstrap/v4 v4.0.0-dev.11 // indirect
+	github.com/edgexfoundry/go-mod-bootstrap/v4 v4.0.0-dev.12 // indirect
 	github.com/edgexfoundry/go-mod-configuration/v4 v4.0.0-dev.7 // indirect
 	github.com/edgexfoundry/go-mod-messaging/v4 v4.0.0-dev.8 // indirect
 	github.com/edgexfoundry/go-mod-registry/v4 v4.0.0-dev.2 // indirect
@@ -117,15 +117,15 @@ require (
 	go.opentelemetry.io/otel v1.29.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
 	go.opentelemetry.io/otel/trace v1.29.0 // indirect
-	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.24.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
-	golang.org/x/time v0.6.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240814211410-ddb44dafa142 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
