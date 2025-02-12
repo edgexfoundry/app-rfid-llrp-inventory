@@ -48,7 +48,6 @@ func addReaderHelper(t *testing.T) (*ReaderGroup, DSClient, func()) {
 	mockResp := responses.NewEventResponse("a", "b", http.StatusOK, tcEvent)
 	mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, nil)
 	mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
-	mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
 
 	ds := NewDSClient(&mockClient, getTestingLogger())
 	rg := readerGroupHelper()

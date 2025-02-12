@@ -158,7 +158,7 @@ func (ds DSClient) SetConfig(device string, conf *SetReaderConfig) error {
 
 	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", configDevCmd, device, commandData)
 
-	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, configDevCmd, commandData)
+	_, err = ds.cmdClient.IssueSetCommandByName(context.Background(), device, configDevCmd, commandData)
 	if err != nil {
 		return fmt.Errorf("failed to set reader config: %v", err)
 	}
@@ -184,7 +184,7 @@ func (ds DSClient) AddROSpec(device string, spec *ROSpec) error {
 
 	ds.lc.Debugf("Sending SET command '%s' to device '%s' with data '%v'", addCmd, device, commandData)
 
-	_, err = ds.cmdClient.IssueSetCommandByNameWithObject(context.Background(), device, addCmd, commandData)
+	_, err = ds.cmdClient.IssueSetCommandByName(context.Background(), device, addCmd, commandData)
 	if err != nil {
 		return fmt.Errorf("failed to add ROSpec: %v", err)
 	}
@@ -223,7 +223,7 @@ func (ds DSClient) DeleteAllROSpecs(device string) error {
 
 // modifyROSpecState requests to set the given device's ROSpec to a particular state.
 func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
-	data := make(map[string]string)
+	data := make(map[string]any)
 
 	data["ROSpecID"] = strconv.FormatUint(uint64(id), 10)
 
@@ -241,7 +241,7 @@ func (ds DSClient) modifyROSpecState(roCmd, device string, id uint32) error {
 // Note that the device in question must be registered
 // with a device profile that has an enableImpinjExt deviceCommand.
 func (d *ImpinjDevice) EnableCustomExt(device string, ds DSClient) error {
-	data := make(map[string]string)
+	data := make(map[string]any)
 
 	ds.lc.Debugf("Sending SET command '%s' to device '%s'", enableImpinjCmd, device)
 
