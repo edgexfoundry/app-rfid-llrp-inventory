@@ -80,7 +80,6 @@ func TestNewReader(t *testing.T) {
 
 			mockClient.On("IssueGetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(&mockResp, nil)
 			mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
-			mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(common.BaseResponse{}, nil)
 
 			getReaderCapabilitiesResponse, err := deviceServiceClient.GetCapabilities(tc.deviceName)
 			require.NotNil(tt, getReaderCapabilitiesResponse, "err %s", err)
@@ -208,9 +207,9 @@ func TestSetConfig(t *testing.T) {
 			mockClient := &mocks.CommandClient{}
 			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 			if tc.errorExpected {
-				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
 			} else {
-				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
 			}
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
@@ -276,9 +275,9 @@ func TestAddROSpec(t *testing.T) {
 			mockClient := &mocks.CommandClient{}
 			mockResp := common.NewBaseResponse("a", "b", tc.respCode)
 			if tc.errorExpected {
-				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, errors.NewCommonEdgeXWrapper(fmt.Errorf("failed")))
 			} else {
-				mockClient.On("IssueSetCommandByNameWithObject", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
+				mockClient.On("IssueSetCommandByName", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockResp, nil)
 			}
 
 			deviceServiceClient := NewDSClient(mockClient, getTestingLogger())
