@@ -2,7 +2,7 @@
 
 ## Change Logs for EdgeX Dependencies
 
-- [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md
+- [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md)
 
 ## [4.0.0] Odessa - 2025-03-12 (Only compatible with the 4.x releases)
 
