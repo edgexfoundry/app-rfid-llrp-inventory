@@ -4,6 +4,34 @@
 
 - [app-functions-sdk-go](https://github.com/edgexfoundry/app-functions-sdk-go/blob/main/CHANGELOG.md)
 
+## [4.0.0] Odessa - 2025-03-12 (Only compatible with the 4.x releases)
+
+### ✨  Features
+
+- Enable PIE support for ASLR and full RELRO ([a22073f…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/a22073f69499906e6450cba5b4d0cb9bd546581e))
+
+### ♻ Code Refactoring
+
+- Update module to v4 ([99be71c…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/99be71cd3f1cfabf5ba07ab1049559251109a417))
+```text
+
+BREAKING CHANGE: import paths will need to change to v4, also replace consul with core keeper
+
+```
+
+### 🐛 Bug Fixes
+
+- Only one ldflags flag is allowed ([4e50def…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/4e50deff255ba4d142e48638a6f98e5681727bcf))
+- Adjust handlers to use Echo signature ([#255](https://github.com/edgexfoundry/app-rfid-llrp-inventory/issues/255)) ([acee94b…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/acee94ba3166acea2f5cb329705de4b152bff5c3))
+
+### 📖 Documentation
+
+- Move API document files from openapi/v3 to openapi ([0358623…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/03586239b5f27a5097d49cb846f66fc97f92ef04))
+
+### 👷 Build
+
+- Upgrade to go-1.23, Linter1.61.0 and Alpine 3.20 ([64c8d29…](https://github.com/edgexfoundry/app-rfid-llrp-inventory/commit/64c8d29a3311ab1d0581b2f88479f8cdfa669ec4))
+
 ## [v3.1.0] Napa - 2023-11-15 (Only compatible with the 3.x releases)
 
 
