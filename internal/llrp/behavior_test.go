@@ -78,16 +78,16 @@ func newImpinjCaps(t *testing.T) *GetReaderCapabilitiesResponse {
 	powerTable := make([]TransmitPowerLevelTableEntry, 81)
 	for i := range powerTable {
 		powerTable[i] = TransmitPowerLevelTableEntry{
-			Index:              uint16(i + 1),
-			TransmitPowerValue: MillibelMilliwatt(i*25 + 1000),
+			Index:              uint16(i + 1),                  // #nosec G115
+			TransmitPowerValue: MillibelMilliwatt(i*25 + 1000), // #nosec G115
 		}
 	}
 
 	receiveTable := make([]ReceiveSensitivityTableEntry, 42)
 	for i := range receiveTable {
 		receiveTable[i] = ReceiveSensitivityTableEntry{
-			Index:              uint16(i + 1),
-			ReceiveSensitivity: uint16(i + 9),
+			Index:              uint16(i + 1), // #nosec G115
+			ReceiveSensitivity: uint16(i + 9), // #nosec G115
 		}
 	}
 	receiveTable[0].ReceiveSensitivity = 0
@@ -107,7 +107,7 @@ func newImpinjCaps(t *testing.T) *GetReaderCapabilitiesResponse {
 	airProto := make([]PerAntennaAirProtocol, numAntennas)
 	for i := range airProto {
 		airProto[i] = PerAntennaAirProtocol{
-			AntennaID:      AntennaID(i + 1),
+			AntennaID:      AntennaID(i + 1), // #nosec G115
 			AirProtocolIDs: []AirProtocolIDType{AirProtoEPCGlobalClass1Gen2},
 		}
 	}
