@@ -160,7 +160,7 @@ func (app *InventoryApp) requestInventorySnapshot(w io.Writer) error {
 // without requiring a ton of lock contention on the inventory itself.
 func (app *InventoryApp) taskLoop(ctx context.Context) {
 	departedCheckSeconds := app.config.AppCustom.AppSettings.DepartedCheckIntervalSeconds
-	aggregateDepartedTicker := time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
+	aggregateDepartedTicker := time.NewTicker(time.Duration(departedCheckSeconds) * time.Second) // #nosec G115
 	ageoutTicker := time.NewTicker(1 * time.Hour)
 	eventCh := make(chan []inventory.Event, eventChSz)
 
@@ -267,7 +267,7 @@ func (app *InventoryApp) taskLoop(ctx context.Context) {
 			if departedCheckSeconds != newConfig.AppSettings.DepartedCheckIntervalSeconds {
 				aggregateDepartedTicker.Stop()
 				departedCheckSeconds = newConfig.AppSettings.DepartedCheckIntervalSeconds
-				aggregateDepartedTicker = time.NewTicker(time.Duration(departedCheckSeconds) * time.Second)
+				aggregateDepartedTicker = time.NewTicker(time.Duration(departedCheckSeconds) * time.Second) // #nosec G115
 				app.lc.Info(fmt.Sprintf("Changing aggregate departed check interval to %d seconds.", departedCheckSeconds))
 			}
 

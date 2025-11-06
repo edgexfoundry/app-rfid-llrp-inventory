@@ -96,7 +96,7 @@ func (ds *testDataset) readTag(t *testing.T, epc string, params readParams) (eve
 
 	rss := llrp.PeakRSSI(params.rssi)
 	ant := llrp.AntennaID(params.antenna)
-	seen := llrp.LastSeenUTC(params.lastSeen.UnixNano() / int64(time.Microsecond))
+	seen := llrp.LastSeenUTC(params.lastSeen.UnixNano() / int64(time.Microsecond)) // #nosec G115
 
 	epcBytes, err := hex.DecodeString(epc)
 	require.NoError(t, err)

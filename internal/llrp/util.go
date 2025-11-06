@@ -36,6 +36,7 @@ func wordsToHex(src []uint16) string {
 func (rt *TagReportData) ExtractRSSI() (float64, bool) {
 	for _, c := range rt.Custom {
 		if c.Is(PENImpinj, ImpinjPeakRSSI) && len(c.Data) == 2 {
+			// #nosec G115
 			return float64(int16(binary.BigEndian.Uint16(c.Data))) / 100.0, true // dBm x100
 		}
 	}

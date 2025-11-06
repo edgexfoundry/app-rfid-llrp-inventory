@@ -84,8 +84,9 @@ func (tp *TagProcessor) ProcessReport(r *llrp.ROAccessReport, info ReportInfo) (
 		// against all other sensors in the system.
 		var lastSeenMicros int64
 		for _, rt := range r.TagReportData {
+			// #nosec G115
 			if rt.LastSeenUTC != nil && int64(*rt.LastSeenUTC) > lastSeenMicros {
-				lastSeenMicros = int64(*rt.LastSeenUTC)
+				lastSeenMicros = int64(*rt.LastSeenUTC) // #nosec G115
 			}
 		}
 		if lastSeenMicros > 0 {
@@ -213,7 +214,7 @@ func (tp *TagProcessor) processData(rt *llrp.TagReportData, info ReportInfo) (ev
 	var lastRead int64
 	if hasTimestamp {
 		// offset each read, divide by 1000 to go from microseconds to milliseconds
-		lastRead = (int64(*rt.LastSeenUTC) + info.offsetMicros) / 1000
+		lastRead = (int64(*rt.LastSeenUTC) + info.offsetMicros) / 1000 // #nosec G115
 
 		// only update last read if it is newer
 		if lastRead > tag.LastRead {
@@ -304,7 +305,7 @@ func logReadTiming(tp *TagProcessor, info ReportInfo, locationStats *tagStats, t
 func (tp *TagProcessor) AgeOut() (int, []StaticTag) {
 	// subtract the ageOutHours to get the minimum allowed LastRead timestamp.
 	// anything older than that is considered aged-out.
-	minTimestamp := time.Now().Add(time.Hour * -time.Duration(tp.config.ageOutHours)).UnixMilli()
+	minTimestamp := time.Now().Add(time.Hour * -time.Duration(tp.config.ageOutHours)).UnixMilli() // #nosec G115
 
 	// developer note: Go allows us to remove from a map while iterating
 	var numRemoved int
@@ -331,6 +332,7 @@ func (tp *TagProcessor) AggregateDeparted() (events []Event, snapshot []StaticTa
 	nowMs := now.UnixNano() / 1e6
 	// subtract the departedThresholdSeconds to get the minimum allowed LastRead timestamp.
 	// anything older than that is considered departed.
+	// #nosec G115
 	minTimestamp := now.Add(-1*time.Duration(tp.config.departedThresholdSeconds)*time.Second).UnixNano() / 1e6
 
 	for _, tag := range tp.inventory {

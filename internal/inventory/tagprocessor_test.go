@@ -195,7 +195,7 @@ func TestAgeOutTask_RequireDepartedState(t *testing.T) {
 	_ = ds.readAll(t, readParams{
 		deviceName: sensor,
 		antenna:    defaultAntenna,
-		lastSeen:   time.Now().Add(time.Duration(ds.tp.config.ageOutHours) * -3 * time.Hour),
+		lastSeen:   time.Now().Add(time.Duration(ds.tp.config.ageOutHours) * -3 * time.Hour), // #nosec G115
 	})
 
 	// make sure all tags are marked as Present and are NOT aged out, because the algorithm
@@ -228,7 +228,7 @@ func TestAgeOutThreshold(t *testing.T) {
 	}{
 		{
 			name:         "Basic age out",
-			lastSeen:     time.Now().Add(-1 * time.Duration(2*serviceConfig.AppCustom.AppSettings.AgeOutHours) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(2*serviceConfig.AppCustom.AppSettings.AgeOutHours) * time.Hour), // #nosec G115
 			state:        Departed,
 			shouldAgeOut: true,
 		},
@@ -241,7 +241,7 @@ func TestAgeOutThreshold(t *testing.T) {
 		{
 			name: "Departed but not aged out",
 			// 1 hour less than the ageout timeout
-			lastSeen:     time.Now().Add(-1 * time.Duration(serviceConfig.AppCustom.AppSettings.AgeOutHours-1) * time.Hour),
+			lastSeen:     time.Now().Add(-1 * time.Duration(serviceConfig.AppCustom.AppSettings.AgeOutHours-1) * time.Hour), // #nosec G115
 			state:        Departed,
 			shouldAgeOut: false,
 		},
@@ -290,7 +290,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-2 * (time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second)),
+		lastSeen:   time.Now().Add(-2 * (time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second)), // #nosec G115
 	})
 
 	// expect all tags to depart, and their stats to be set to Departed
@@ -309,7 +309,7 @@ func TestAggregateDepartedTask(t *testing.T) {
 		deviceName: sensor,
 		antenna:    defaultAntenna,
 		count:      10,
-		lastSeen:   time.Now().Add(-(time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second) / 2),
+		lastSeen:   time.Now().Add(-(time.Duration(ds.tp.config.departedThresholdSeconds) * time.Second) / 2), // #nosec G115
 	})
 
 	if err := ds.verifyEventPattern(events, ds.size(), ArrivedType); err != nil {

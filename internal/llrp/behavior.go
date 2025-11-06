@@ -178,7 +178,7 @@ func NewBasicDevice(c *GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 		if len(freqInfo.FrequencyHopTables[0].Frequencies) > (1 << 16) {
 			panic("impossible frequency table length")
 		}
-		nFreqs = uint16(len(freqInfo.FrequencyHopTables[0].Frequencies))
+		nFreqs = uint16(len(freqInfo.FrequencyHopTables[0].Frequencies)) // #nosec G115
 	} else {
 		if freqInfo.FixedFrequencyTable == nil || len(freqInfo.FixedFrequencyTable.Frequencies) == 0 {
 			return nil, errMissingCapInfo("frequency table",
@@ -190,7 +190,7 @@ func NewBasicDevice(c *GetReaderCapabilitiesResponse) (*BasicDevice, error) {
 		if len(freqInfo.FixedFrequencyTable.Frequencies) > (1 << 16) {
 			panic("impossible frequency table length")
 		}
-		nFreqs = uint16(len(freqInfo.FixedFrequencyTable.Frequencies))
+		nFreqs = uint16(len(freqInfo.FixedFrequencyTable.Frequencies)) // #nosec G115
 	}
 
 	genCap := c.GeneralDeviceCapabilities
@@ -314,7 +314,7 @@ func impinjEnableBool16(subtype ImpinjParamSubtype) []byte {
 	return []byte{
 		0x03, 0xff, 0, 14, // param type & length (incl. header)
 		pen0, pen1, pen2, pen3,
-		uint8(subtype >> 24), uint8(subtype >> 16), uint8(subtype >> 8), uint8(subtype),
+		uint8(subtype >> 24), uint8(subtype >> 16), uint8(subtype >> 8), uint8(subtype), // #nosec G115
 		0, 1, // data (uint16, 0=disabled, 1=enabled)
 	}
 }
@@ -492,7 +492,7 @@ func (d *BasicDevice) Transmit(b Behavior) (*RFTransmitter, error) {
 		for i, f := range d.freqInfo.FixedFrequencyTable.Frequencies {
 			if permitted == f {
 				// +1 because channel indices are 1-based in LLRP
-				return &RFTransmitter{ChannelIndex: uint16(i + 1)}, nil
+				return &RFTransmitter{ChannelIndex: uint16(i + 1)}, nil // #nosec G115
 			}
 		}
 	}
@@ -691,8 +691,8 @@ func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 				C1G2InventoryCommand: &C1G2InventoryCommand{
 					TagInventoryStateAware: d.stateAware,
 					RFControl: &C1G2RFControl{
-						RFModeID: uint16(best.ModeID),
-						Tari:     uint16(tari),
+						RFModeID: uint16(best.ModeID), // #nosec G115
+						Tari:     uint16(tari),        // #nosec G115
 					},
 
 					SingulationControl: query,
@@ -797,7 +797,7 @@ func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 				},
 
 				InventoryParameterSpecs: []InventoryParameterSpec{{
-					InventoryParameterSpecID: uint16(i + 1),
+					InventoryParameterSpecID: uint16(i + 1), // #nosec G115
 					AirProtocolID:            AirProtoEPCGlobalClass1Gen2,
 					AntennaConfigurations: []AntennaConfiguration{{
 						AntennaID:     0,
@@ -805,8 +805,8 @@ func (d *BasicDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 						C1G2InventoryCommand: &C1G2InventoryCommand{
 							TagInventoryStateAware: true,
 							RFControl: &C1G2RFControl{
-								RFModeID: uint16(best.ModeID),
-								Tari:     uint16(tari),
+								RFModeID: uint16(best.ModeID), // #nosec G115
+								Tari:     uint16(tari),        // #nosec G115
 							},
 							SingulationControl: &C1G2SingulationControl{
 								Session:        2,
@@ -906,13 +906,13 @@ func (d *ImpinjDevice) NewROSpec(b Behavior, e Environment) (*ROSpec, error) {
 					RFTransmitter: transmit,
 					C1G2InventoryCommand: &C1G2InventoryCommand{
 						RFControl: &C1G2RFControl{
-							RFModeID: uint16(best.ModeID),
+							RFModeID: uint16(best.ModeID), // #nosec G115
 						},
 						SingulationControl: queryAction,
 						Custom: []Custom{{
 							VendorID: uint32(PENImpinj),
 							Subtype:  ImpinjSearchMode,
-							Data:     []byte{uint8(searchMode >> 8), uint8(searchMode & 0xFF)},
+							Data:     []byte{uint8(searchMode >> 8), uint8(searchMode & 0xFF)}, // #nosec G115
 						}},
 					},
 				}},
@@ -972,7 +972,7 @@ var (
 )
 
 func (s ScanType) MarshalText() ([]byte, error) {
-	if !(0 <= int(s) && int(s) < len(scanStrs)) {
+	if int(s) < 0 || int(s) >= len(scanStrs) {
 		return nil, fmt.Errorf("unknown ScanType: %v", s)
 	}
 	return scanStrs[s], nil
